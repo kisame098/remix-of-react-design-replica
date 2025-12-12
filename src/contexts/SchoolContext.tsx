@@ -78,8 +78,29 @@ export interface Grade {
   devoir1?: number;
   devoir2?: number;
   devoir3?: number;
+  devoir4?: number;
+  devoir5?: number;
   composition?: number;
   note?: number; // For exams
+}
+
+export interface SubjectSettingsData {
+  subjectId: number;
+  periodId: number;
+  devoir1Active: boolean;
+  devoir2Active: boolean;
+  devoir3Active: boolean;
+  devoir4Active: boolean;
+  devoir5Active: boolean;
+  lvModeActive: boolean;
+  lv1Coefficient?: number;
+  lv2Coefficient?: number;
+  lv3Coefficient?: number;
+  studentSettings: Record<number, {
+    active: boolean;
+    customCoef: string;
+    lvLevel: 'none' | 'lv1' | 'lv2' | 'lv3';
+  }>;
 }
 
 interface SchoolContextType {
@@ -90,6 +111,7 @@ interface SchoolContextType {
   periodClasses: PeriodClass[];
   subjects: Subject[];
   grades: Grade[];
+  subjectSettings: SubjectSettingsData[];
   addStudent: (student: Omit<Student, 'id' | 'studentId' | 'createdAt'>) => Student;
   updateStudent: (id: number, updates: Partial<Student>) => void;
   addClass: (schoolClass: Omit<SchoolClass, 'id' | 'createdAt'>) => SchoolClass;
@@ -106,6 +128,8 @@ interface SchoolContextType {
   updateSubject: (id: number, updates: Partial<Subject>) => void;
   deleteSubject: (id: number) => void;
   setGrades: (grades: Grade[]) => void;
+  updateSubjectSettings: (subjectId: number, periodId: number, settings: Omit<SubjectSettingsData, 'subjectId' | 'periodId'>) => void;
+  getSubjectSettings: (subjectId: number, periodId: number) => SubjectSettingsData | undefined;
 }
 
 const SchoolContext = createContext<SchoolContextType | undefined>(undefined);
@@ -125,6 +149,7 @@ export const SchoolProvider = ({ children }: { children: ReactNode }) => {
   const [periodClasses, setPeriodClasses] = useState<PeriodClass[]>([]);
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [grades, setGradesState] = useState<Grade[]>([]);
+  const [subjectSettings, setSubjectSettings] = useState<SubjectSettingsData[]>([]);
 
   const generateStudentId = (): string => {
     const year = new Date().getFullYear();
@@ -245,6 +270,24 @@ export const SchoolProvider = ({ children }: { children: ReactNode }) => {
     setGradesState(newGrades);
   };
 
+  const updateSubjectSettings = (subjectId: number, periodId: number, settings: Omit<SubjectSettingsData, 'subjectId' | 'periodId'>) => {
+    setSubjectSettings(prev => {
+      const existing = prev.find(s => s.subjectId === subjectId && s.periodId === periodId);
+      if (existing) {
+        return prev.map(s => 
+          s.subjectId === subjectId && s.periodId === periodId 
+            ? { ...s, ...settings } 
+            : s
+        );
+      }
+      return [...prev, { subjectId, periodId, ...settings }];
+    });
+  };
+
+  const getSubjectSettings = (subjectId: number, periodId: number): SubjectSettingsData | undefined => {
+    return subjectSettings.find(s => s.subjectId === subjectId && s.periodId === periodId);
+  };
+
   return (
     <SchoolContext.Provider
       value={{
@@ -255,6 +298,7 @@ export const SchoolProvider = ({ children }: { children: ReactNode }) => {
         periodClasses,
         subjects,
         grades,
+        subjectSettings,
         addStudent,
         updateStudent,
         addClass,
@@ -271,6 +315,8 @@ export const SchoolProvider = ({ children }: { children: ReactNode }) => {
         updateSubject,
         deleteSubject,
         setGrades,
+        updateSubjectSettings,
+        getSubjectSettings,
       }}
     >
       {children}
