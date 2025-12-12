@@ -5,7 +5,8 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { ArrowLeft, ChevronRight, Users, Check } from 'lucide-react';
+import { ArrowLeft, ChevronRight, Users, Check, Settings } from 'lucide-react';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { toast } from '@/hooks/use-toast';
 
 interface GradeEntry {
@@ -13,6 +14,8 @@ interface GradeEntry {
   devoir1: string;
   devoir2: string;
   devoir3: string;
+  devoir4: string;
+  devoir5: string;
   composition: string;
   note: string; // For exams
 }
@@ -20,7 +23,10 @@ interface GradeEntry {
 const SubjectGrades = () => {
   const { periodId, classId, subjectId } = useParams();
   const navigate = useNavigate();
-  const { gradePeriods, classes, subjects, students, grades, setGrades } = useSchool();
+  const { gradePeriods, classes, subjects, students, grades, setGrades, getSubjectSettings } = useSchool();
+
+  // Get subject settings
+  const settings = getSubjectSettings(Number(subjectId), Number(periodId));
 
   const [gradeEntries, setGradeEntries] = useState<GradeEntry[]>([]);
   const [isSaving, setIsSaving] = useState(false);
@@ -31,8 +37,20 @@ const SubjectGrades = () => {
   const schoolClass = classes.find(c => c.id === Number(classId));
   const subject = subjects.find(s => s.id === Number(subjectId));
 
-  const classStudents = students.filter(s => s.classId === Number(classId));
+  // Filter students based on settings (only active students for this subject)
+  const classStudents = students.filter(s => {
+    if (s.classId !== Number(classId)) return false;
+    if (settings?.studentSettings?.[s.id]?.active === false) return false;
+    return true;
+  });
   const isExam = period?.type === 'exam';
+
+  // Active devoirs based on settings
+  const devoir1Active = settings?.devoir1Active ?? true;
+  const devoir2Active = settings?.devoir2Active ?? true;
+  const devoir3Active = settings?.devoir3Active ?? true;
+  const devoir4Active = settings?.devoir4Active ?? false;
+  const devoir5Active = settings?.devoir5Active ?? false;
 
   useEffect(() => {
     // Initialize grade entries from existing grades or empty
@@ -48,6 +66,8 @@ const SubjectGrades = () => {
         devoir1: existingGrade?.devoir1?.toString() || '',
         devoir2: existingGrade?.devoir2?.toString() || '',
         devoir3: existingGrade?.devoir3?.toString() || '',
+        devoir4: existingGrade?.devoir4?.toString() || '',
+        devoir5: existingGrade?.devoir5?.toString() || '',
         composition: existingGrade?.composition?.toString() || '',
         note: existingGrade?.note?.toString() || ''
       };
@@ -75,6 +95,8 @@ const SubjectGrades = () => {
       devoir1: entry.devoir1 ? Number(entry.devoir1) : undefined,
       devoir2: entry.devoir2 ? Number(entry.devoir2) : undefined,
       devoir3: entry.devoir3 ? Number(entry.devoir3) : undefined,
+      devoir4: entry.devoir4 ? Number(entry.devoir4) : undefined,
+      devoir5: entry.devoir5 ? Number(entry.devoir5) : undefined,
       composition: entry.composition ? Number(entry.composition) : undefined,
       note: entry.note ? Number(entry.note) : undefined
     }));
@@ -122,18 +144,20 @@ const SubjectGrades = () => {
       return entry.note || '-';
     }
 
-    const values = [entry.devoir1, entry.devoir2, entry.devoir3, entry.composition]
-      .filter(v => v !== '')
-      .map(v => Number(v));
+    // Build array of active devoirs
+    const activeDevoirs: string[] = [];
+    if (devoir1Active && entry.devoir1 !== '') activeDevoirs.push(entry.devoir1);
+    if (devoir2Active && entry.devoir2 !== '') activeDevoirs.push(entry.devoir2);
+    if (devoir3Active && entry.devoir3 !== '') activeDevoirs.push(entry.devoir3);
+    if (devoir4Active && entry.devoir4 !== '') activeDevoirs.push(entry.devoir4);
+    if (devoir5Active && entry.devoir5 !== '') activeDevoirs.push(entry.devoir5);
 
-    if (values.length === 0) return '-';
+    if (activeDevoirs.length === 0 && entry.composition === '') return '-';
 
     // Composition counts double
     const hasComposition = entry.composition !== '';
-    const devoirSum = [entry.devoir1, entry.devoir2, entry.devoir3]
-      .filter(v => v !== '')
-      .reduce((sum, v) => sum + Number(v), 0);
-    const devoirCount = [entry.devoir1, entry.devoir2, entry.devoir3].filter(v => v !== '').length;
+    const devoirSum = activeDevoirs.reduce((sum, v) => sum + Number(v), 0);
+    const devoirCount = activeDevoirs.length;
     
     if (hasComposition) {
       const total = devoirSum + (Number(entry.composition) * 2);
@@ -162,15 +186,31 @@ const SubjectGrades = () => {
           </div>
           <h1 className="text-3xl font-bold text-foreground">Saisie des Notes</h1>
         </div>
-        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-          {isSaving ? (
-            <span className="animate-pulse">Enregistrement...</span>
-          ) : lastSaved ? (
-            <span className="flex items-center gap-1">
-              <Check className="h-4 w-4 text-green-600" />
-              Enregistré
-            </span>
-          ) : null}
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            {isSaving ? (
+              <span className="animate-pulse">Enregistrement...</span>
+            ) : lastSaved ? (
+              <span className="flex items-center gap-1">
+                <Check className="h-4 w-4 text-green-600" />
+                Enregistré
+              </span>
+            ) : null}
+          </div>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button 
+                variant="outline" 
+                size="icon"
+                onClick={() => navigate(`/notes/${periodId}/${classId}/${subjectId}/settings`)}
+              >
+                <Settings className="h-5 w-5" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>Paramètres de la matière</p>
+            </TooltipContent>
+          </Tooltip>
         </div>
       </div>
 
@@ -209,9 +249,11 @@ const SubjectGrades = () => {
                       <TableHead className="min-w-[100px] text-center">Note</TableHead>
                     ) : (
                       <>
-                        <TableHead className="min-w-[100px] text-center">Devoir 1</TableHead>
-                        <TableHead className="min-w-[100px] text-center">Devoir 2</TableHead>
-                        <TableHead className="min-w-[100px] text-center">Devoir 3</TableHead>
+                        {devoir1Active && <TableHead className="min-w-[100px] text-center">Devoir 1</TableHead>}
+                        {devoir2Active && <TableHead className="min-w-[100px] text-center">Devoir 2</TableHead>}
+                        {devoir3Active && <TableHead className="min-w-[100px] text-center">Devoir 3</TableHead>}
+                        {devoir4Active && <TableHead className="min-w-[100px] text-center">Devoir 4</TableHead>}
+                        {devoir5Active && <TableHead className="min-w-[100px] text-center">Devoir 5</TableHead>}
                         <TableHead className="min-w-[100px] text-center">Composition</TableHead>
                       </>
                     )}
@@ -250,42 +292,76 @@ const SubjectGrades = () => {
                           </TableCell>
                         ) : (
                           <>
-                            <TableCell>
-                              <Input
-                                type="number"
-                                min="0"
-                                max="20"
-                                step="0.25"
-                                className="w-20 text-center mx-auto"
-                                value={entry.devoir1}
-                                onChange={(e) => updateGrade(student.id, 'devoir1', e.target.value)}
-                                placeholder="-"
-                              />
-                            </TableCell>
-                            <TableCell>
-                              <Input
-                                type="number"
-                                min="0"
-                                max="20"
-                                step="0.25"
-                                className="w-20 text-center mx-auto"
-                                value={entry.devoir2}
-                                onChange={(e) => updateGrade(student.id, 'devoir2', e.target.value)}
-                                placeholder="-"
-                              />
-                            </TableCell>
-                            <TableCell>
-                              <Input
-                                type="number"
-                                min="0"
-                                max="20"
-                                step="0.25"
-                                className="w-20 text-center mx-auto"
-                                value={entry.devoir3}
-                                onChange={(e) => updateGrade(student.id, 'devoir3', e.target.value)}
-                                placeholder="-"
-                              />
-                            </TableCell>
+                            {devoir1Active && (
+                              <TableCell>
+                                <Input
+                                  type="number"
+                                  min="0"
+                                  max="20"
+                                  step="0.25"
+                                  className="w-20 text-center mx-auto"
+                                  value={entry.devoir1}
+                                  onChange={(e) => updateGrade(student.id, 'devoir1', e.target.value)}
+                                  placeholder="-"
+                                />
+                              </TableCell>
+                            )}
+                            {devoir2Active && (
+                              <TableCell>
+                                <Input
+                                  type="number"
+                                  min="0"
+                                  max="20"
+                                  step="0.25"
+                                  className="w-20 text-center mx-auto"
+                                  value={entry.devoir2}
+                                  onChange={(e) => updateGrade(student.id, 'devoir2', e.target.value)}
+                                  placeholder="-"
+                                />
+                              </TableCell>
+                            )}
+                            {devoir3Active && (
+                              <TableCell>
+                                <Input
+                                  type="number"
+                                  min="0"
+                                  max="20"
+                                  step="0.25"
+                                  className="w-20 text-center mx-auto"
+                                  value={entry.devoir3}
+                                  onChange={(e) => updateGrade(student.id, 'devoir3', e.target.value)}
+                                  placeholder="-"
+                                />
+                              </TableCell>
+                            )}
+                            {devoir4Active && (
+                              <TableCell>
+                                <Input
+                                  type="number"
+                                  min="0"
+                                  max="20"
+                                  step="0.25"
+                                  className="w-20 text-center mx-auto"
+                                  value={entry.devoir4}
+                                  onChange={(e) => updateGrade(student.id, 'devoir4', e.target.value)}
+                                  placeholder="-"
+                                />
+                              </TableCell>
+                            )}
+                            {devoir5Active && (
+                              <TableCell>
+                                <Input
+                                  type="number"
+                                  min="0"
+                                  max="20"
+                                  step="0.25"
+                                  className="w-20 text-center mx-auto"
+                                  value={entry.devoir5}
+                                  onChange={(e) => updateGrade(student.id, 'devoir5', e.target.value)}
+                                  placeholder="-"
+                                />
+                              </TableCell>
+                            )}
                             <TableCell>
                               <Input
                                 type="number"
