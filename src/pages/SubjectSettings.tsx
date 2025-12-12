@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useSchool } from '@/contexts/SchoolContext';
 import { Button } from '@/components/ui/button';
@@ -10,7 +10,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { ArrowLeft, ChevronRight, ClipboardList, Users, Languages, Save } from 'lucide-react';
+import { ArrowLeft, ChevronRight, ClipboardList, Users, Languages } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 
 const SubjectSettings = () => {
@@ -86,25 +86,39 @@ const SubjectSettings = () => {
     );
   }
 
-  const handleSave = () => {
-    updateSubjectSettings(Number(subjectId), Number(periodId), {
-      devoir1Active,
-      devoir2Active,
-      devoir3Active,
-      devoir4Active,
-      devoir5Active,
-      lvModeActive,
-      lv1Coefficient: lv1Coefficient ? Number(lv1Coefficient) : undefined,
-      lv2Coefficient: lv2Coefficient ? Number(lv2Coefficient) : undefined,
-      lv3Coefficient: lv3Coefficient ? Number(lv3Coefficient) : undefined,
-      studentSettings
-    });
+  // Auto-save functionality
+  const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  
+  const autoSave = useCallback(() => {
+    if (saveTimeoutRef.current) {
+      clearTimeout(saveTimeoutRef.current);
+    }
     
-    toast({
-      title: "Paramètres enregistrés",
-      description: "Les paramètres de la matière ont été mis à jour."
-    });
-  };
+    saveTimeoutRef.current = setTimeout(() => {
+      updateSubjectSettings(Number(subjectId), Number(periodId), {
+        devoir1Active,
+        devoir2Active,
+        devoir3Active,
+        devoir4Active,
+        devoir5Active,
+        lvModeActive,
+        lv1Coefficient: lv1Coefficient ? Number(lv1Coefficient) : undefined,
+        lv2Coefficient: lv2Coefficient ? Number(lv2Coefficient) : undefined,
+        lv3Coefficient: lv3Coefficient ? Number(lv3Coefficient) : undefined,
+        studentSettings
+      });
+    }, 500);
+  }, [devoir1Active, devoir2Active, devoir3Active, devoir4Active, devoir5Active, lvModeActive, lv1Coefficient, lv2Coefficient, lv3Coefficient, studentSettings, subjectId, periodId, updateSubjectSettings]);
+
+  // Trigger auto-save whenever settings change
+  useEffect(() => {
+    autoSave();
+    return () => {
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current);
+      }
+    };
+  }, [autoSave]);
 
   const updateStudentSetting = (studentId: number, field: 'active' | 'customCoef' | 'lvLevel', value: any) => {
     setStudentSettings(prev => ({
@@ -158,10 +172,6 @@ const SubjectSettings = () => {
           </div>
           <h1 className="text-3xl font-bold text-foreground">Paramètres de la Matière</h1>
         </div>
-        <Button onClick={handleSave} className="gap-2">
-          <Save className="h-4 w-4" />
-          Enregistrer
-        </Button>
       </div>
 
       {/* Tabs */}
@@ -250,7 +260,7 @@ const SubjectSettings = () => {
                       <Label className="text-base font-medium">Composition</Label>
                       <Badge className="text-xs bg-primary text-primary-foreground">Obligatoire</Badge>
                     </div>
-                    <p className="text-sm text-muted-foreground">Toujours actif (coefficient x2)</p>
+                    <p className="text-sm text-muted-foreground">Toujours actif</p>
                   </div>
                   <Switch checked={true} disabled className="opacity-50" />
                 </div>
