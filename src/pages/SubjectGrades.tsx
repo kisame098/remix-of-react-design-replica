@@ -1,13 +1,16 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useSchool } from '@/contexts/SchoolContext';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { ArrowLeft, ChevronRight, Users, Check, Settings } from 'lucide-react';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { ArrowLeft, ChevronRight, Users, Check, Settings, ArrowUpDown } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { toast } from '@/hooks/use-toast';
+
+type SortOption = 'default' | 'name-asc' | 'name-desc' | 'average-asc' | 'average-desc';
 
 interface GradeEntry {
   studentId: number;
@@ -31,6 +34,7 @@ const SubjectGrades = () => {
   const [gradeEntries, setGradeEntries] = useState<GradeEntry[]>([]);
   const [isSaving, setIsSaving] = useState(false);
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
+  const [sortOption, setSortOption] = useState<SortOption>('default');
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const period = gradePeriods.find(p => p.id === Number(periodId));
@@ -139,7 +143,7 @@ const SubjectGrades = () => {
     };
   }, []);
 
-  const calculateAverage = (entry: GradeEntry): string => {
+  const calculateAverage = useCallback((entry: GradeEntry): string => {
     if (isExam) {
       return entry.note || '-';
     }
@@ -158,7 +162,55 @@ const SubjectGrades = () => {
     // Simple average: sum of all notes / number of notes
     const total = allNotes.reduce((sum, note) => sum + note, 0);
     return (total / allNotes.length).toFixed(2);
-  };
+  }, [isExam, devoir1Active, devoir2Active, devoir3Active, devoir4Active, devoir5Active]);
+
+  // Sorted students with ranking
+  const sortedStudentsWithRank = useMemo(() => {
+    const studentsWithAvg = classStudents.map(student => {
+      const entry = gradeEntries.find(e => e.studentId === student.id);
+      const avg = entry ? calculateAverage(entry) : '-';
+      return { student, avgNum: avg === '-' ? -Infinity : parseFloat(avg) };
+    });
+
+    let sorted = [...studentsWithAvg];
+    
+    switch (sortOption) {
+      case 'name-asc':
+        sorted.sort((a, b) => a.student.lastName.localeCompare(b.student.lastName));
+        break;
+      case 'name-desc':
+        sorted.sort((a, b) => b.student.lastName.localeCompare(a.student.lastName));
+        break;
+      case 'average-asc':
+        sorted.sort((a, b) => a.avgNum - b.avgNum);
+        break;
+      case 'average-desc':
+        sorted.sort((a, b) => b.avgNum - a.avgNum);
+        break;
+      default:
+        // Keep original order
+        break;
+    }
+
+    // Calculate ranks (only relevant for average sorting)
+    const withRanks = sorted.map((item, index) => {
+      let rank = index + 1;
+      // Handle ties - same average = same rank
+      if (sortOption === 'average-desc' || sortOption === 'average-asc') {
+        for (let i = index - 1; i >= 0; i--) {
+          if (sorted[i].avgNum === item.avgNum && item.avgNum !== -Infinity) {
+            rank = i + 1;
+            break;
+          }
+        }
+      }
+      return { ...item, rank };
+    });
+
+    return withRanks;
+  }, [classStudents, gradeEntries, sortOption, calculateAverage]);
+
+  const showRankColumn = sortOption === 'average-asc' || sortOption === 'average-desc';
 
   return (
     <div className="p-6 space-y-6">
@@ -217,12 +269,29 @@ const SubjectGrades = () => {
       ) : (
         <Card>
           <CardHeader>
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between flex-wrap gap-4">
               <CardTitle>
                 {classStudents.length} Élève{classStudents.length !== 1 ? 's' : ''} - Coefficient {subject.coefficient}
               </CardTitle>
-              <div className="text-sm text-muted-foreground">
-                Notes sur 20
+              <div className="flex items-center gap-4">
+                <div className="flex items-center gap-2">
+                  <ArrowUpDown className="h-4 w-4 text-muted-foreground" />
+                  <Select value={sortOption} onValueChange={(v) => setSortOption(v as SortOption)}>
+                    <SelectTrigger className="w-[180px]">
+                      <SelectValue placeholder="Trier par..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="default">Ordre par défaut</SelectItem>
+                      <SelectItem value="name-asc">Nom (A → Z)</SelectItem>
+                      <SelectItem value="name-desc">Nom (Z → A)</SelectItem>
+                      <SelectItem value="average-desc">Moyenne (↓)</SelectItem>
+                      <SelectItem value="average-asc">Moyenne (↑)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="text-sm text-muted-foreground">
+                  Notes sur 20
+                </div>
               </div>
             </div>
           </CardHeader>
@@ -231,6 +300,7 @@ const SubjectGrades = () => {
               <Table>
                 <TableHeader>
                   <TableRow>
+                    {showRankColumn && <TableHead className="min-w-[60px] text-center bg-primary/10">Rang</TableHead>}
                     <TableHead className="min-w-[100px]">ID</TableHead>
                     <TableHead className="min-w-[150px]">Nom</TableHead>
                     <TableHead className="min-w-[150px]">Prénom</TableHead>
@@ -251,7 +321,7 @@ const SubjectGrades = () => {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {classStudents.map((student) => {
+                  {sortedStudentsWithRank.map(({ student, rank }) => {
                     const entry = gradeEntries.find(e => e.studentId === student.id);
                     if (!entry) return null;
                     
@@ -263,6 +333,11 @@ const SubjectGrades = () => {
 
                     return (
                       <TableRow key={student.id}>
+                        {showRankColumn && (
+                          <TableCell className="text-center font-bold bg-primary/10">
+                            {average !== '-' ? rank : '-'}
+                          </TableCell>
+                        )}
                         <TableCell className="font-mono text-sm whitespace-nowrap">{student.studentId}</TableCell>
                         <TableCell className="font-medium">{student.lastName}</TableCell>
                         <TableCell>{student.firstName}</TableCell>
