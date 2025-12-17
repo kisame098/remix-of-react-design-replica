@@ -144,30 +144,20 @@ const SubjectGrades = () => {
       return entry.note || '-';
     }
 
-    // Build array of active devoirs
-    const activeDevoirs: string[] = [];
-    if (devoir1Active && entry.devoir1 !== '') activeDevoirs.push(entry.devoir1);
-    if (devoir2Active && entry.devoir2 !== '') activeDevoirs.push(entry.devoir2);
-    if (devoir3Active && entry.devoir3 !== '') activeDevoirs.push(entry.devoir3);
-    if (devoir4Active && entry.devoir4 !== '') activeDevoirs.push(entry.devoir4);
-    if (devoir5Active && entry.devoir5 !== '') activeDevoirs.push(entry.devoir5);
+    // Build array of all notes (devoirs + composition)
+    const allNotes: number[] = [];
+    if (devoir1Active && entry.devoir1 !== '') allNotes.push(Number(entry.devoir1));
+    if (devoir2Active && entry.devoir2 !== '') allNotes.push(Number(entry.devoir2));
+    if (devoir3Active && entry.devoir3 !== '') allNotes.push(Number(entry.devoir3));
+    if (devoir4Active && entry.devoir4 !== '') allNotes.push(Number(entry.devoir4));
+    if (devoir5Active && entry.devoir5 !== '') allNotes.push(Number(entry.devoir5));
+    if (entry.composition !== '') allNotes.push(Number(entry.composition));
 
-    if (activeDevoirs.length === 0 && entry.composition === '') return '-';
+    if (allNotes.length === 0) return '-';
 
-    // Composition counts double
-    const hasComposition = entry.composition !== '';
-    const devoirSum = activeDevoirs.reduce((sum, v) => sum + Number(v), 0);
-    const devoirCount = activeDevoirs.length;
-    
-    if (hasComposition) {
-      const total = devoirSum + (Number(entry.composition) * 2);
-      const count = devoirCount + 2;
-      return (total / count).toFixed(2);
-    } else if (devoirCount > 0) {
-      return (devoirSum / devoirCount).toFixed(2);
-    }
-    
-    return '-';
+    // Simple average: sum of all notes / number of notes
+    const total = allNotes.reduce((sum, note) => sum + note, 0);
+    return (total / allNotes.length).toFixed(2);
   };
 
   return (

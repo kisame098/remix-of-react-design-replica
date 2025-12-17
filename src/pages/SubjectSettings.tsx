@@ -203,42 +203,66 @@ const SubjectSettings = () => {
             <CardContent className="space-y-6">
               <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
                 {/* Devoir 1 */}
-                <div className="flex items-center justify-between p-4 rounded-lg border bg-card">
+                <div className={`flex items-center justify-between p-4 rounded-lg border bg-card ${devoir2Active ? 'opacity-70' : ''}`}>
                   <div className="space-y-1">
                     <Label className="text-base font-medium">Devoir 1</Label>
-                    <p className="text-sm text-muted-foreground">Première évaluation</p>
+                    <p className="text-sm text-muted-foreground">
+                      {devoir2Active ? 'Désactivez D2 d\'abord' : 'Première évaluation'}
+                    </p>
                   </div>
-                  <Switch checked={devoir1Active} onCheckedChange={setDevoir1Active} />
+                  <Switch 
+                    checked={devoir1Active} 
+                    onCheckedChange={setDevoir1Active}
+                    disabled={devoir2Active}
+                  />
                 </div>
 
                 {/* Devoir 2 */}
-                <div className="flex items-center justify-between p-4 rounded-lg border bg-card">
+                <div className={`flex items-center justify-between p-4 rounded-lg border bg-card ${devoir3Active ? 'opacity-70' : ''}`}>
                   <div className="space-y-1">
                     <Label className="text-base font-medium">Devoir 2</Label>
-                    <p className="text-sm text-muted-foreground">Deuxième évaluation</p>
+                    <p className="text-sm text-muted-foreground">
+                      {devoir3Active ? 'Désactivez D3 d\'abord' : 'Deuxième évaluation'}
+                    </p>
                   </div>
-                  <Switch checked={devoir2Active} onCheckedChange={setDevoir2Active} />
+                  <Switch 
+                    checked={devoir2Active} 
+                    onCheckedChange={setDevoir2Active}
+                    disabled={devoir3Active}
+                  />
                 </div>
 
                 {/* Devoir 3 */}
-                <div className="flex items-center justify-between p-4 rounded-lg border bg-card">
+                <div className={`flex items-center justify-between p-4 rounded-lg border bg-card ${devoir4Active ? 'opacity-70' : ''}`}>
                   <div className="space-y-1">
                     <Label className="text-base font-medium">Devoir 3</Label>
-                    <p className="text-sm text-muted-foreground">Troisième évaluation</p>
+                    <p className="text-sm text-muted-foreground">
+                      {devoir4Active ? 'Désactivez D4 d\'abord' : 'Troisième évaluation'}
+                    </p>
                   </div>
-                  <Switch checked={devoir3Active} onCheckedChange={setDevoir3Active} />
+                  <Switch 
+                    checked={devoir3Active} 
+                    onCheckedChange={setDevoir3Active}
+                    disabled={devoir4Active}
+                  />
                 </div>
 
                 {/* Devoir 4 (Optionnel) */}
-                <div className="flex items-center justify-between p-4 rounded-lg border bg-accent/30">
+                <div className={`flex items-center justify-between p-4 rounded-lg border bg-accent/30 ${devoir5Active ? 'opacity-70' : ''}`}>
                   <div className="space-y-1">
                     <div className="flex items-center gap-2">
                       <Label className="text-base font-medium">Devoir 4</Label>
                       <Badge variant="secondary" className="text-xs">Optionnel</Badge>
                     </div>
-                    <p className="text-sm text-muted-foreground">Évaluation supplémentaire</p>
+                    <p className="text-sm text-muted-foreground">
+                      {devoir5Active ? 'Désactivez D5 d\'abord' : 'Évaluation supplémentaire'}
+                    </p>
                   </div>
-                  <Switch checked={devoir4Active} onCheckedChange={setDevoir4Active} />
+                  <Switch 
+                    checked={devoir4Active} 
+                    onCheckedChange={setDevoir4Active}
+                    disabled={devoir5Active}
+                  />
                 </div>
 
                 {/* Devoir 5 (Optionnel) */}
