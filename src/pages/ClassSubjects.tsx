@@ -7,8 +7,9 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { ArrowLeft, Plus, BookOpen, Trash2, Edit, ChevronRight } from 'lucide-react';
+import { ArrowLeft, Plus, BookOpen, Trash2, Edit, ChevronRight, Trophy } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
+import ClassRankingModal from '@/components/ClassRankingModal';
 
 const ClassSubjects = () => {
   const { periodId, classId } = useParams();
@@ -16,6 +17,7 @@ const ClassSubjects = () => {
   const { gradePeriods, classes, subjects, addSubject, updateSubject, deleteSubject } = useSchool();
 
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [isRankingOpen, setIsRankingOpen] = useState(false);
   const [editingSubject, setEditingSubject] = useState<number | null>(null);
   const [subjectName, setSubjectName] = useState('');
   const [coefficient, setCoefficient] = useState('1');
@@ -99,13 +101,18 @@ const ClassSubjects = () => {
           </div>
           <h1 className="text-3xl font-bold text-foreground">Gestion des Matières</h1>
         </div>
-        <Dialog open={isDialogOpen} onOpenChange={(open) => { if (!open) resetForm(); setIsDialogOpen(open); }}>
-          <DialogTrigger asChild>
-            <Button className="gap-2">
-              <Plus className="h-4 w-4" />
-              Ajouter Matière
-            </Button>
-          </DialogTrigger>
+        <div className="flex gap-2">
+          <Button variant="outline" className="gap-2" onClick={() => setIsRankingOpen(true)}>
+            <Trophy className="h-4 w-4" />
+            Classement Général
+          </Button>
+          <Dialog open={isDialogOpen} onOpenChange={(open) => { if (!open) resetForm(); setIsDialogOpen(open); }}>
+            <DialogTrigger asChild>
+              <Button className="gap-2">
+                <Plus className="h-4 w-4" />
+                Ajouter Matière
+              </Button>
+            </DialogTrigger>
           <DialogContent>
             <DialogHeader>
               <DialogTitle>{editingSubject ? 'Modifier' : 'Ajouter'} une Matière</DialogTitle>
@@ -136,6 +143,7 @@ const ClassSubjects = () => {
             </div>
           </DialogContent>
         </Dialog>
+      </div>
       </div>
 
       {classSubjects.length === 0 ? (
@@ -202,6 +210,13 @@ const ClassSubjects = () => {
           </CardContent>
         </Card>
       )}
+
+      <ClassRankingModal
+        open={isRankingOpen}
+        onOpenChange={setIsRankingOpen}
+        periodId={Number(periodId)}
+        classId={Number(classId)}
+      />
     </div>
   );
 };
