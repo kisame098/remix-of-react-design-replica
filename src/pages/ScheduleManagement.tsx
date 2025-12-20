@@ -54,9 +54,11 @@ const ScheduleManagement = () => {
   const [currentConflict, setCurrentConflict] = useState<ScheduleConflict | null>(null);
 
   // Get filtered events based on view mode
+  // When "Classe Entière" is selected, we pass 'all' to show ONLY universal events
+  // When a specific group is selected, we show universal + that group's events
   const filteredEvents = useMemo(() => {
     if (viewMode === 'class' && selectedClassId) {
-      return getEventsByClass(selectedClassId, groupFilter === 'all' ? undefined : groupFilter);
+      return getEventsByClass(selectedClassId, groupFilter);
     }
     if (viewMode === 'teacher' && selectedTeacherId) {
       return getEventsByTeacher(selectedTeacherId);
