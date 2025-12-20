@@ -16,6 +16,7 @@ import PeriodClasses from "./pages/PeriodClasses";
 import ClassSubjects from "./pages/ClassSubjects";
 import SubjectGrades from "./pages/SubjectGrades";
 import SubjectSettings from "./pages/SubjectSettings";
+import ScheduleManagement from "./pages/ScheduleManagement";
 import NotFound from "./pages/NotFound";
 import { DashboardLayout } from "./components/DashboardLayout";
 import { SchoolProvider } from "./contexts/SchoolContext";
@@ -44,6 +45,7 @@ const App = () => (
               <Route path="/notes/:periodId/:classId" element={<ClassSubjects />} />
               <Route path="/notes/:periodId/:classId/:subjectId" element={<SubjectGrades />} />
               <Route path="/notes/:periodId/:classId/:subjectId/settings" element={<SubjectSettings />} />
+              <Route path="/emplois-du-temps" element={<ScheduleManagement />} />
             </Route>
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
