@@ -28,7 +28,6 @@ const ScheduleManagement = () => {
     deleteEvent,
     getEventsByClass,
     getEventsByTeacher,
-    applyGroupPartition,
   } = useSchedule();
 
   // View state
@@ -53,7 +52,6 @@ const ScheduleManagement = () => {
   // Conflict state
   const [conflictDialogOpen, setConflictDialogOpen] = useState(false);
   const [currentConflict, setCurrentConflict] = useState<ScheduleConflict | null>(null);
-  const [pendingEvent, setPendingEvent] = useState<Omit<ScheduleEvent, 'id'> | null>(null);
 
   // Get filtered events based on view mode
   const filteredEvents = useMemo(() => {
@@ -90,6 +88,7 @@ const ScheduleManagement = () => {
         setIsFormModalOpen(false);
         setEditingEvent(null);
       } else if (result.conflicts.length > 0) {
+        // All conflicts are now blocking
         setCurrentConflict(result.conflicts[0]);
         setConflictDialogOpen(true);
       }
@@ -101,16 +100,9 @@ const ScheduleManagement = () => {
         setIsFormModalOpen(false);
         setPendingSlot(null);
       } else if (result.conflicts.length > 0) {
-        const conflict = result.conflicts[0];
-        if (conflict.severity === 'hard') {
-          setCurrentConflict(conflict);
-          setConflictDialogOpen(true);
-        } else {
-          // Soft conflict - allow with groups
-          setPendingEvent(eventData);
-          setCurrentConflict(conflict);
-          setConflictDialogOpen(true);
-        }
+        // All conflicts are now blocking (hard)
+        setCurrentConflict(result.conflicts[0]);
+        setConflictDialogOpen(true);
       }
     }
   };
@@ -123,33 +115,6 @@ const ScheduleManagement = () => {
       setIsFormModalOpen(false);
       setEditingEvent(null);
     }
-  };
-
-  // Handle conflict resolution
-  const handleConflictResolve = (existingGroup: string, newGroup: string) => {
-    if (currentConflict && pendingEvent) {
-      // First add the new event with the assigned group
-      const eventWithGroup = {
-        ...pendingEvent,
-        groupId: newGroup,
-        groupName: GROUP_OPTIONS.find((g) => g.id === newGroup)?.name || newGroup,
-      };
-      const result = addEvent(eventWithGroup);
-      
-      if (result.success && result.event) {
-        // Then update the existing event's group
-        updateEvent(currentConflict.existingEvent.id, {
-          groupId: existingGroup,
-          groupName: GROUP_OPTIONS.find((g) => g.id === existingGroup)?.name || existingGroup,
-        });
-        
-        toast.success('Créneaux partitionnés en groupes');
-        setIsFormModalOpen(false);
-        setPendingSlot(null);
-      }
-    }
-    setPendingEvent(null);
-    setCurrentConflict(null);
   };
 
   const selectedClass = classes.find((c) => c.id === selectedClassId);
@@ -217,12 +182,11 @@ const ScheduleManagement = () => {
                   </Select>
 
                   <Select value={groupFilter} onValueChange={setGroupFilter}>
-                    <SelectTrigger className="w-40">
+                    <SelectTrigger className="w-48">
                       <Filter className="w-4 h-4 mr-2" />
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="all">Tous les groupes</SelectItem>
                       {GROUP_OPTIONS.map((group) => (
                         <SelectItem key={group.id} value={group.id}>
                           {group.name}
@@ -323,10 +287,8 @@ const ScheduleManagement = () => {
         onClose={() => {
           setConflictDialogOpen(false);
           setCurrentConflict(null);
-          setPendingEvent(null);
         }}
         conflict={currentConflict}
-        onResolve={handleConflictResolve}
       />
     </div>
   );

@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import { ScheduleEvent, ScheduleConflict } from '@/types/schedule';
+import { ScheduleEvent, ScheduleConflict, GROUP_OPTIONS } from '@/types/schedule';
 
 // Helper to parse time string to minutes
 const timeToMinutes = (time: string): number => {
@@ -21,10 +21,17 @@ const doTimesIntersect = (
   return s1 < e2 && s2 < e1;
 };
 
+// Validate that endTime is after startTime
+export const validateTimeRange = (startTime: string, endTime: string): boolean => {
+  const start = timeToMinutes(startTime);
+  const end = timeToMinutes(endTime);
+  return end > start;
+};
+
 export const useSchedule = () => {
   const [events, setEvents] = useState<ScheduleEvent[]>([]);
 
-  // Check for overlaps with a new/modified event
+  // STRICT CONSTRAINT VALIDATION (V2 Algorithm)
   const checkOverlap = useCallback(
     (
       newEvent: Partial<ScheduleEvent>,
@@ -40,7 +47,20 @@ export const useSchedule = () => {
         return conflicts;
       }
 
-      const relevantEvents = events.filter(
+      // Time validation: end must be after start
+      if (!validateTimeRange(newEvent.startTime, newEvent.endTime)) {
+        conflicts.push({
+          type: 'class',
+          severity: 'hard',
+          message: `L'heure de fin (${newEvent.endTime}) doit être après l'heure de début (${newEvent.startTime}).`,
+          existingEvent: {} as ScheduleEvent,
+          newEvent,
+        });
+        return conflicts;
+      }
+
+      // Get all events on the same day that intersect with the new time slot
+      const overlappingEvents = events.filter(
         (e) =>
           e.id !== excludeEventId &&
           e.dayIndex === newEvent.dayIndex &&
@@ -52,8 +72,9 @@ export const useSchedule = () => {
           )
       );
 
-      for (const existingEvent of relevantEvents) {
-        // Hard constraint: Teacher cannot be in two places at once
+      for (const existingEvent of overlappingEvents) {
+        // RULE A: Teacher constraint (HARD - always blocking)
+        // A teacher cannot be in two places at once
         if (
           newEvent.teacherId &&
           existingEvent.teacherId === newEvent.teacherId
@@ -67,20 +88,50 @@ export const useSchedule = () => {
           });
         }
 
-        // Soft constraint: Class already has a course (need groups)
+        // RULE B: Class constraint (STRICT logic based on Scope/Group)
         if (
           newEvent.classId &&
-          existingEvent.classId === newEvent.classId &&
-          existingEvent.groupId === 'all' &&
-          newEvent.groupId === 'all'
+          existingEvent.classId === newEvent.classId
         ) {
-          conflicts.push({
-            type: 'class',
-            severity: 'soft',
-            message: `La classe a déjà un cours (${existingEvent.subjectName}) sur ce créneau. Voulez-vous diviser en groupes?`,
-            existingEvent,
-            newEvent,
-          });
+          const newScope = newEvent.groupId;
+          const existingScope = existingEvent.groupId;
+
+          // Case 1: New event is "Classe Entière" (universal)
+          // Cannot overlap with ANY existing event (universal or group-specific)
+          if (newScope === 'all') {
+            conflicts.push({
+              type: 'class',
+              severity: 'hard',
+              message: `Un cours "Classe Entière" ne peut pas chevaucher un cours existant (${existingEvent.subjectName} - ${existingEvent.groupName}).`,
+              existingEvent,
+              newEvent,
+            });
+          }
+          // Case 2: New event is for a specific group
+          else {
+            // Cannot overlap with universal events
+            if (existingScope === 'all') {
+              conflicts.push({
+                type: 'class',
+                severity: 'hard',
+                message: `Le Groupe "${GROUP_OPTIONS.find(g => g.id === newScope)?.name}" ne peut pas avoir cours pendant un cours "Classe Entière" (${existingEvent.subjectName}).`,
+                existingEvent,
+                newEvent,
+              });
+            }
+            // Cannot overlap with the SAME group's events
+            else if (existingScope === newScope) {
+              conflicts.push({
+                type: 'class',
+                severity: 'hard',
+                message: `Le ${GROUP_OPTIONS.find(g => g.id === newScope)?.name} a déjà un cours (${existingEvent.subjectName}) sur ce créneau.`,
+                existingEvent,
+                newEvent,
+              });
+            }
+            // ALLOWED: Different groups can overlap (Group A and Group B simultaneously)
+            // No conflict added here
+          }
         }
       }
 
@@ -96,10 +147,10 @@ export const useSchedule = () => {
       const newEvent: ScheduleEvent = { ...event, id: newId };
 
       const conflicts = checkOverlap(newEvent);
-      const hardConflicts = conflicts.filter((c) => c.severity === 'hard');
-
-      if (hardConflicts.length > 0) {
-        return { success: false, conflicts: hardConflicts };
+      
+      // ALL conflicts are now blocking (hard)
+      if (conflicts.length > 0) {
+        return { success: false, conflicts };
       }
 
       setEvents((prev) => [...prev, newEvent]);
@@ -118,10 +169,10 @@ export const useSchedule = () => {
 
       const updatedEvent = { ...existingEvent, ...updates };
       const conflicts = checkOverlap(updatedEvent, eventId);
-      const hardConflicts = conflicts.filter((c) => c.severity === 'hard');
 
-      if (hardConflicts.length > 0) {
-        return { success: false, conflicts: hardConflicts };
+      // ALL conflicts are now blocking (hard)
+      if (conflicts.length > 0) {
+        return { success: false, conflicts };
       }
 
       setEvents((prev) =>
@@ -137,17 +188,26 @@ export const useSchedule = () => {
     setEvents((prev) => prev.filter((e) => e.id !== eventId));
   }, []);
 
-  // Get events for a specific class
+  // Get events for a specific class with STRICT group filtering
   const getEventsByClass = useCallback(
     (classId: number, groupFilter?: string): ScheduleEvent[] => {
-      return events.filter(
-        (e) =>
-          e.classId === classId &&
-          (groupFilter === undefined ||
-            groupFilter === 'all' ||
-            e.groupId === groupFilter ||
-            e.groupId === 'all')
-      );
+      return events.filter((e) => {
+        if (e.classId !== classId) return false;
+        
+        // No filter or undefined: show all events for this class
+        if (groupFilter === undefined) {
+          return true;
+        }
+        
+        // "Classe Entière" filter: show ONLY universal events (scope = 'all')
+        if (groupFilter === 'all') {
+          return e.groupId === 'all';
+        }
+        
+        // Specific group filter: show universal events + that group's events
+        // EDT_A = E_univ ∪ E_GA
+        return e.groupId === 'all' || e.groupId === groupFilter;
+      });
     },
     [events]
   );
@@ -160,26 +220,6 @@ export const useSchedule = () => {
     [events]
   );
 
-  // Apply group partition to overlapping class events
-  const applyGroupPartition = useCallback(
-    (existingEventId: string, newEventId: string, existingGroup: string, newGroup: string) => {
-      setEvents((prev) =>
-        prev.map((e) => {
-          if (e.id === existingEventId) {
-            const group = GROUP_OPTIONS.find((g) => g.id === existingGroup);
-            return { ...e, groupId: existingGroup, groupName: group?.name || existingGroup };
-          }
-          if (e.id === newEventId) {
-            const group = GROUP_OPTIONS.find((g) => g.id === newGroup);
-            return { ...e, groupId: newGroup, groupName: group?.name || newGroup };
-          }
-          return e;
-        })
-      );
-    },
-    []
-  );
-
   return {
     events,
     addEvent,
@@ -188,13 +228,5 @@ export const useSchedule = () => {
     checkOverlap,
     getEventsByClass,
     getEventsByTeacher,
-    applyGroupPartition,
   };
 };
-
-const GROUP_OPTIONS = [
-  { id: 'all', name: 'Classe Entière' },
-  { id: 'group_a', name: 'Groupe A' },
-  { id: 'group_b', name: 'Groupe B' },
-  { id: 'group_c', name: 'Groupe C' },
-];
