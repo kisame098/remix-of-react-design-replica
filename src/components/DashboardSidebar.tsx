@@ -11,7 +11,8 @@ import {
   LogOut,
   GraduationCap,
   Briefcase,
-  ClipboardList
+  ClipboardList,
+  Calendar
 } from 'lucide-react';
 
 const menuItems = [
@@ -22,6 +23,7 @@ const menuItems = [
   { title: 'Gestion Profs', url: '/professeurs', icon: Briefcase, active: true },
   { title: 'Gestion Classe', url: '/classes', icon: School, active: true },
   { title: 'Gestion Notes', url: '/notes', icon: ClipboardList, active: true },
+  { title: 'Emplois du Temps', url: '/emplois-du-temps', icon: Calendar, active: true },
 ];
 
 export const DashboardSidebar = () => {
