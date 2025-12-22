@@ -1,5 +1,7 @@
-import { useState, useCallback } from 'react';
+import React, { createContext, useContext, useState, useCallback, useEffect, ReactNode } from 'react';
 import { ScheduleEvent, ScheduleConflict, GROUP_OPTIONS } from '@/types/schedule';
+
+const STORAGE_KEY = 'school_schedule_events';
 
 // Helper to parse time string to minutes
 const timeToMinutes = (time: string): number => {
@@ -28,8 +30,33 @@ export const validateTimeRange = (startTime: string, endTime: string): boolean =
   return end > start;
 };
 
-export const useSchedule = () => {
-  const [events, setEvents] = useState<ScheduleEvent[]>([]);
+interface ScheduleContextType {
+  events: ScheduleEvent[];
+  addEvent: (event: Omit<ScheduleEvent, 'id'>) => { success: boolean; conflicts: ScheduleConflict[]; event?: ScheduleEvent };
+  updateEvent: (eventId: string, updates: Partial<ScheduleEvent>) => { success: boolean; conflicts: ScheduleConflict[] };
+  deleteEvent: (eventId: string) => void;
+  checkOverlap: (newEvent: Partial<ScheduleEvent>, excludeEventId?: string) => ScheduleConflict[];
+  getEventsByClass: (classId: number, groupFilter?: string) => ScheduleEvent[];
+  getEventsByTeacher: (teacherId: number) => ScheduleEvent[];
+}
+
+const ScheduleContext = createContext<ScheduleContextType | undefined>(undefined);
+
+export const ScheduleProvider = ({ children }: { children: ReactNode }) => {
+  const [events, setEvents] = useState<ScheduleEvent[]>(() => {
+    // Load from localStorage on init
+    try {
+      const stored = localStorage.getItem(STORAGE_KEY);
+      return stored ? JSON.parse(stored) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  // Persist to localStorage whenever events change
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(events));
+  }, [events]);
 
   // STRICT CONSTRAINT VALIDATION (V2 Algorithm)
   const checkOverlap = useCallback(
@@ -74,7 +101,6 @@ export const useSchedule = () => {
 
       for (const existingEvent of overlappingEvents) {
         // RULE A: Teacher constraint (HARD - always blocking)
-        // A teacher cannot be in two places at once
         if (
           newEvent.teacherId &&
           existingEvent.teacherId === newEvent.teacherId
@@ -96,8 +122,6 @@ export const useSchedule = () => {
           const newScope = newEvent.groupId;
           const existingScope = existingEvent.groupId;
 
-          // Case 1: New event is "Classe Entière" (universal)
-          // Cannot overlap with ANY existing event (universal or group-specific)
           if (newScope === 'all') {
             conflicts.push({
               type: 'class',
@@ -106,10 +130,7 @@ export const useSchedule = () => {
               existingEvent,
               newEvent,
             });
-          }
-          // Case 2: New event is for a specific group
-          else {
-            // Cannot overlap with universal events
+          } else {
             if (existingScope === 'all') {
               conflicts.push({
                 type: 'class',
@@ -118,9 +139,7 @@ export const useSchedule = () => {
                 existingEvent,
                 newEvent,
               });
-            }
-            // Cannot overlap with the SAME group's events
-            else if (existingScope === newScope) {
+            } else if (existingScope === newScope) {
               conflicts.push({
                 type: 'class',
                 severity: 'hard',
@@ -129,8 +148,6 @@ export const useSchedule = () => {
                 newEvent,
               });
             }
-            // ALLOWED: Different groups can overlap (Group A and Group B simultaneously)
-            // No conflict added here
           }
         }
       }
@@ -148,7 +165,6 @@ export const useSchedule = () => {
 
       const conflicts = checkOverlap(newEvent);
       
-      // ALL conflicts are now blocking (hard)
       if (conflicts.length > 0) {
         return { success: false, conflicts };
       }
@@ -170,7 +186,6 @@ export const useSchedule = () => {
       const updatedEvent = { ...existingEvent, ...updates };
       const conflicts = checkOverlap(updatedEvent, eventId);
 
-      // ALL conflicts are now blocking (hard)
       if (conflicts.length > 0) {
         return { success: false, conflicts };
       }
@@ -194,18 +209,14 @@ export const useSchedule = () => {
       return events.filter((e) => {
         if (e.classId !== classId) return false;
         
-        // No filter or undefined: show all events for this class
         if (groupFilter === undefined) {
           return true;
         }
         
-        // "Classe Entière" filter: show ONLY universal events (scope = 'all')
         if (groupFilter === 'all') {
           return e.groupId === 'all';
         }
         
-        // Specific group filter: show universal events + that group's events
-        // EDT_A = E_univ ∪ E_GA
         return e.groupId === 'all' || e.groupId === groupFilter;
       });
     },
@@ -220,13 +231,27 @@ export const useSchedule = () => {
     [events]
   );
 
-  return {
-    events,
-    addEvent,
-    updateEvent,
-    deleteEvent,
-    checkOverlap,
-    getEventsByClass,
-    getEventsByTeacher,
-  };
+  return (
+    <ScheduleContext.Provider
+      value={{
+        events,
+        addEvent,
+        updateEvent,
+        deleteEvent,
+        checkOverlap,
+        getEventsByClass,
+        getEventsByTeacher,
+      }}
+    >
+      {children}
+    </ScheduleContext.Provider>
+  );
+};
+
+export const useSchedule = () => {
+  const context = useContext(ScheduleContext);
+  if (context === undefined) {
+    throw new Error('useSchedule must be used within a ScheduleProvider');
+  }
+  return context;
 };

@@ -21,6 +21,7 @@ import AttendanceManagement from "./pages/AttendanceManagement";
 import NotFound from "./pages/NotFound";
 import { DashboardLayout } from "./components/DashboardLayout";
 import { SchoolProvider } from "./contexts/SchoolContext";
+import { ScheduleProvider } from "./contexts/ScheduleContext";
 
 const queryClient = new QueryClient();
 
@@ -28,31 +29,33 @@ const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
       <SchoolProvider>
-        <Toaster />
-        <Sonner />
-        <BrowserRouter>
-          <Routes>
-            <Route path="/" element={<Index />} />
-            <Route path="/auth" element={<Auth />} />
-            <Route element={<DashboardLayout />}>
-              <Route path="/dashboard" element={<Dashboard />} />
-              <Route path="/inscription" element={<StudentRegistration />} />
-              <Route path="/eleves" element={<StudentManagement />} />
-              <Route path="/inscription-prof" element={<TeacherRegistration />} />
-              <Route path="/professeurs" element={<TeacherManagement />} />
-              <Route path="/classes" element={<ClassManagement />} />
-              <Route path="/notes" element={<GradeManagement />} />
-              <Route path="/notes/:periodId" element={<PeriodClasses />} />
-              <Route path="/notes/:periodId/:classId" element={<ClassSubjects />} />
-              <Route path="/notes/:periodId/:classId/:subjectId" element={<SubjectGrades />} />
-              <Route path="/notes/:periodId/:classId/:subjectId/settings" element={<SubjectSettings />} />
-              <Route path="/emplois-du-temps" element={<ScheduleManagement />} />
-              <Route path="/presences" element={<AttendanceManagement />} />
-            </Route>
-            {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-            <Route path="*" element={<NotFound />} />
-          </Routes>
-        </BrowserRouter>
+        <ScheduleProvider>
+          <Toaster />
+          <Sonner />
+          <BrowserRouter>
+            <Routes>
+              <Route path="/" element={<Index />} />
+              <Route path="/auth" element={<Auth />} />
+              <Route element={<DashboardLayout />}>
+                <Route path="/dashboard" element={<Dashboard />} />
+                <Route path="/inscription" element={<StudentRegistration />} />
+                <Route path="/eleves" element={<StudentManagement />} />
+                <Route path="/inscription-prof" element={<TeacherRegistration />} />
+                <Route path="/professeurs" element={<TeacherManagement />} />
+                <Route path="/classes" element={<ClassManagement />} />
+                <Route path="/notes" element={<GradeManagement />} />
+                <Route path="/notes/:periodId" element={<PeriodClasses />} />
+                <Route path="/notes/:periodId/:classId" element={<ClassSubjects />} />
+                <Route path="/notes/:periodId/:classId/:subjectId" element={<SubjectGrades />} />
+                <Route path="/notes/:periodId/:classId/:subjectId/settings" element={<SubjectSettings />} />
+                <Route path="/emplois-du-temps" element={<ScheduleManagement />} />
+                <Route path="/presences" element={<AttendanceManagement />} />
+              </Route>
+              {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
+              <Route path="*" element={<NotFound />} />
+            </Routes>
+          </BrowserRouter>
+        </ScheduleProvider>
       </SchoolProvider>
     </TooltipProvider>
   </QueryClientProvider>

@@ -17,7 +17,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAttendance } from '@/hooks/useAttendance';
-import { useSchedule } from '@/hooks/useSchedule';
+import { useSchedule } from '@/contexts/ScheduleContext';
 import { 
   TeacherAttendanceStatus, 
   TEACHER_STATUS_LABELS, 
