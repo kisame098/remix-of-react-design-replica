@@ -11,7 +11,7 @@ import {
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { useSchool } from '@/contexts/SchoolContext';
-import { useSchedule } from '@/hooks/useSchedule';
+import { useSchedule } from '@/contexts/ScheduleContext';
 import { ScheduleGrid } from '@/components/schedule/ScheduleGrid';
 import { EventFormModal } from '@/components/schedule/EventFormModal';
 import { ConflictDialog } from '@/components/schedule/ConflictDialog';

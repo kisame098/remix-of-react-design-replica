@@ -22,7 +22,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useSchool } from '@/contexts/SchoolContext';
-import { useSchedule } from '@/hooks/useSchedule';
+import { useSchedule } from '@/contexts/ScheduleContext';
 import { useAttendance } from '@/hooks/useAttendance';
 import { DAYS } from '@/types/schedule';
 import { SESSION_ENTRY_STATUS } from '@/types/attendance';
