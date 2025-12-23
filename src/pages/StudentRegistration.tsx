@@ -1,17 +1,23 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
-import { UserPlus, User, Calendar, MapPin, Phone, Mail, Home, Users, GraduationCap, Check } from 'lucide-react';
+import { UserPlus, User, Calendar, MapPin, Phone, Mail, Home, Users, GraduationCap, Check, Search, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useSchool, Tutor } from '@/contexts/SchoolContext';
+import { useSchoolYear } from '@/contexts/SchoolYearContext';
 import { useToast } from '@/hooks/use-toast';
 
 const StudentRegistration = () => {
-  const { classes, addStudent, getStudentCountByClass, generateStudentId } = useSchool();
+  const { classes, addStudent, getStudentCountByClass, generateStudentId, findStudentByUniqueId, reEnrollStudent } = useSchool();
+  const { currentYear } = useSchoolYear();
   const { toast } = useToast();
+
+  // Re-enrollment state
+  const [reEnrollId, setReEnrollId] = useState('');
+  const [isReEnrolling, setIsReEnrolling] = useState(false);
   
   const [formData, setFormData] = useState({
     firstName: '',
@@ -49,6 +55,105 @@ const StudentRegistration = () => {
 
   const handleTutor2Change = (field: string, value: string) => {
     setTutor2(prev => ({ ...prev, [field]: value }));
+  };
+
+  // Re-enrollment by ID
+  const handleReEnrollSearch = () => {
+    if (!reEnrollId.trim()) {
+      toast({ title: "Erreur", description: "Veuillez saisir un ID élève", variant: "destructive" });
+      return;
+    }
+
+    const studentBase = findStudentByUniqueId(reEnrollId.trim());
+    if (!studentBase) {
+      toast({ 
+        title: "Élève non trouvé", 
+        description: "Aucun élève trouvé avec cet ID. Vérifiez l'ID ou inscrivez un nouvel élève.", 
+        variant: "destructive" 
+      });
+      return;
+    }
+
+    // Auto-fill form with student data
+    setFormData({
+      firstName: studentBase.firstName,
+      lastName: studentBase.lastName,
+      dateOfBirth: studentBase.dateOfBirth,
+      placeOfBirth: studentBase.placeOfBirth,
+      sex: studentBase.sex,
+      phone: studentBase.phone || '',
+      email: studentBase.email || '',
+      residence: studentBase.residence,
+      classId: null,
+    });
+    setTutor1(studentBase.tutor1);
+    setTutor2(studentBase.tutor2 || { phone: '', status: '', email: '' });
+    setPreviewId(studentBase.uniqueId);
+    setIsReEnrolling(true);
+
+    toast({ 
+      title: "Élève trouvé!", 
+      description: `${studentBase.firstName} ${studentBase.lastName} - Sélectionnez une classe pour réinscrire.` 
+    });
+  };
+
+  const handleReEnrollSubmit = () => {
+    if (!formData.classId) {
+      toast({ title: "Erreur", description: "Veuillez sélectionner une classe", variant: "destructive" });
+      return;
+    }
+
+    const student = reEnrollStudent(reEnrollId.trim(), formData.classId);
+    if (!student) {
+      toast({ 
+        title: "Erreur", 
+        description: "Impossible de réinscrire l'élève. Il est peut-être déjà inscrit cette année.", 
+        variant: "destructive" 
+      });
+      return;
+    }
+
+    toast({
+      title: "Réinscription réussie!",
+      description: `${student.firstName} ${student.lastName} a été réinscrit pour l'année ${currentYear?.name || 'courante'}.`,
+    });
+
+    // Reset
+    setReEnrollId('');
+    setIsReEnrolling(false);
+    setFormData({
+      firstName: '',
+      lastName: '',
+      dateOfBirth: '',
+      placeOfBirth: '',
+      sex: '',
+      phone: '',
+      email: '',
+      residence: '',
+      classId: null,
+    });
+    setTutor1({ phone: '', status: '', email: '' });
+    setTutor2({ phone: '', status: '', email: '' });
+    setPreviewId(generateStudentId());
+  };
+
+  const cancelReEnroll = () => {
+    setIsReEnrolling(false);
+    setReEnrollId('');
+    setFormData({
+      firstName: '',
+      lastName: '',
+      dateOfBirth: '',
+      placeOfBirth: '',
+      sex: '',
+      phone: '',
+      email: '',
+      residence: '',
+      classId: null,
+    });
+    setTutor1({ phone: '', status: '', email: '' });
+    setTutor2({ phone: '', status: '', email: '' });
+    setPreviewId(generateStudentId());
   };
 
   const validateForm = (): boolean => {
@@ -173,13 +278,63 @@ const StudentRegistration = () => {
           </div>
         </div>
 
+        {/* Re-enrollment Card */}
+        <Card className="mb-6 border-amber-500/30 bg-amber-50/50 dark:bg-amber-950/20">
+          <CardHeader className="pb-3">
+            <CardTitle className="flex items-center gap-2 text-lg">
+              <RefreshCw className="w-5 h-5 text-amber-600" />
+              Réinscription Rapide
+            </CardTitle>
+            <CardDescription>
+              Élève déjà inscrit une année précédente ? Saisissez son ID pour réinscrire rapidement.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="flex gap-3">
+              <div className="flex-1 relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <Input
+                  placeholder="Ex: ETU-2024-00001"
+                  value={reEnrollId}
+                  onChange={(e) => setReEnrollId(e.target.value)}
+                  className="pl-9 font-mono"
+                  disabled={isReEnrolling}
+                />
+              </div>
+              {isReEnrolling ? (
+                <>
+                  <Button type="button" onClick={handleReEnrollSubmit} className="gap-2">
+                    <Check className="w-4 h-4" />
+                    Confirmer Réinscription
+                  </Button>
+                  <Button type="button" variant="outline" onClick={cancelReEnroll}>
+                    Annuler
+                  </Button>
+                </>
+              ) : (
+                <Button type="button" variant="secondary" onClick={handleReEnrollSearch} className="gap-2">
+                  <Search className="w-4 h-4" />
+                  Rechercher
+                </Button>
+              )}
+            </div>
+            {isReEnrolling && (
+              <p className="text-sm text-amber-600 mt-3">
+                ✓ Élève trouvé ! Les informations ont été pré-remplies. Sélectionnez une classe et confirmez.
+              </p>
+            )}
+          </CardContent>
+        </Card>
+
         {/* Preview Student ID */}
         <Card className="mb-6 bg-primary/5 border-primary/20">
           <CardContent className="py-4">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <GraduationCap className="w-5 h-5 text-primary" />
-                <span className="text-sm text-muted-foreground">ID Étudiant qui sera généré:</span>
+                <span className="text-sm text-muted-foreground">
+                  {isReEnrolling ? "ID Élève (réinscription):" : "ID Étudiant qui sera généré:"}
+                </span>
               </div>
               <span className="font-mono font-bold text-primary text-lg">{previewId}</span>
             </div>

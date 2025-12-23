@@ -1,17 +1,23 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
-import { UserPlus, User, Calendar, MapPin, Phone, Mail, Home, Briefcase, GraduationCap, Check, Clock, Award } from 'lucide-react';
+import { UserPlus, User, Calendar, MapPin, Phone, Mail, Home, Briefcase, GraduationCap, Check, Clock, Award, Search, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useSchool } from '@/contexts/SchoolContext';
+import { useSchoolYear } from '@/contexts/SchoolYearContext';
 import { useToast } from '@/hooks/use-toast';
 
 const TeacherRegistration = () => {
-  const { addTeacher, generateTeacherId } = useSchool();
+  const { addTeacher, generateTeacherId, findTeacherByUniqueId, reEnrollTeacher } = useSchool();
+  const { currentYear } = useSchoolYear();
   const { toast } = useToast();
+
+  // Re-enrollment state
+  const [reEnrollId, setReEnrollId] = useState('');
+  const [isReEnrolling, setIsReEnrolling] = useState(false);
   
   const [formData, setFormData] = useState({
     firstName: '',
@@ -31,6 +37,82 @@ const TeacherRegistration = () => {
   });
 
   const [previewId, setPreviewId] = useState(generateTeacherId());
+
+  // Re-enrollment functions
+  const handleReEnrollSearch = () => {
+    if (!reEnrollId.trim()) {
+      toast({ title: "Erreur", description: "Veuillez saisir un ID professeur", variant: "destructive" });
+      return;
+    }
+
+    const teacherBase = findTeacherByUniqueId(reEnrollId.trim());
+    if (!teacherBase) {
+      toast({ 
+        title: "Professeur non trouvé", 
+        description: "Aucun professeur trouvé avec cet ID.", 
+        variant: "destructive" 
+      });
+      return;
+    }
+
+    setFormData(prev => ({
+      ...prev,
+      firstName: teacherBase.firstName,
+      lastName: teacherBase.lastName,
+      dateOfBirth: teacherBase.dateOfBirth,
+      placeOfBirth: teacherBase.placeOfBirth,
+      sex: teacherBase.sex,
+      phone: teacherBase.phone || '',
+      email: teacherBase.email || '',
+      residence: teacherBase.residence,
+      diploma: teacherBase.diploma,
+      emergencyPhone: teacherBase.emergencyPhone,
+    }));
+    setPreviewId(teacherBase.uniqueId);
+    setIsReEnrolling(true);
+
+    toast({ 
+      title: "Professeur trouvé!", 
+      description: `${teacherBase.firstName} ${teacherBase.lastName} - Complétez les infos de contrat.` 
+    });
+  };
+
+  const handleReEnrollSubmit = () => {
+    if (!formData.contractType || !formData.paymentType || !formData.salaryAmount || !formData.yearsExperience) {
+      toast({ title: "Erreur", description: "Complétez les informations de contrat", variant: "destructive" });
+      return;
+    }
+
+    const teacher = reEnrollTeacher(reEnrollId.trim(), {
+      yearsExperience: parseInt(formData.yearsExperience) || 0,
+      contractType: formData.contractType as 'cdi' | 'cdd' | 'vacataire' | 'stagiaire',
+      paymentType: formData.paymentType as 'hourly' | 'fixed',
+      salaryAmount: parseFloat(formData.salaryAmount) || 0,
+    });
+
+    if (!teacher) {
+      toast({ title: "Erreur", description: "Impossible de réinscrire. Peut-être déjà inscrit cette année.", variant: "destructive" });
+      return;
+    }
+
+    toast({
+      title: "Réinscription réussie!",
+      description: `${teacher.firstName} ${teacher.lastName} réinscrit pour ${currentYear?.name || 'cette année'}.`,
+    });
+
+    cancelReEnroll();
+  };
+
+  const cancelReEnroll = () => {
+    setIsReEnrolling(false);
+    setReEnrollId('');
+    setFormData({
+      firstName: '', lastName: '', dateOfBirth: '', placeOfBirth: '', sex: '',
+      phone: '', email: '', residence: '', diploma: '', yearsExperience: '',
+      emergencyPhone: '', contractType: '', paymentType: '', salaryAmount: '',
+    });
+    setPreviewId(generateTeacherId());
+  };
 
   const handleInputChange = (field: string, value: string | number | null) => {
     setFormData(prev => ({ ...prev, [field]: value }));
@@ -168,13 +250,47 @@ const TeacherRegistration = () => {
           </div>
         </div>
 
+        {/* Re-enrollment Card */}
+        <Card className="mb-6 border-amber-500/30 bg-amber-50/50 dark:bg-amber-950/20">
+          <CardHeader className="pb-3">
+            <CardTitle className="flex items-center gap-2 text-lg">
+              <RefreshCw className="w-5 h-5 text-amber-600" />
+              Réinscription Rapide
+            </CardTitle>
+            <CardDescription>
+              Professeur déjà inscrit ? Saisissez son ID pour réinscrire rapidement.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="flex gap-3">
+              <Input
+                placeholder="Ex: PROF-2024-00001"
+                value={reEnrollId}
+                onChange={(e) => setReEnrollId(e.target.value)}
+                className="flex-1 font-mono"
+                disabled={isReEnrolling}
+              />
+              {isReEnrolling ? (
+                <>
+                  <Button type="button" onClick={handleReEnrollSubmit}>Confirmer</Button>
+                  <Button type="button" variant="outline" onClick={cancelReEnroll}>Annuler</Button>
+                </>
+              ) : (
+                <Button type="button" variant="secondary" onClick={handleReEnrollSearch}>Rechercher</Button>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+
         {/* Preview Teacher ID */}
         <Card className="mb-6 bg-primary/5 border-primary/20">
           <CardContent className="py-4">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <Briefcase className="w-5 h-5 text-primary" />
-                <span className="text-sm text-muted-foreground">ID Professeur qui sera généré:</span>
+                <span className="text-sm text-muted-foreground">
+                  {isReEnrolling ? "ID Professeur (réinscription):" : "ID Professeur qui sera généré:"}
+                </span>
               </div>
               <span className="font-mono font-bold text-primary text-lg">{previewId}</span>
             </div>

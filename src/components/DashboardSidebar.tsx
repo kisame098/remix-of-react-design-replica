@@ -15,6 +15,7 @@ import {
   Calendar,
   UserCheck
 } from 'lucide-react';
+import { SchoolYearSelector } from './SchoolYearSelector';
 
 const menuItems = [
   { title: 'Dashboard', url: '/dashboard', icon: LayoutDashboard, active: true },
@@ -59,6 +60,9 @@ export const DashboardSidebar = () => {
           </AnimatePresence>
         </div>
       </div>
+
+      {/* School Year Selector */}
+      <SchoolYearSelector collapsed={collapsed} />
 
       {/* Toggle Button */}
       <button
