@@ -228,11 +228,11 @@ const TeacherManagement = () => {
       email: editForm.email || undefined,
       residence: editForm.residence,
       diploma: editForm.diploma,
-      yearsExperience: parseInt(editForm.yearsExperience),
+      yearsExperience: parseInt(editForm.yearsExperience) || 0,
       emergencyPhone: editForm.emergencyPhone,
       contractType: editForm.contractType as 'cdi' | 'cdd' | 'vacataire' | 'stagiaire',
       paymentType: editForm.paymentType as 'hourly' | 'fixed',
-      salaryAmount: parseFloat(editForm.salaryAmount),
+      salaryAmount: parseFloat(editForm.salaryAmount) || 0,
     });
 
     toast({

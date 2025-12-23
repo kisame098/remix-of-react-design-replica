@@ -47,10 +47,10 @@ export interface TeacherEnrollment {
   id: number;
   teacherUniqueId: string;
   schoolYearId: string;
-  yearsExperience: string;
+  yearsExperience: number;
   contractType: 'cdi' | 'cdd' | 'vacataire' | 'stagiaire';
   paymentType: 'hourly' | 'fixed';
-  salaryAmount: string;
+  salaryAmount: number;
   enrolledAt: string;
 }
 
@@ -85,18 +85,18 @@ export interface Teacher {
   email?: string;
   residence: string;
   diploma: string;
-  yearsExperience: string;
+  yearsExperience: number;
   emergencyPhone: string;
   contractType: 'cdi' | 'cdd' | 'vacataire' | 'stagiaire';
   paymentType: 'hourly' | 'fixed';
-  salaryAmount: string;
+  salaryAmount: number;
   createdAt: Date;
 }
 
 export interface SchoolClass {
   id: number;
   name: string;
-  capacity: number;
+  studentLimit: number;
   createdAt: Date;
 }
 
@@ -127,15 +127,34 @@ export interface Grade {
   subjectId: number;
   periodId: number;
   classId: number;
-  scores: number[];
-  average: number | null;
+  devoir1?: number;
+  devoir2?: number;
+  devoir3?: number;
+  devoir4?: number;
+  devoir5?: number;
+  composition?: number;
+  note?: number;
+}
+
+export interface StudentSubjectSetting {
+  active: boolean;
+  customCoef?: string;
+  lvLevel?: 'none' | 'lv1' | 'lv2' | 'lv3';
 }
 
 export interface SubjectSettingsData {
   subjectId: number;
   periodId: number;
-  numberOfGrades: number;
-  maxScore: number;
+  devoir1Active: boolean;
+  devoir2Active: boolean;
+  devoir3Active: boolean;
+  devoir4Active: boolean;
+  devoir5Active: boolean;
+  lvModeActive: boolean;
+  lv1Coefficient: number;
+  lv2Coefficient: number;
+  lv3Coefficient: number;
+  studentSettings: Record<number, StudentSubjectSetting>;
 }
 
 interface SchoolContextType {

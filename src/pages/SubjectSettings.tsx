@@ -50,8 +50,8 @@ const SubjectSettings = () => {
   // Student settings - each student has: active (for this subject), custom coefficient, LV level
   const [studentSettings, setStudentSettings] = useState<Record<number, {
     active: boolean;
-    customCoef: string;
-    lvLevel: 'none' | 'lv1' | 'lv2' | 'lv3';
+    customCoef?: string;
+    lvLevel?: 'none' | 'lv1' | 'lv2' | 'lv3';
   }>>(existingSettings?.studentSettings ?? {});
 
   // Initialize student settings if not present
