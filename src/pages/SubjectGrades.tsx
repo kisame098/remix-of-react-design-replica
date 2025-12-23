@@ -96,6 +96,7 @@ const SubjectGrades = () => {
       studentId: entry.studentId,
       subjectId: Number(subjectId),
       periodId: Number(periodId),
+      classId: Number(classId),
       devoir1: entry.devoir1 ? Number(entry.devoir1) : undefined,
       devoir2: entry.devoir2 ? Number(entry.devoir2) : undefined,
       devoir3: entry.devoir3 ? Number(entry.devoir3) : undefined,

@@ -108,11 +108,11 @@ const TeacherRegistration = () => {
       email: formData.email || undefined,
       residence: formData.residence,
       diploma: formData.diploma,
-      yearsExperience: parseInt(formData.yearsExperience),
+      yearsExperience: parseInt(formData.yearsExperience) || 0,
       emergencyPhone: formData.emergencyPhone,
       contractType: formData.contractType as 'cdi' | 'cdd' | 'vacataire' | 'stagiaire',
       paymentType: formData.paymentType as 'hourly' | 'fixed',
-      salaryAmount: parseFloat(formData.salaryAmount),
+      salaryAmount: parseFloat(formData.salaryAmount) || 0,
     });
 
     toast({
