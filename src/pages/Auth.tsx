@@ -6,6 +6,7 @@ import { Link } from "react-router-dom";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { z } from "zod";
+import { supabase } from "@/integrations/supabase/client";
 
 // Validation schemas
 const loginSchema = z.object({
@@ -26,6 +27,7 @@ const signupSchema = z.object({
 
 const Auth = () => {
   const [isLogin, setIsLogin] = useState(true);
+  const [isForgotPassword, setIsForgotPassword] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formData, setFormData] = useState({
@@ -54,6 +56,31 @@ const Auth = () => {
     setIsSubmitting(true);
 
     try {
+      if (isForgotPassword) {
+        const result = z.object({ email: z.string().email("Email invalide") }).safeParse({ email: formData.email });
+        if (!result.success) {
+          setErrors({ email: result.error.errors[0]?.message || "Email invalide" });
+          setIsSubmitting(false);
+          return;
+        }
+        const { error } = await supabase.auth.resetPasswordForEmail(formData.email, {
+          redirectTo: `${window.location.origin}/reset-password`,
+        });
+        if (error) {
+          toast({ variant: "destructive", title: "Erreur", description: error.message });
+          setIsSubmitting(false);
+          return;
+        }
+        toast({
+          title: "Email envoyé",
+          description: "Vérifiez votre boîte mail pour réinitialiser votre mot de passe.",
+        });
+        setIsForgotPassword(false);
+        setIsLogin(true);
+        setIsSubmitting(false);
+        return;
+      }
+
       if (isLogin) {
         // Validate login
         const result = loginSchema.safeParse({
@@ -217,10 +244,12 @@ const Auth = () => {
           {/* Title */}
           <div className="mb-8">
             <h1 className="text-2xl font-bold text-foreground mb-2">
-              {isLogin ? "Bon retour parmi nous" : "Créer votre école"}
+              {isForgotPassword ? "Mot de passe oublié" : isLogin ? "Bon retour parmi nous" : "Créer votre école"}
             </h1>
             <p className="text-muted-foreground">
-              {isLogin
+              {isForgotPassword
+                ? "Entrez votre email pour recevoir un lien de réinitialisation"
+                : isLogin
                 ? "Connectez-vous pour accéder à votre espace"
                 : "Inscrivez votre établissement sur Teranga School"}
             </p>
@@ -229,7 +258,7 @@ const Auth = () => {
           {/* Form */}
           <form onSubmit={handleSubmit} className="space-y-5">
             <AnimatePresence mode="wait">
-              {!isLogin && (
+              {!isLogin && !isForgotPassword && (
                 <>
                   {/* School Name */}
                   <motion.div
@@ -314,6 +343,7 @@ const Auth = () => {
             </div>
 
             {/* Password */}
+            {!isForgotPassword && (
             <div>
               <label className="block text-sm font-medium text-foreground mb-2">
                 Mot de passe
@@ -342,10 +372,11 @@ const Auth = () => {
                 <p className="text-sm text-destructive mt-1">{errors.password}</p>
               )}
             </div>
+            )}
 
             {/* Confirm Password */}
             <AnimatePresence mode="wait">
-              {!isLogin && (
+              {!isLogin && !isForgotPassword && (
                 <motion.div
                   initial={{ opacity: 0, height: 0 }}
                   animate={{ opacity: 1, height: "auto" }}
@@ -375,11 +406,15 @@ const Auth = () => {
               )}
             </AnimatePresence>
 
-            {isLogin && (
+            {isLogin && !isForgotPassword && (
               <div className="flex justify-end">
-                <a href="#" className="text-sm text-primary hover:underline">
+                <button
+                  type="button"
+                  onClick={() => { setIsForgotPassword(true); setErrors({}); }}
+                  className="text-sm text-primary hover:underline"
+                >
                   Mot de passe oublié ?
-                </a>
+                </button>
               </div>
             )}
 
@@ -391,11 +426,22 @@ const Auth = () => {
               className="w-full py-3 text-base font-semibold text-primary-foreground bg-primary rounded-lg shadow-lg shadow-primary/25 hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
             >
               {isSubmitting && <Loader2 className="w-5 h-5 animate-spin" />}
-              {isLogin ? "Se connecter" : "Créer mon école"}
+              {isForgotPassword ? "Envoyer le lien" : isLogin ? "Se connecter" : "Créer mon école"}
             </motion.button>
           </form>
 
           {/* Toggle */}
+          {isForgotPassword ? (
+            <p className="text-center text-sm text-muted-foreground mt-6">
+              <button
+                type="button"
+                onClick={() => { setIsForgotPassword(false); setErrors({}); }}
+                className="text-primary font-medium hover:underline"
+              >
+                Retour à la connexion
+              </button>
+            </p>
+          ) : (
           <p className="text-center text-sm text-muted-foreground mt-6">
             {isLogin ? "Pas encore d'école inscrite ?" : "Déjà un compte ?"}{" "}
             <button
@@ -409,6 +455,7 @@ const Auth = () => {
               {isLogin ? "Inscrire mon école" : "Se connecter"}
             </button>
           </p>
+          )}
         </motion.div>
       </div>
 
