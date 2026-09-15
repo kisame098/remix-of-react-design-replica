@@ -1,5 +1,5 @@
 import { Facebook, Twitter, Linkedin, MapPin, Phone, Mail } from "lucide-react";
-import { TELEPHONE_LISIBLE, lienWhatsApp } from "@/lib/contact";
+import { EMAIL_CONTACT, TELEPHONE_LISIBLE, lienWhatsApp } from "@/lib/contact";
 
 const Footer = () => {
   return (
@@ -108,9 +108,12 @@ const Footer = () => {
               </li>
               <li className="flex items-center gap-3">
                 <Mail className="w-4 h-4 text-muted-foreground flex-shrink-0" />
-                <span className="text-sm text-muted-foreground">
-                  contact@senclass.com
-                </span>
+                <a
+                  href={`mailto:${EMAIL_CONTACT}`}
+                  className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  {EMAIL_CONTACT}
+                </a>
               </li>
             </ul>
           </div>

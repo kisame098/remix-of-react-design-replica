@@ -14,3 +14,6 @@ export const lienWhatsApp = (message: string): string =>
 
 /** Adresse de la page de création d'école (formulaire d'inscription ouvert d'office). */
 export const ADRESSE_INSCRIPTION = '/auth?inscription=1';
+
+/** Adresse de contact publique — transférée par Cloudflare Email Routing. */
+export const EMAIL_CONTACT = 'contact@senclass.com';

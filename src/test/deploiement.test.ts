@@ -3,6 +3,7 @@ import { readFileSync, existsSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { TITRE_ACCUEIL, PREFIXES_PRIVES } from '@/lib/referencement';
 import { TARIF_MENSUEL } from '@/lib/subscriptionPlans';
+import { EMAIL_CONTACT } from '@/lib/contact';
 
 // ════════════════════════════════════════════════════════════════════════════
 // GARDE-FOUS DE MISE EN LIGNE
@@ -179,6 +180,12 @@ describe('référencement Google', () => {
     const appli = JSON.parse(brut)['@graph'].find((n: { '@type': string }) => n['@type'] === 'SoftwareApplication');
     expect(Number(appli.offers.price)).toBe(TARIF_MENSUEL);
     expect(appli.offers.priceCurrency).toBe('XOF');
+  });
+
+  it('l\'e-mail déclaré à Google est celui affiché sur le site', () => {
+    const brut = /<script type="application\/ld\+json">([\s\S]*?)<\/script>/.exec(html)![1];
+    const organisation = JSON.parse(brut)['@graph'].find((n: { '@type': string }) => n['@type'] === 'Organization');
+    expect(organisation.contactPoint.email).toBe(EMAIL_CONTACT);
   });
 
   it('le logo déclaré à Google existe', () => {
