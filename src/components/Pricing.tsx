@@ -1,9 +1,7 @@
 import { motion } from "framer-motion";
-import { Check, MessageCircle } from "lucide-react";
-
-const WHATSAPP_NUMBER = "221706811277";
-const WHATSAPP_MESSAGE = "Bonjour, je suis intéressé(e) par SenClass pour mon établissement.";
-const WHATSAPP_URL = `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(WHATSAPP_MESSAGE)}`;
+import { Check } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { ADRESSE_INSCRIPTION } from "@/lib/contact";
 
 const FEATURES = [
   "Gestion des inscriptions et des dossiers élèves",
@@ -16,6 +14,8 @@ const FEATURES = [
 ];
 
 const Pricing = () => {
+  const navigate = useNavigate();
+
   return (
     <section id="tarifs" className="py-20 bg-background">
       <div className="container mx-auto px-4">
@@ -54,7 +54,7 @@ const Pricing = () => {
               <span className="text-muted-foreground">/mois</span>
             </div>
 
-            <ul className="space-y-3 mb-6">
+            <ul className="space-y-3 mb-8">
               {FEATURES.map((feature) => (
                 <li key={feature} className="flex items-start gap-3">
                   <Check className="w-5 h-5 text-primary flex-shrink-0 mt-0.5" />
@@ -63,23 +63,18 @@ const Pricing = () => {
               ))}
             </ul>
 
-            <div className="mb-6 px-3 py-2 rounded-lg bg-muted/50 text-xs text-muted-foreground text-center">
-              💳 Paiement en ligne bientôt disponible — pour le moment, l'abonnement s'active directement avec nous.
-            </div>
-
-            {/* CTA Button */}
-            <motion.a
-              href={WHATSAPP_URL}
-              target="_blank"
-              rel="noopener noreferrer"
+            {/* Abonnement en libre-service : l'école crée d'abord son compte,
+                puis active l'abonnement depuis son espace (page Abonnement),
+                où le paiement l'active immédiatement. */}
+            <motion.button
+              type="button"
+              onClick={() => navigate(ADRESSE_INSCRIPTION)}
               whileHover={{ scale: 1.02 }}
               whileTap={{ scale: 0.98 }}
-              className="w-full py-3 rounded-lg font-semibold transition-colors bg-primary text-primary-foreground hover:bg-primary/90 flex items-center justify-center gap-2"
+              className="w-full py-3 rounded-lg font-semibold transition-colors bg-primary text-primary-foreground hover:bg-primary/90"
             >
-              <MessageCircle className="w-5 h-5" />
-              Nous contacter sur WhatsApp
-            </motion.a>
-            <p className="mt-3 text-center text-xs text-muted-foreground">{WHATSAPP_NUMBER.replace(/^221/, "+221 ")}</p>
+              S'abonner
+            </motion.button>
           </div>
         </motion.div>
       </div>

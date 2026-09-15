@@ -3,6 +3,7 @@ import { render, screen, fireEvent } from '@testing-library/react';
 import { MemoryRouter, Routes, Route, useLocation } from 'react-router-dom';
 import Hero from './Hero';
 import CTA from './CTA';
+import Pricing from './Pricing';
 import Footer from './Footer';
 import FAQ from './FAQ';
 import { QUESTIONS, donneesStructureesFAQ } from '@/lib/faq';
@@ -140,5 +141,29 @@ describe('pied de page', () => {
   it('plus aucune adresse sur un domaine qui n\'est pas le nôtre', () => {
     const { container } = render(<Footer />);
     expect(container.textContent).not.toMatch(/terangaschool|terranga/i);
+  });
+});
+
+describe('carte Tarifs — abonnement en libre-service', () => {
+  it('« S\'abonner » ouvre la création de compte : l\'école s\'inscrit, puis active son abonnement', () => {
+    monter(<Pricing />);
+    fireEvent.click(screen.getByRole('button', { name: "S'abonner" }));
+    expect(screen.getByTestId('adresse')).toHaveTextContent(ADRESSE_INSCRIPTION);
+  });
+
+  it('plus de « paiement bientôt disponible » : le paiement en ligne existe', () => {
+    const { container } = monter(<Pricing />);
+    expect(container.textContent).not.toMatch(/bientôt disponible/i);
+  });
+
+  it('plus de passage obligé par WhatsApp pour s\'abonner', () => {
+    const { container } = monter(<Pricing />);
+    expect(container.querySelector('a[href*="wa.me"]')).toBeNull();
+    expect(container.textContent).not.toMatch(/WhatsApp/i);
+  });
+
+  it('le tarif affiché reste celui de la grille réelle', () => {
+    const { container } = monter(<Pricing />);
+    expect(container.textContent?.replace(/\D/g, '')).toContain(String(TARIF_MENSUEL));
   });
 });
