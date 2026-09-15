@@ -259,6 +259,15 @@ describe('hébergement Cloudflare Pages', () => {
     expect(lire('.github/workflows/ci.yml')).toContain("node-version-file: '.nvmrc'");
   });
 
+  it('un seul fichier de verrouillage, celui de npm — Cloudflare choisit son outil d\'après lui', () => {
+    // Un bun.lockb hérité de Lovable a fait échouer le premier déploiement :
+    // Cloudflare a lancé « bun install --frozen-lockfile » au lieu de npm.
+    for (const f of ['bun.lockb', 'bun.lock', 'yarn.lock', 'pnpm-lock.yaml']) {
+      expect(existsSync(join(RACINE, f)), f).toBe(false);
+    }
+    expect(existsSync(join(RACINE, 'package-lock.json'))).toBe(true);
+  });
+
   it('plus de configuration Vercel qui pourrait induire en erreur', () => {
     expect(existsSync(join(RACINE, 'vercel.json'))).toBe(false);
   });

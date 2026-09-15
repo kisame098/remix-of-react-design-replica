@@ -20,7 +20,7 @@
 | Commande de build | `npm run build` |
 | Dossier de sortie | `dist` |
 
-Rien d'autre à régler : Node 22 est lu dans `.nvmrc`, et Cloudflare installe les dépendances avec `npm clean-install`, qui lit `.npmrc` (sans lui, l'installation échoue sur une erreur ERESOLVE).
+Rien d'autre à régler : Node 22 est lu dans `.nvmrc`, et Cloudflare installe les dépendances avec `npm clean-install`, qui lit `.npmrc` (sans lui, l'installation échoue sur une erreur ERESOLVE). Cloudflare choisit son outil d'installation d'après le fichier de verrouillage présent : le dépôt ne doit contenir que `package-lock.json` — un `bun.lockb` hérité de Lovable a fait échouer le premier déploiement (`bun install --frozen-lockfile`).
 
 **Variables d'environnement :** aucune à saisir, elles sont dans `.env` (versionné). La clé qui s'y trouve est la clé *publique* de Supabase — elle finit de toute façon dans le code envoyé aux navigateurs, c'est prévu ainsi. Si `.env` sort un jour du dépôt, recopier ses variables `VITE_*` dans Cloudflare → projet → Paramètres → Variables.
 
