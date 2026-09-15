@@ -1,5 +1,5 @@
 import { motion } from "framer-motion";
-import { Users, BookOpen, CreditCard, MessageSquare, Shield, Headphones } from "lucide-react";
+import { Users, BookOpen, CreditCard, ClipboardCheck, Shield, Headphones } from "lucide-react";
 
 const features = [
   {
@@ -17,13 +17,13 @@ const features = [
   {
     icon: CreditCard,
     title: "Paiements Simplifiés",
-    description: "Suivi de la scolarité, relances automatiques et intégration Mobile Money (Wave, Orange Money).",
+    description: "Encaissement rapide (espèces, Wave, Orange Money), suivi des impayés et relances automatiques.",
     color: "bg-green-50 text-green-600",
   },
   {
-    icon: MessageSquare,
-    title: "Communication SMS",
-    description: "Envoyez des notifications aux parents pour les retards, absences ou événements importants.",
+    icon: ClipboardCheck,
+    title: "Suivi des Présences",
+    description: "Enregistrez les absences et retards des élèves comme des professeurs, en un clic par créneau.",
     color: "bg-purple-50 text-purple-600",
   },
   {

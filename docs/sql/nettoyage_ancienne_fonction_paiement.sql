@@ -1,0 +1,35 @@
+-- ═══════════════════════════════════════════════════════════════════════════
+-- NETTOYAGE : retirer l'ancienne version de submit_payment_claim
+-- À coller et exécuter dans l'éditeur SQL Supabase.
+--
+-- `create or replace function` ne remplace une fonction que si la signature
+-- est IDENTIQUE. En ajoutant le paramètre p_months, la migration précédente a
+-- donc créé une SECONDE fonction au lieu de remplacer la première :
+--
+--   submit_payment_claim(text, integer, text, text, text)            ← ancienne
+--   submit_payment_claim(text, integer, text, text, text, integer)   ← nouvelle
+--
+-- Les deux existent aujourd'hui. L'ancienne fonctionne, mais elle
+-- N'ENREGISTRE PAS LA DURÉE : une école qui l'appellerait après avoir réglé
+-- 12 mois se verrait créditer 1 seul mois (months prend sa valeur par défaut).
+--
+-- Cas réel : une école dont l'onglet est resté ouvert depuis avant la mise à
+-- jour envoie encore 5 arguments. PostgREST choisit la fonction d'après les
+-- clés reçues — elle tomberait donc sur l'ancienne, et paierait un an pour un
+-- mois.
+--
+-- On supprime l'ancienne : le client envoie toujours p_months désormais.
+-- ═══════════════════════════════════════════════════════════════════════════
+
+drop function if exists public.submit_payment_claim(text, integer, text, text, text);
+
+-- ── Contrôle ───────────────────────────────────────────────────────────────
+-- Il ne doit rester QU'UNE seule version, celle à 6 paramètres :
+--
+--   select pg_get_function_identity_arguments(p.oid)
+--     from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+--    where n.nspname = 'public' and p.proname = 'submit_payment_claim';
+--
+-- Attendu :
+--   p_plan text, p_amount integer, p_wave_number text,
+--   p_wave_account_name text, p_proof_screenshot text, p_months integer

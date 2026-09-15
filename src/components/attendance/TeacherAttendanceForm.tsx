@@ -1,323 +1,235 @@
-import { useState, useMemo, useEffect } from 'react';
-import { format } from 'date-fns';
-import { fr } from 'date-fns/locale';
+import { useState, useEffect, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
-import { 
-  UserCheck, 
-  Save,
-  Lock,
-  AlertTriangle,
-  Clock,
-  CheckCircle,
-  XCircle
-} from 'lucide-react';
+import { Save, Lock, UserCheck, Clock, AlertTriangle, XCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useSchool } from '@/contexts/SchoolContext';
 import { useAttendance } from '@/hooks/useAttendance';
-import { useSchedule } from '@/contexts/ScheduleContext';
-import { 
-  TeacherAttendanceStatus, 
-  TEACHER_STATUS_LABELS, 
-  TEACHER_STATUS_COLORS 
+import {
+  TeacherAttendanceStatus,
+  TEACHER_STATUS_LABELS,
+  TEACHER_STATUS_COLORS,
+  AttendanceSession,
 } from '@/types/attendance';
-import { Teacher } from '@/contexts/SchoolContext';
 import { toast } from '@/hooks/use-toast';
 
+const timeToMinutes = (t: string) => {
+  const [h, m] = t.split(':').map(Number);
+  return h * 60 + m;
+};
+const formatMins = (mins: number) => {
+  const h = Math.floor(mins / 60);
+  const m = mins % 60;
+  return `${h}h${m.toString().padStart(2, '0')}`;
+};
+
 interface TeacherAttendanceFormProps {
-  selectedDate: Date;
-  selectedSession: string | null;
-  teachers: Teacher[];
+  session: AttendanceSession;
   isMonthLocked: boolean;
 }
 
-// Helper: convertit time string en minutes
-const timeToMinutes = (time: string): number => {
-  const [hours, minutes] = time.split(':').map(Number);
-  return hours * 60 + minutes;
-};
+export const TeacherAttendanceForm = ({ session, isMonthLocked }: TeacherAttendanceFormProps) => {
+  const { teachers } = useSchool();
+  const { getOrInitTeacherAttendance, getTeacherAttendance, updateTeacherAttendance } = useAttendance();
 
-export const TeacherAttendanceForm = ({
-  selectedDate,
-  selectedSession,
-  teachers,
-  isMonthLocked,
-}: TeacherAttendanceFormProps) => {
-  const { events } = useSchedule();
-  const {
-    getOrInitTeacherAttendance,
-    updateTeacherAttendance,
-    getTeacherAttendance,
-    sessions,
-  } = useAttendance();
+  const teacher = session.teacherId
+    ? teachers.find(t => t.id === session.teacherId)
+    : null;
 
-  const [status, setStatus] = useState<TeacherAttendanceStatus>('undefined');
-  const [effectiveMinutes, setEffectiveMinutes] = useState<number>(0);
-  const [justification, setJustification] = useState<string>('');
+  const theoreticalMinutes = useMemo(
+    () => timeToMinutes(session.endTime) - timeToMinutes(session.startTime),
+    [session.startTime, session.endTime]
+  );
 
-  // Trouver la session et l'événement
-  const sessionData = useMemo(() => {
-    if (!selectedSession) return null;
-    
-    const session = sessions.find(s => s.id === selectedSession);
-    if (!session) return null;
+  // État local du formulaire
+  const [status, setStatus]               = useState<TeacherAttendanceStatus>('undefined');
+  const [effectiveMinutes, setEffectiveMinutes] = useState(0);
+  const [justification, setJustification] = useState('');
 
-    const event = events.find(e => e.id === session.scheduleEventId);
-    const teacher = teachers.find(t => t.id === session.teacherId);
-    const theoreticalMinutes = timeToMinutes(session.endTime) - timeToMinutes(session.startTime);
-
-    return {
-      session,
-      event,
-      teacher,
-      theoreticalMinutes,
-    };
-  }, [selectedSession, sessions, events, teachers]);
-
-  // Charger les données existantes
+  // Initialiser l'enregistrement prof dans le contexte
   useEffect(() => {
-    if (sessionData?.session && sessionData.teacher) {
-      const existing = getTeacherAttendance(
-        sessionData.session.id,
-        sessionData.teacher.id
-      );
-
-      if (existing) {
-        setStatus(existing.status);
-        setEffectiveMinutes(existing.effectiveMinutes);
-        setJustification(existing.justification || '');
-      } else {
-        // Initialiser avec undefined (logique pessimiste)
-        getOrInitTeacherAttendance(
-          sessionData.session.id,
-          sessionData.teacher.id,
-          sessionData.theoreticalMinutes
-        );
-        setStatus('undefined');
-        setEffectiveMinutes(0);
-        setJustification('');
-      }
+    if (session.teacherId) {
+      getOrInitTeacherAttendance(session.id, session.teacherId, theoreticalMinutes);
     }
-  }, [sessionData, getTeacherAttendance, getOrInitTeacherAttendance]);
+  }, [session.id, session.teacherId, theoreticalMinutes]);
 
-  // Mettre à jour les heures effectives selon le statut
+  // Charger les données existantes dans l'état local
+  const existingAtt = session.teacherId
+    ? getTeacherAttendance(session.id, session.teacherId)
+    : undefined;
+
   useEffect(() => {
-    if (!sessionData) return;
+    if (existingAtt) {
+      setStatus(existingAtt.status);
+      setEffectiveMinutes(existingAtt.effectiveMinutes);
+      setJustification(existingAtt.justification || '');
+    }
+  }, [existingAtt?.id, session.id]); // Recharger si on change de session
 
+  // Ajuster les heures effectives selon le statut
+  useEffect(() => {
     if (status === 'present') {
-      setEffectiveMinutes(sessionData.theoreticalMinutes);
+      setEffectiveMinutes(theoreticalMinutes);
     } else if (status === 'absent' || status === 'undefined') {
       setEffectiveMinutes(0);
     }
-    // Pour 'late' et 'incomplete', l'utilisateur saisit manuellement
-  }, [status, sessionData]);
+    // 'late' et 'incomplete' → saisie manuelle
+  }, [status, theoreticalMinutes]);
+
+  const isLocked = isMonthLocked || !!existingAtt?.isLocked;
 
   const handleSave = () => {
-    if (!sessionData?.session || !sessionData.teacher) return;
-
-    updateTeacherAttendance(
-      sessionData.session.id,
-      sessionData.teacher.id,
-      status,
-      effectiveMinutes,
-      justification
-    );
-
+    if (!session.teacherId || !teacher) return;
+    updateTeacherAttendance(session.id, session.teacherId, status, effectiveMinutes, justification);
     toast({
-      title: 'Présence professeur enregistrée',
-      description: `${sessionData.teacher.firstName} ${sessionData.teacher.lastName} - ${TEACHER_STATUS_LABELS[status]}`,
+      title: 'Présence enregistrée',
+      description: `${teacher.firstName} ${teacher.lastName} — ${TEACHER_STATUS_LABELS[status]}`,
     });
   };
 
-  // Formater les minutes en heures:minutes
-  const formatMinutes = (mins: number): string => {
-    const h = Math.floor(mins / 60);
-    const m = mins % 60;
-    return `${h}h${m.toString().padStart(2, '0')}`;
-  };
-
-  if (!selectedSession) {
+  // Pas de prof assigné
+  if (!teacher) {
     return (
-      <Card>
-        <CardContent className="py-12 text-center text-muted-foreground">
-          <UserCheck className="w-12 h-12 mx-auto mb-2 opacity-50" />
-          <p>Sélectionnez une session dans le calendrier ou l'onglet Élèves pour saisir la présence du professeur.</p>
+      <Card className="border-dashed">
+        <CardContent className="py-6 flex items-center gap-3 text-muted-foreground">
+          <XCircle className="h-5 w-5 opacity-50 flex-shrink-0" />
+          <p className="text-sm">Aucun professeur assigné à ce cours.</p>
         </CardContent>
       </Card>
     );
   }
 
-  if (!sessionData) {
-    return (
-      <Card>
-        <CardContent className="py-12 text-center text-muted-foreground">
-          <AlertTriangle className="w-12 h-12 mx-auto mb-2 opacity-50" />
-          <p>Session introuvable. Veuillez sélectionner une autre session.</p>
-        </CardContent>
-      </Card>
-    );
-  }
-
-  const { session, teacher, theoreticalMinutes } = sessionData;
-  const existingAtt = teacher ? getTeacherAttendance(session.id, teacher.id) : undefined;
-  const isLocked = isMonthLocked || existingAtt?.isLocked;
+  const needsManualDuration = status === 'late' || status === 'incomplete';
+  const needsJustification  = status !== 'present' && status !== 'undefined';
 
   return (
     <Card>
-      <CardHeader>
+      <CardHeader className="pb-3">
         <div className="flex items-center justify-between">
-          <CardTitle className="flex items-center gap-2">
-            <UserCheck className="w-5 h-5" />
+          <CardTitle className="flex items-center gap-2 text-base">
+            <UserCheck className="h-5 w-5" />
             Présence Professeur
             {isLocked && (
-              <Badge variant="secondary" className="gap-1">
-                <Lock className="w-3 h-3" />
-                Verrouillé
+              <Badge variant="secondary" className="gap-1 text-xs">
+                <Lock className="h-3 w-3" /> Verrouillé
               </Badge>
             )}
           </CardTitle>
           {!isLocked && (
-            <Button onClick={handleSave} className="gap-2">
-              <Save className="w-4 h-4" />
+            <Button size="sm" className="gap-2 h-8 text-xs" onClick={handleSave}>
+              <Save className="h-3.5 w-3.5" />
               Enregistrer
             </Button>
           )}
         </div>
       </CardHeader>
-      <CardContent className="space-y-6">
-        {/* Infos session */}
-        <div className="p-4 bg-muted/50 rounded-xl space-y-2">
-          <div className="flex items-center justify-between">
-            <span className="text-sm text-muted-foreground">Date</span>
-            <span className="font-medium">{format(new Date(session.date), 'EEEE d MMMM yyyy', { locale: fr })}</span>
+
+      <CardContent className="space-y-4 pt-0">
+        {/* Info prof */}
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="font-semibold text-sm">
+              {teacher.firstName} {teacher.lastName}
+            </p>
+            <p className="text-xs text-muted-foreground">
+              Durée théorique : {formatMins(theoreticalMinutes)}
+            </p>
           </div>
-          <div className="flex items-center justify-between">
-            <span className="text-sm text-muted-foreground">Horaires</span>
-            <span className="font-medium">{session.startTime} - {session.endTime}</span>
-          </div>
-          <div className="flex items-center justify-between">
-            <span className="text-sm text-muted-foreground">Matière</span>
-            <span className="font-medium">{session.subjectName}</span>
-          </div>
-          <div className="flex items-center justify-between">
-            <span className="text-sm text-muted-foreground">Classe</span>
-            <span className="font-medium">{session.className} ({session.groupName})</span>
-          </div>
-          <div className="flex items-center justify-between">
-            <span className="text-sm text-muted-foreground">Professeur</span>
-            <span className="font-medium">
-              {teacher ? `${teacher.firstName} ${teacher.lastName}` : 'Non assigné'}
-            </span>
-          </div>
-          <div className="flex items-center justify-between">
-            <span className="text-sm text-muted-foreground">Durée théorique</span>
-            <span className="font-medium">{formatMinutes(theoreticalMinutes)}</span>
+          {existingAtt && existingAtt.status !== 'undefined' && (
+            <Badge
+              variant="outline"
+              className={cn('text-xs', TEACHER_STATUS_COLORS[existingAtt.status])}
+            >
+              {TEACHER_STATUS_LABELS[existingAtt.status]}
+            </Badge>
+          )}
+        </div>
+
+        {/* Boutons de statut */}
+        <div>
+          <Label className="text-xs text-muted-foreground mb-2 block">Statut de présence</Label>
+          <div className="flex flex-wrap gap-1.5">
+            {(['undefined', 'present', 'absent', 'late', 'incomplete'] as TeacherAttendanceStatus[]).map(s => (
+              <button
+                key={s}
+                disabled={isLocked}
+                onClick={() => !isLocked && setStatus(s)}
+                className={cn(
+                  'px-3 py-1.5 text-xs rounded-lg border font-medium transition-all',
+                  status === s
+                    ? TEACHER_STATUS_COLORS[s]
+                    : 'bg-background text-muted-foreground border-border hover:border-primary/40 hover:bg-muted',
+                  isLocked && 'opacity-50 cursor-not-allowed'
+                )}
+              >
+                {TEACHER_STATUS_LABELS[s]}
+              </button>
+            ))}
           </div>
         </div>
 
-        {teacher ? (
-          <>
-            {/* Statut */}
-            <div className="space-y-3">
-              <Label>Statut de présence</Label>
-              <div className="flex flex-wrap gap-2">
-                {(['undefined', 'present', 'absent', 'late', 'incomplete'] as TeacherAttendanceStatus[]).map((s) => (
-                  <button
-                    key={s}
-                    onClick={() => !isLocked && setStatus(s)}
-                    disabled={isLocked}
-                    className={cn(
-                      'px-4 py-2 text-sm rounded-lg border transition-all',
-                      status === s
-                        ? TEACHER_STATUS_COLORS[s]
-                        : 'bg-background text-muted-foreground border-border hover:border-primary/50',
-                      isLocked && 'opacity-50 cursor-not-allowed'
-                    )}
-                  >
-                    {TEACHER_STATUS_LABELS[s]}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Heures effectives (pour retard/incomplet) */}
-            {(status === 'late' || status === 'incomplete') && (
-              <div className="space-y-3">
-                <Label>Durée effective (minutes)</Label>
-                <div className="flex items-center gap-4">
-                  <Input
-                    type="number"
-                    min={0}
-                    max={theoreticalMinutes}
-                    value={effectiveMinutes}
-                    onChange={(e) => setEffectiveMinutes(parseInt(e.target.value) || 0)}
-                    disabled={isLocked}
-                    className="w-32"
-                  />
-                  <span className="text-sm text-muted-foreground">
-                    sur {theoreticalMinutes} min théoriques ({formatMinutes(effectiveMinutes)} effectuées)
-                  </span>
-                </div>
-              </div>
-            )}
-
-            {/* Justification */}
-            {status !== 'present' && status !== 'undefined' && (
-              <div className="space-y-3">
-                <Label>Motif / Justification</Label>
+        {/* Durée effective (retard / incomplet) */}
+        {needsManualDuration && (
+          <div className="flex items-center gap-3">
+            <div>
+              <Label className="text-xs text-muted-foreground mb-1.5 block">
+                Durée effective (minutes)
+              </Label>
+              <div className="flex items-center gap-2">
                 <Input
-                  placeholder="Ex: Réunion pédagogique, Maladie..."
-                  value={justification}
-                  onChange={(e) => setJustification(e.target.value)}
+                  type="number"
+                  min={0}
+                  max={theoreticalMinutes}
+                  value={effectiveMinutes}
+                  onChange={e => setEffectiveMinutes(parseInt(e.target.value) || 0)}
                   disabled={isLocked}
+                  className="h-8 w-24 text-sm"
                 />
+                <span className="text-xs text-muted-foreground">
+                  = {formatMins(effectiveMinutes)} / {formatMins(theoreticalMinutes)} théoriques
+                </span>
               </div>
-            )}
-
-            {/* Résumé financier */}
-            <div className="p-4 border border-border rounded-xl space-y-3">
-              <h4 className="font-medium flex items-center gap-2">
-                <Clock className="w-4 h-4" />
-                Impact sur la rémunération
-              </h4>
-              
-              <div className="grid grid-cols-2 gap-4">
-                <div className="p-3 bg-muted/50 rounded-lg">
-                  <p className="text-sm text-muted-foreground">Heures théoriques</p>
-                  <p className="text-xl font-bold">{formatMinutes(theoreticalMinutes)}</p>
-                </div>
-                <div className={cn(
-                  'p-3 rounded-lg',
-                  effectiveMinutes > 0 ? 'bg-green-50' : 'bg-red-50'
-                )}>
-                  <p className="text-sm text-muted-foreground">Heures comptabilisées</p>
-                  <p className={cn(
-                    'text-xl font-bold',
-                    effectiveMinutes > 0 ? 'text-green-600' : 'text-red-600'
-                  )}>
-                    {formatMinutes(effectiveMinutes)}
-                  </p>
-                </div>
-              </div>
-
-              {status === 'undefined' && (
-                <div className="flex items-center gap-2 p-3 bg-amber-50 rounded-lg text-amber-700">
-                  <AlertTriangle className="w-4 h-4" />
-                  <span className="text-sm">
-                    Statut non saisi = 0h comptabilisée (sécurité financière)
-                  </span>
-                </div>
-              )}
             </div>
-          </>
-        ) : (
-          <div className="text-center py-8 text-muted-foreground">
-            <XCircle className="w-12 h-12 mx-auto mb-2 opacity-50" />
-            <p>Aucun professeur assigné à cette session.</p>
           </div>
         )}
+
+        {/* Motif / justification */}
+        {needsJustification && (
+          <div>
+            <Label className="text-xs text-muted-foreground mb-1.5 block">Motif / Justification</Label>
+            <Input
+              placeholder="Ex : Réunion pédagogique, Maladie..."
+              value={justification}
+              onChange={e => setJustification(e.target.value)}
+              disabled={isLocked}
+              className="h-8 text-sm"
+            />
+          </div>
+        )}
+
+        {/* Impact sur la rémunération (résumé compact) */}
+        <div className="flex items-center gap-4 pt-1">
+          <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            <Clock className="h-3.5 w-3.5" />
+            Théorique : <span className="font-semibold text-foreground">{formatMins(theoreticalMinutes)}</span>
+          </div>
+          <div className={cn(
+            'flex items-center gap-1.5 text-xs',
+            effectiveMinutes > 0 ? 'text-green-600' : 'text-red-500'
+          )}>
+            <Clock className="h-3.5 w-3.5" />
+            Comptabilisé : <span className="font-semibold">{formatMins(effectiveMinutes)}</span>
+          </div>
+          {status === 'undefined' && (
+            <div className="flex items-center gap-1 text-xs text-amber-600 ml-auto">
+              <AlertTriangle className="h-3 w-3" />
+              Non saisi = 0h comptabilisée
+            </div>
+          )}
+        </div>
       </CardContent>
     </Card>
   );

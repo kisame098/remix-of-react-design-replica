@@ -1,0 +1,167 @@
+# Mise en ligne de SenClass
+
+- **Hébergeur :** Cloudflare Pages — offre gratuite, usage commercial autorisé, serveur à Dakar.
+- **Domaine :** `senclass.com`, acheté chez Hostinger (sans www ; `www.senclass.com` y redirige).
+- **Base de données :** Supabase, région `eu-west-1` (Irlande) — le bon choix pour le Sénégal, les câbles sous-marins passent par l'Europe.
+
+---
+
+## 1. Première mise en ligne sur Cloudflare Pages
+
+1. Le code est sur GitHub : `github.com/kisame098/remix-of-react-design-replica`. Cloudflare construit depuis la branche `main` : ce qui n'y est pas n'existe pas pour lui.
+2. [dash.cloudflare.com](https://dash.cloudflare.com) (compte gratuit) → **Workers & Pages → Créer → Pages → Connecter à Git** → choisir le dépôt.
+3. Réglages :
+
+| Champ | Valeur |
+|---|---|
+| Nom du projet | `senclass` → adresse technique `senclass.pages.dev` |
+| Branche de production | `main` |
+| Préréglage de framework | Vite (ou « Aucun ») |
+| Commande de build | `npm run build` |
+| Dossier de sortie | `dist` |
+
+Rien d'autre à régler : Node 22 est lu dans `.nvmrc`, et Cloudflare installe les dépendances avec `npm clean-install`, qui lit `.npmrc` (sans lui, l'installation échoue sur une erreur ERESOLVE).
+
+**Variables d'environnement :** aucune à saisir, elles sont dans `.env` (versionné). La clé qui s'y trouve est la clé *publique* de Supabase — elle finit de toute façon dans le code envoyé aux navigateurs, c'est prévu ainsi. Si `.env` sort un jour du dépôt, recopier ses variables `VITE_*` dans Cloudflare → projet → Paramètres → Variables.
+
+Chaque push sur `main` redéploie automatiquement ; chaque autre branche reçoit une adresse de prévisualisation.
+
+## 2. Le domaine `senclass.com` (acheté chez Hostinger)
+
+**Aucun hébergement Hostinger n'est nécessaire** : un nom de domaine et un hébergement sont deux choses séparées. Le domaine reste enregistré chez Hostinger (vous y payez seulement le renouvellement annuel) ; pour le brancher « nu » (sans www) sur Cloudflare Pages, il faut simplement confier sa gestion DNS à Cloudflare.
+
+1. Cloudflare → **Ajouter un site** → `senclass.com` → offre **Free**. Cloudflare affiche **deux serveurs de noms** (du type `xxxx.ns.cloudflare.com`).
+2. Hostinger → **Domaines → senclass.com → DNS / Serveurs de noms → Modifier** : remplacer les serveurs actuels (`dns-parking.com`) par ceux de Cloudflare. La bascule prend de quelques minutes à 24 h ; Cloudflare prévient par e-mail.
+3. Cloudflare → **Workers & Pages → senclass → Domaines personnalisés** : ajouter `senclass.com`, puis `www.senclass.com`. DNS et HTTPS se configurent tout seuls.
+4. **Redirection www → sans www** : Cloudflare → senclass.com → **Règles → Redirect Rules → Créer** → modèle *Redirect from WWW to root* (301). Une seule adresse pour Google.
+5. **E-mail `contact@senclass.com`** (affiché dans le pied de page) : Cloudflare → senclass.com → **Email → Email Routing** (gratuit) → transfert vers votre messagerie habituelle.
+
+Déjà prévu dans le code :
+- `public/_headers` : les adresses `*.pages.dev` (technique et prévisualisations) répondent `X-Robots-Tag: noindex`, pour que Google ne voie pas le site en double. **Tant que `senclass.com` n'est pas branché, le site n'est donc pas indexé** ; c'est voulu.
+- Pas de `404.html` : Cloudflare sert l'application pour toute adresse (`/portail/notes`, `/paiements`…).
+- `VITE_SITE_URL="https://senclass.com"` (dans `.env`) alimente l'adresse canonique, les aperçus WhatsApp et les données structurées.
+
+### Adresses de connexion des élèves et professeurs
+
+Les comptes créés désormais reçoivent une adresse `prenom.nom.12345@senclass.com`. Les comptes existants gardent leur adresse `@terranga.com` : leurs identifiants ont déjà été distribués, et ils continuent de fonctionner.
+
+**Avant de créer un nouveau compte élève ou professeur, exécutez `docs/sql/domaine_senclass.sql`.** Sans lui, la base prendrait chaque nouvel élève pour un directeur qui s'inscrit, et lui créerait une fausse école.
+
+## 3. Supabase — obligatoire
+
+**Authentication → URL Configuration.** Sans ce réglage, « mot de passe oublié » envoie les utilisateurs vers `localhost`.
+
+- Site URL : `https://senclass.com`
+- Redirect URLs :
+  - `https://senclass.com/**`
+  - `https://senclass.pages.dev/**` et `https://*.senclass.pages.dev/**` (adresse technique et prévisualisations)
+  - `http://localhost:8080/**` (développement)
+
+**Plan Pro (25 $/mois) avant la première vraie école.** L'offre gratuite met le projet en pause après 7 jours sans activité et ne fait aucune sauvegarde. La page d'accueil promet des « sauvegardes quotidiennes automatiques » : c'est vrai **seulement** avec le plan Pro.
+
+**Nettoyer les données de test.** Il faut supprimer les écoles « Ecole Test Charge… » (plus de 1 000 élèves fictifs). C'est irréversible : à faire vous-même, en connaissance de cause.
+
+---
+
+## 4. Référencement Google
+
+### La concurrence
+
+Sur « logiciel de gestion scolaire Sénégal », Google affiche notamment :
+- [EduSen](https://www.edusenpro.net/)
+- [LoTech School](https://www.lotechschool.com/)
+- [Noppal](https://noppal.jangaan.com/)
+- [School'Gest](https://www.schoolgest.sn/)
+- [Galactis](https://www.galactis.education/page/logiciel-de-gestion-scolaire-senegal)
+- [Scolaris](https://scolaris.sn/)
+- [SmartSchool](https://www.smartschool.sn/)
+- [Sama-Ecole](https://www.socialnetlink.org/2017/10/31/sama-ecole-un-entrepreneur-web-senegalais-developpe-un-logiciel-de-gestion-scolaire/)
+
+**Tous** mettent « Logiciel de gestion scolaire au Sénégal » dans leur titre. SenClass avait « L'Excellence Scolaire à Portée de Main » : aucun mot recherché. Il était donc invisible sur cette recherche, quel que soit le reste.
+
+### Ce qui est fait dans le code
+
+| | |
+|---|---|
+| **Titre Google** | « Logiciel de gestion scolaire au Sénégal \| SenClass », avec le mot-clé en tête (56 caractères, sous la limite d'affichage). |
+| **Description** | 158 caractères qui nomment ce que cherchent les écoles : inscriptions, notes et bulletins, emplois du temps, présences, paiements. |
+| **Titre principal (h1)** | « Logiciel de gestion scolaire au Sénégal ». Visuellement, c'est le badge au-dessus du slogan : l'apparence de la page ne change pas. |
+| **Texte d'accroche** | Mentionne « logiciel de gestion scolaire », « écoles du Sénégal » et « du CI à la Terminale » (un vocabulaire local que les concurrents emploient peu). |
+| **FAQ** | 8 questions calquées sur les recherches réelles (« combien coûte… », « bulletins automatiques », « adapté au système sénégalais »). Les réponses sont lisibles par Google même repliées, et les prix sont calculés depuis la vraie grille tarifaire. |
+| **Données structurées** | Organisation (nom, logo, Dakar, WhatsApp), site, logiciel (catégorie, fonctionnalités, prix 25 000 XOF), FAQ. Aucune note ni aucun avis inventé : Google les sanctionne. |
+| **Adresse canonique** | `https://senclass.com/`. |
+| **robots.txt** | Accueil ouvert. Espaces privés (tableau de bord, portail, caisse…) fermés, puisqu'il n'y a rien à y indexer. Il annonce aussi le plan du site. |
+| **sitemap.xml** | Plan du site pour Google. |
+| **Titres par page** | Chaque écran a son titre d'onglet. Toutes les pages sauf l'accueil sont en `noindex`, y compris « page introuvable ». |
+| **Favicon** | Votre icône (couches blanches sur carré orange), recadrée et nettoyée de son halo. Google l'affiche aussi à côté du site dans ses résultats. |
+| **Image de partage** | WhatsApp et Facebook montrent le logo, le nom et l'accroche. |
+| **Vitesse** | Premier téléchargement divisé par trois. La police est chargée sans attendre la feuille de style. La connexion à Supabase est ouverte d'avance. |
+
+### Ce que le code ne peut pas faire — et qui compte le plus face aux concurrents
+
+Le technique fait entrer le site dans la course. Ce qui fait passer devant EduSen ou LoTech, c'est ce qui suit.
+
+1. **Google Search Console**, le jour où le domaine est branché :
+   - ajouter `senclass.com` (propriété de domaine, validation par DNS) ;
+   - soumettre `https://senclass.com/sitemap.xml` ;
+   - demander l'indexation de l'accueil.
+
+   Faire de même sur **Bing Webmaster Tools** (import direct depuis Search Console).
+2. **Fiche Google Business Profile** « SenClass », à Dakar. Elle fait apparaître le logiciel dans Maps et dans les recherches locales (« logiciel école Dakar »). Il faut une adresse et un téléphone réels.
+3. **Des liens vers le site.** C'est le premier critère de Google, et les concurrents ont des années d'avance :
+   - presse tech sénégalaise (Socialnetlink a consacré un article à Sama-Ecole) ;
+   - annuaires d'entreprises ;
+   - sites des écoles clientes (« géré avec SenClass ») ;
+   - partenaires (Wave, Orange Money, associations d'écoles privées).
+4. **Des avis Google** laissés par de vraies écoles clientes, sur la fiche Business Profile.
+5. **Du contenu.** Plus tard, une page par besoin (« logiciel de bulletins de notes », « paiement de la scolarité par Wave ») ou un blog de conseils aux directeurs. Chaque page est une nouvelle porte d'entrée sur Google.
+
+**Délai réaliste.** Un domaine neuf met plusieurs semaines à plusieurs mois à monter sur une recherche disputée. La recherche du nom, « SenClass », remonte en premier, généralement en quelques jours après l'indexation.
+
+### À corriger sur la page d'accueil (contenu, pas code)
+
+- **E-mail du pied de page** : `contact@senclass.com`. Créez cette boîte, ou un simple transfert vers votre messagerie habituelle — sinon les écoles qui écrivent ne reçoivent qu'une erreur.
+- **Téléphone** : l'ancien « +221 33 800 00 00 » était un numéro de démonstration. Il est remplacé par le numéro WhatsApp déjà affiché dans les Tarifs.
+- **Icônes Facebook, Twitter, LinkedIn** et **pages Confidentialité, Conditions, Mentions légales** : les liens ne mènent nulle part (`#`). Une politique de confidentialité est attendue pour un logiciel qui traite des données d'élèves mineurs (loi sénégalaise sur les données personnelles, CDP).
+- **Promesses des fonctionnalités** : « sauvegardes quotidiennes » est vrai seulement avec Supabase Pro ; « relances automatiques » est à vérifier.
+- **Essai gratuit** : la page promettait « 30 jours ». Le logiciel accorde **7 jours** par défaut. Le texte dit désormais « une période d'essai gratuite » ; mettez un nombre de jours seulement si vous le fixez pour tous.
+
+---
+
+## 5. Application installable (PWA)
+
+**Installer l'application :**
+- Android (Chrome) : menu ⋮ → **Installer l'application**.
+- iPhone (Safari) : Partager → **Sur l'écran d'accueil**.
+- Ordinateur : icône d'installation dans la barre d'adresse.
+
+**Hors connexion :**
+- l'application s'ouvre, sur n'importe quelle page ;
+- un bandeau prévient que rien ne sera enregistré ;
+- au retour du réseau, tout reprend seul.
+
+Les données (notes, paiements) ne sont volontairement **pas** gardées hors connexion. Sur un téléphone partagé entre plusieurs comptes, le cache pourrait montrer à un élève les données d'un autre.
+
+**Mises à jour :** le bandeau « Nouvelle version disponible » propose la mise à jour, il ne l'impose jamais. Recharger d'office ferait perdre un encaissement en cours de saisie.
+
+---
+
+## 6. Avant chaque mise en ligne
+
+```bash
+npm run verify
+```
+
+La CI GitHub rejoue les types, le lint, les tests et le build. Elle vérifie aussi que le build produit une application installable, un `robots.txt`, un plan du site, et aucune variable `%VITE_…%` oubliée dans la page. **CI rouge = on ne déploie pas.**
+
+## 7. Vérifications après la première mise en ligne
+
+- [ ] `https://senclass.com` s'ouvre en HTTPS, et `www.` y redirige.
+- [ ] L'onglet affiche l'icône orange à couches.
+- [ ] Un lien partagé dans WhatsApp montre l'image SenClass.
+- [ ] L'[outil de test des résultats enrichis](https://search.google.com/test/rich-results) de Google, sur l'accueil, détecte les données structurées sans erreur.
+- [ ] Search Console : le plan du site est soumis et l'accueil est indexé.
+- [ ] `senclass.pages.dev` renvoie bien `X-Robots-Tag: noindex`.
+- [ ] Le lien « mot de passe oublié » reçu par e-mail pointe vers `senclass.com`, pas vers `localhost`.
+- [ ] En mode avion, l'application installée s'ouvre et affiche « Hors connexion ».
+- [ ] La caméra fonctionne (photo d'inscription, scan à la caisse) et un bulletin PDF se génère.

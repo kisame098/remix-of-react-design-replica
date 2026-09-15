@@ -1,4 +1,4 @@
-# Documentation Technique Supabase - Teranga School
+# Documentation Technique Supabase - SenClass
 
 > **Dernière mise à jour :** 2025-12-25  
 > **Version :** 1.0.0  

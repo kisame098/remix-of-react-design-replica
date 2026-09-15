@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import {
   Select,
@@ -11,18 +11,23 @@ import {
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { useSchool } from '@/contexts/SchoolContext';
+import { useAuth } from '@/contexts/AuthContext';
 import { useSchedule } from '@/contexts/ScheduleContext';
 import { ScheduleGrid } from '@/components/schedule/ScheduleGrid';
 import { EventFormModal } from '@/components/schedule/EventFormModal';
 import { ConflictDialog } from '@/components/schedule/ConflictDialog';
 import { ScheduleEvent, ScheduleConflict, ViewMode, GROUP_OPTIONS } from '@/types/schedule';
-import { Calendar, Users, GraduationCap, Plus, Filter } from 'lucide-react';
+import { Calendar, Users, GraduationCap, Plus, Filter, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 
 const ScheduleManagement = () => {
   const { classes, teachers } = useSchool();
+  const { school } = useAuth();
+  const scheduleMinHour = (school?.settings?.scheduleMinHour as string) ?? undefined;
+  const scheduleMaxHour = (school?.settings?.scheduleMaxHour as string) ?? undefined;
   const {
     events,
+    scheduleLoading,
     addEvent,
     updateEvent,
     deleteEvent,
@@ -30,12 +35,12 @@ const ScheduleManagement = () => {
     getEventsByTeacher,
   } = useSchedule();
 
-  // View state
+  // View state — classId et teacherId sont des UUID strings
   const [viewMode, setViewMode] = useState<ViewMode>('class');
-  const [selectedClassId, setSelectedClassId] = useState<number | null>(
+  const [selectedClassId, setSelectedClassId] = useState<string | null>(
     classes.length > 0 ? classes[0].id : null
   );
-  const [selectedTeacherId, setSelectedTeacherId] = useState<number | null>(
+  const [selectedTeacherId, setSelectedTeacherId] = useState<string | null>(
     teachers.length > 0 ? teachers[0].id : null
   );
   const [groupFilter, setGroupFilter] = useState<string>('all');
@@ -48,14 +53,13 @@ const ScheduleManagement = () => {
     startTime: string;
     endTime: string;
   } | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
 
   // Conflict state
   const [conflictDialogOpen, setConflictDialogOpen] = useState(false);
   const [currentConflict, setCurrentConflict] = useState<ScheduleConflict | null>(null);
 
-  // Get filtered events based on view mode
-  // When "Classe Entière" is selected, we pass 'all' to show ONLY universal events
-  // When a specific group is selected, we show universal + that group's events
+  // Filtrage des événements selon le mode de vue
   const filteredEvents = useMemo(() => {
     if (viewMode === 'class' && selectedClassId) {
       return getEventsByClass(selectedClassId, groupFilter);
@@ -66,61 +70,67 @@ const ScheduleManagement = () => {
     return [];
   }, [viewMode, selectedClassId, selectedTeacherId, groupFilter, getEventsByClass, getEventsByTeacher]);
 
-  // Handle slot click to create new event
   const handleSlotClick = (dayIndex: number, startTime: string, endTime: string) => {
     setPendingSlot({ dayIndex, startTime, endTime });
     setEditingEvent(null);
     setIsFormModalOpen(true);
   };
 
-  // Handle event click to edit
   const handleEventClick = (event: ScheduleEvent) => {
     setEditingEvent(event);
     setPendingSlot(null);
     setIsFormModalOpen(true);
   };
 
-  // Handle save from form
-  const handleSaveEvent = (eventData: Omit<ScheduleEvent, 'id'>) => {
-    if (editingEvent) {
-      // Update existing event
-      const result = updateEvent(editingEvent.id, eventData);
-      if (result.success) {
-        toast.success('Créneau modifié avec succès');
-        setIsFormModalOpen(false);
-        setEditingEvent(null);
-      } else if (result.conflicts.length > 0) {
-        // All conflicts are now blocking
-        setCurrentConflict(result.conflicts[0]);
-        setConflictDialogOpen(true);
+  // Sauvegarde async (addEvent / updateEvent sont désormais Promises)
+  const handleSaveEvent = async (eventData: Omit<ScheduleEvent, 'id'>) => {
+    setIsSaving(true);
+    try {
+      if (editingEvent) {
+        const result = await updateEvent(editingEvent.id, eventData);
+        if (result.success) {
+          toast.success('Créneau modifié avec succès');
+          setIsFormModalOpen(false);
+          setEditingEvent(null);
+        } else if (result.conflicts.length > 0) {
+          setCurrentConflict(result.conflicts[0]);
+          setConflictDialogOpen(true);
+        } else {
+          toast.error('Erreur lors de la modification');
+        }
+      } else {
+        const result = await addEvent(eventData);
+        if (result.success) {
+          toast.success('Créneau ajouté avec succès');
+          setIsFormModalOpen(false);
+          setPendingSlot(null);
+        } else if (result.conflicts.length > 0) {
+          setCurrentConflict(result.conflicts[0]);
+          setConflictDialogOpen(true);
+        } else {
+          toast.error('Erreur lors de l\'ajout');
+        }
       }
-    } else {
-      // Add new event
-      const result = addEvent(eventData);
-      if (result.success) {
-        toast.success('Créneau ajouté avec succès');
-        setIsFormModalOpen(false);
-        setPendingSlot(null);
-      } else if (result.conflicts.length > 0) {
-        // All conflicts are now blocking (hard)
-        setCurrentConflict(result.conflicts[0]);
-        setConflictDialogOpen(true);
-      }
+    } finally {
+      setIsSaving(false);
     }
   };
 
-  // Handle delete
-  const handleDeleteEvent = () => {
-    if (editingEvent) {
-      deleteEvent(editingEvent.id);
+  const handleDeleteEvent = async () => {
+    if (!editingEvent) return;
+    setIsSaving(true);
+    try {
+      await deleteEvent(editingEvent.id);
       toast.success('Créneau supprimé');
       setIsFormModalOpen(false);
       setEditingEvent(null);
+    } finally {
+      setIsSaving(false);
     }
   };
 
-  const selectedClass = classes.find((c) => c.id === selectedClassId);
-  const selectedTeacher = teachers.find((t) => t.id === selectedTeacherId);
+  const selectedClass   = classes.find(c => c.id === selectedClassId);
+  const selectedTeacher = teachers.find(t => t.id === selectedTeacherId);
 
   return (
     <div className="p-6 space-y-6">
@@ -135,9 +145,10 @@ const ScheduleManagement = () => {
             Planifiez et gérez les créneaux horaires
           </p>
         </div>
-
-        <Button onClick={() => handleSlotClick(0, '08:00', '09:00')}>
-          <Plus className="w-4 h-4 mr-2" />
+        <Button onClick={() => handleSlotClick(0, '08:00', '09:00')} disabled={scheduleLoading}>
+          {scheduleLoading
+            ? <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+            : <Plus className="w-4 h-4 mr-2" />}
           Nouveau Créneau
         </Button>
       </div>
@@ -146,11 +157,8 @@ const ScheduleManagement = () => {
       <Card>
         <CardContent className="pt-6">
           <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-            {/* View Mode Tabs */}
-            <Tabs
-              value={viewMode}
-              onValueChange={(v) => setViewMode(v as ViewMode)}
-            >
+            {/* Onglets Vue */}
+            <Tabs value={viewMode} onValueChange={(v) => setViewMode(v as ViewMode)}>
               <TabsList>
                 <TabsTrigger value="class" className="gap-2">
                   <GraduationCap className="w-4 h-4" />
@@ -163,20 +171,21 @@ const ScheduleManagement = () => {
               </TabsList>
             </Tabs>
 
-            {/* Entity Selector + Group Filter */}
+            {/* Sélecteurs entité + groupe */}
             <div className="flex gap-3 items-center">
               {viewMode === 'class' ? (
                 <>
+                  {/* Sélecteur classe — UUID string, pas de parseInt */}
                   <Select
-                    value={selectedClassId?.toString() || ''}
-                    onValueChange={(v) => setSelectedClassId(parseInt(v))}
+                    value={selectedClassId ?? ''}
+                    onValueChange={(v) => setSelectedClassId(v)}
                   >
                     <SelectTrigger className="w-48">
                       <SelectValue placeholder="Sélectionner une classe" />
                     </SelectTrigger>
                     <SelectContent>
                       {classes.map((cls) => (
-                        <SelectItem key={cls.id} value={cls.id.toString()}>
+                        <SelectItem key={cls.id} value={cls.id}>
                           {cls.name}
                         </SelectItem>
                       ))}
@@ -198,16 +207,17 @@ const ScheduleManagement = () => {
                   </Select>
                 </>
               ) : (
+                /* Sélecteur professeur — UUID string, pas de parseInt */
                 <Select
-                  value={selectedTeacherId?.toString() || ''}
-                  onValueChange={(v) => setSelectedTeacherId(parseInt(v))}
+                  value={selectedTeacherId ?? ''}
+                  onValueChange={(v) => setSelectedTeacherId(v)}
                 >
                   <SelectTrigger className="w-64">
                     <SelectValue placeholder="Sélectionner un professeur" />
                   </SelectTrigger>
                   <SelectContent>
                     {teachers.map((teacher) => (
-                      <SelectItem key={teacher.id} value={teacher.id.toString()}>
+                      <SelectItem key={teacher.id} value={teacher.id}>
                         {teacher.firstName} {teacher.lastName}
                       </SelectItem>
                     ))}
@@ -219,9 +229,15 @@ const ScheduleManagement = () => {
         </CardContent>
       </Card>
 
-      {/* Schedule Grid */}
-      {(viewMode === 'class' && selectedClassId) ||
-      (viewMode === 'teacher' && selectedTeacherId) ? (
+      {/* Grille de l'emploi du temps */}
+      {scheduleLoading ? (
+        <Card>
+          <CardContent className="py-12 flex items-center justify-center gap-3 text-muted-foreground">
+            <Loader2 className="h-5 w-5 animate-spin" />
+            Chargement des créneaux…
+          </CardContent>
+        </Card>
+      ) : (viewMode === 'class' && selectedClassId) || (viewMode === 'teacher' && selectedTeacherId) ? (
         <div>
           <div className="mb-4 flex items-center gap-2">
             <Badge variant="outline" className="text-sm">
@@ -239,6 +255,8 @@ const ScheduleManagement = () => {
             viewMode={viewMode}
             onSlotClick={handleSlotClick}
             onEventClick={handleEventClick}
+            minHour={scheduleMinHour}
+            maxHour={scheduleMaxHour}
           />
         </div>
       ) : (
@@ -258,9 +276,10 @@ const ScheduleManagement = () => {
         </Card>
       )}
 
-      {/* Event Form Modal */}
+      {/* Modal formulaire créneau */}
       <EventFormModal
         isOpen={isFormModalOpen}
+        isSaving={isSaving}
         onClose={() => {
           setIsFormModalOpen(false);
           setEditingEvent(null);
@@ -272,18 +291,18 @@ const ScheduleManagement = () => {
           editingEvent ||
           (pendingSlot
             ? {
-                dayIndex: pendingSlot.dayIndex,
+                dayIndex:  pendingSlot.dayIndex,
                 startTime: pendingSlot.startTime,
-                endTime: pendingSlot.endTime,
+                endTime:   pendingSlot.endTime,
               }
             : undefined)
         }
         viewMode={viewMode}
-        selectedClassId={viewMode === 'class' ? selectedClassId || undefined : undefined}
-        selectedTeacherId={viewMode === 'teacher' ? selectedTeacherId || undefined : undefined}
+        selectedClassId={viewMode === 'class' ? selectedClassId ?? undefined : undefined}
+        selectedTeacherId={viewMode === 'teacher' ? selectedTeacherId ?? undefined : undefined}
       />
 
-      {/* Conflict Dialog */}
+      {/* Dialogue de conflit */}
       <ConflictDialog
         isOpen={conflictDialogOpen}
         onClose={() => {

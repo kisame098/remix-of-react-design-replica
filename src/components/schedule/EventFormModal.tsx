@@ -18,21 +18,23 @@ import {
 } from '@/components/ui/select';
 import { useSchool } from '@/contexts/SchoolContext';
 import { ScheduleEvent, DAYS, GROUP_OPTIONS, EVENT_COLORS } from '@/types/schedule';
-import { Trash2 } from 'lucide-react';
+import { Trash2, Loader2 } from 'lucide-react';
 
 interface EventFormModalProps {
   isOpen: boolean;
+  isSaving?: boolean;
   onClose: () => void;
   onSave: (event: Omit<ScheduleEvent, 'id'>) => void;
   onDelete?: () => void;
   initialEvent?: Partial<ScheduleEvent>;
   viewMode: 'class' | 'teacher';
-  selectedClassId?: number;
-  selectedTeacherId?: number;
+  selectedClassId?: string;    // UUID string
+  selectedTeacherId?: string;  // UUID string
 }
 
 export const EventFormModal: React.FC<EventFormModalProps> = ({
   isOpen,
+  isSaving = false,
   onClose,
   onSave,
   onDelete,
@@ -41,67 +43,67 @@ export const EventFormModal: React.FC<EventFormModalProps> = ({
   selectedClassId,
   selectedTeacherId,
 }) => {
-  const { classes, teachers, subjects } = useSchool();
+  const { classes, teachers } = useSchool();
 
   const [formData, setFormData] = useState({
-    dayIndex: 0,
-    startTime: '08:00',
-    endTime: '09:00',
+    dayIndex:    0,
+    startTime:   '08:00',
+    endTime:     '09:00',
     subjectName: '',
-    classId: selectedClassId || 0,
-    teacherId: selectedTeacherId || null as number | null,
-    groupId: 'all',
-    color: EVENT_COLORS[0],
+    classId:     selectedClassId   ?? '',
+    teacherId:   selectedTeacherId ?? null as string | null,
+    groupId:     'all',
+    color:       EVENT_COLORS[0],
   });
 
   useEffect(() => {
     if (initialEvent) {
       setFormData({
-        dayIndex: initialEvent.dayIndex ?? 0,
-        startTime: initialEvent.startTime ?? '08:00',
-        endTime: initialEvent.endTime ?? '09:00',
+        dayIndex:    initialEvent.dayIndex    ?? 0,
+        startTime:   initialEvent.startTime   ?? '08:00',
+        endTime:     initialEvent.endTime     ?? '09:00',
         subjectName: initialEvent.subjectName ?? '',
-        classId: initialEvent.classId ?? selectedClassId ?? 0,
-        teacherId: initialEvent.teacherId ?? selectedTeacherId ?? null,
-        groupId: initialEvent.groupId ?? 'all',
-        color: initialEvent.color ?? EVENT_COLORS[0],
+        classId:     initialEvent.classId     ?? selectedClassId   ?? '',
+        teacherId:   initialEvent.teacherId   ?? selectedTeacherId ?? null,
+        groupId:     initialEvent.groupId     ?? 'all',
+        color:       initialEvent.color       ?? EVENT_COLORS[0],
       });
     } else {
       setFormData({
-        dayIndex: 0,
-        startTime: '08:00',
-        endTime: '09:00',
+        dayIndex:    0,
+        startTime:   '08:00',
+        endTime:     '09:00',
         subjectName: '',
-        classId: selectedClassId || 0,
-        teacherId: selectedTeacherId || null,
-        groupId: 'all',
-        color: EVENT_COLORS[Math.floor(Math.random() * EVENT_COLORS.length)],
+        classId:     selectedClassId   ?? '',
+        teacherId:   selectedTeacherId ?? null,
+        groupId:     'all',
+        color:       EVENT_COLORS[Math.floor(Math.random() * EVENT_COLORS.length)],
       });
     }
   }, [initialEvent, selectedClassId, selectedTeacherId, isOpen]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    
-    const selectedClass = classes.find((c) => c.id === formData.classId);
-    const selectedTeacher = teachers.find((t) => t.id === formData.teacherId);
-    const selectedGroup = GROUP_OPTIONS.find((g) => g.id === formData.groupId);
+
+    const selectedClass   = classes.find(c => c.id === formData.classId);
+    const selectedTeacher = teachers.find(t => t.id === formData.teacherId);
+    const selectedGroup   = GROUP_OPTIONS.find(g => g.id === formData.groupId);
 
     onSave({
-      dayIndex: formData.dayIndex,
-      startTime: formData.startTime,
-      endTime: formData.endTime,
-      subjectId: null,
+      dayIndex:    formData.dayIndex,
+      startTime:   formData.startTime,
+      endTime:     formData.endTime,
+      subjectId:   null,
       subjectName: formData.subjectName,
-      classId: formData.classId,
-      className: selectedClass?.name || '',
-      teacherId: formData.teacherId,
+      classId:     formData.classId,
+      className:   selectedClass?.name ?? '',
+      teacherId:   formData.teacherId,
       teacherName: selectedTeacher
         ? `${selectedTeacher.firstName} ${selectedTeacher.lastName}`
         : null,
-      groupId: formData.groupId,
-      groupName: selectedGroup?.name || 'Classe Entière',
-      color: formData.color,
+      groupId:   formData.groupId,
+      groupName: selectedGroup?.name ?? 'Classe Entière',
+      color:     formData.color,
     });
   };
 
@@ -117,20 +119,20 @@ export const EventFormModal: React.FC<EventFormModalProps> = ({
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-4">
-          {/* Day Selection */}
+          {/* Jour */}
           <div className="space-y-2">
             <Label>Jour</Label>
             <Select
               value={formData.dayIndex.toString()}
-              onValueChange={(v) =>
-                setFormData((prev) => ({ ...prev, dayIndex: parseInt(v) }))
+              onValueChange={v =>
+                setFormData(prev => ({ ...prev, dayIndex: parseInt(v, 10) }))
               }
             >
               <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {DAYS.map((day) => (
+                {DAYS.map(day => (
                   <SelectItem key={day.index} value={day.index.toString()}>
                     {day.name}
                   </SelectItem>
@@ -139,15 +141,15 @@ export const EventFormModal: React.FC<EventFormModalProps> = ({
             </Select>
           </div>
 
-          {/* Time Range */}
+          {/* Horaires */}
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label>Heure début</Label>
               <Input
                 type="time"
                 value={formData.startTime}
-                onChange={(e) =>
-                  setFormData((prev) => ({ ...prev, startTime: e.target.value }))
+                onChange={e =>
+                  setFormData(prev => ({ ...prev, startTime: e.target.value }))
                 }
               />
             </div>
@@ -156,42 +158,42 @@ export const EventFormModal: React.FC<EventFormModalProps> = ({
               <Input
                 type="time"
                 value={formData.endTime}
-                onChange={(e) =>
-                  setFormData((prev) => ({ ...prev, endTime: e.target.value }))
+                onChange={e =>
+                  setFormData(prev => ({ ...prev, endTime: e.target.value }))
                 }
               />
             </div>
           </div>
 
-          {/* Subject Name */}
+          {/* Matière */}
           <div className="space-y-2">
             <Label>Matière</Label>
             <Input
               placeholder="Ex: Mathématiques"
               value={formData.subjectName}
-              onChange={(e) =>
-                setFormData((prev) => ({ ...prev, subjectName: e.target.value }))
+              onChange={e =>
+                setFormData(prev => ({ ...prev, subjectName: e.target.value }))
               }
               required
             />
           </div>
 
-          {/* Class Selection (if in teacher view or no class selected) */}
+          {/* Classe (en vue professeur ou si aucune classe pré-sélectionnée) */}
           {(viewMode === 'teacher' || !selectedClassId) && (
             <div className="space-y-2">
               <Label>Classe</Label>
               <Select
-                value={formData.classId.toString()}
-                onValueChange={(v) =>
-                  setFormData((prev) => ({ ...prev, classId: parseInt(v) }))
+                value={formData.classId}
+                onValueChange={v =>
+                  setFormData(prev => ({ ...prev, classId: v }))
                 }
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Sélectionner une classe" />
                 </SelectTrigger>
                 <SelectContent>
-                  {classes.map((cls) => (
-                    <SelectItem key={cls.id} value={cls.id.toString()}>
+                  {classes.map(cls => (
+                    <SelectItem key={cls.id} value={cls.id}>
                       {cls.name}
                     </SelectItem>
                   ))}
@@ -200,16 +202,16 @@ export const EventFormModal: React.FC<EventFormModalProps> = ({
             </div>
           )}
 
-          {/* Teacher Selection (if in class view or no teacher selected) */}
+          {/* Professeur (en vue classe ou si aucun prof pré-sélectionné) */}
           {(viewMode === 'class' || !selectedTeacherId) && (
             <div className="space-y-2">
               <Label>Professeur (optionnel)</Label>
               <Select
-                value={formData.teacherId?.toString() || 'none'}
-                onValueChange={(v) =>
-                  setFormData((prev) => ({
+                value={formData.teacherId ?? 'none'}
+                onValueChange={v =>
+                  setFormData(prev => ({
                     ...prev,
-                    teacherId: v === 'none' ? null : parseInt(v),
+                    teacherId: v === 'none' ? null : v,
                   }))
                 }
               >
@@ -218,8 +220,8 @@ export const EventFormModal: React.FC<EventFormModalProps> = ({
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="none">Non assigné</SelectItem>
-                  {teachers.map((teacher) => (
-                    <SelectItem key={teacher.id} value={teacher.id.toString()}>
+                  {teachers.map(teacher => (
+                    <SelectItem key={teacher.id} value={teacher.id}>
                       {teacher.firstName} {teacher.lastName}
                     </SelectItem>
                   ))}
@@ -228,20 +230,20 @@ export const EventFormModal: React.FC<EventFormModalProps> = ({
             </div>
           )}
 
-          {/* Group Selection */}
+          {/* Groupe */}
           <div className="space-y-2">
             <Label>Groupe</Label>
             <Select
               value={formData.groupId}
-              onValueChange={(v) =>
-                setFormData((prev) => ({ ...prev, groupId: v }))
+              onValueChange={v =>
+                setFormData(prev => ({ ...prev, groupId: v }))
               }
             >
               <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {GROUP_OPTIONS.map((group) => (
+                {GROUP_OPTIONS.map(group => (
                   <SelectItem key={group.id} value={group.id}>
                     {group.name}
                   </SelectItem>
@@ -250,11 +252,11 @@ export const EventFormModal: React.FC<EventFormModalProps> = ({
             </Select>
           </div>
 
-          {/* Color Picker */}
+          {/* Couleur */}
           <div className="space-y-2">
             <Label>Couleur</Label>
             <div className="flex gap-2 flex-wrap">
-              {EVENT_COLORS.map((color) => (
+              {EVENT_COLORS.map(color => (
                 <button
                   key={color}
                   type="button"
@@ -264,7 +266,7 @@ export const EventFormModal: React.FC<EventFormModalProps> = ({
                       : 'hover:scale-105'
                   }`}
                   style={{ backgroundColor: color }}
-                  onClick={() => setFormData((prev) => ({ ...prev, color }))}
+                  onClick={() => setFormData(prev => ({ ...prev, color }))}
                 />
               ))}
             </div>
@@ -276,16 +278,22 @@ export const EventFormModal: React.FC<EventFormModalProps> = ({
                 type="button"
                 variant="destructive"
                 onClick={onDelete}
+                disabled={isSaving}
                 className="mr-auto"
               >
-                <Trash2 className="w-4 h-4 mr-2" />
+                {isSaving ? (
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                ) : (
+                  <Trash2 className="w-4 h-4 mr-2" />
+                )}
                 Supprimer
               </Button>
             )}
-            <Button type="button" variant="outline" onClick={onClose}>
+            <Button type="button" variant="outline" onClick={onClose} disabled={isSaving}>
               Annuler
             </Button>
-            <Button type="submit">
+            <Button type="submit" disabled={isSaving}>
+              {isSaving && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
               {isEditing ? 'Modifier' : 'Ajouter'}
             </Button>
           </DialogFooter>

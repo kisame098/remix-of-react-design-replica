@@ -1,14 +1,29 @@
-User-agent: Googlebot
-Allow: /
-
-User-agent: Bingbot
-Allow: /
-
-User-agent: Twitterbot
-Allow: /
-
-User-agent: facebookexternalhit
-Allow: /
+# SenClass — https://senclass.com
+#
+# Seule la page d'accueil a vocation à apparaître sur Google. Tout le reste
+# est réservé aux comptes connectés : rien à indexer, et inutile d'y
+# gaspiller le passage des robots.
 
 User-agent: *
 Allow: /
+
+Disallow: /dashboard
+Disallow: /inscription
+Disallow: /eleves
+Disallow: /professeurs
+Disallow: /classes
+Disallow: /notes
+Disallow: /filieres
+Disallow: /emplois-du-temps
+Disallow: /presences
+Disallow: /paiements
+Disallow: /salaires
+Disallow: /identifiants
+Disallow: /parametres
+Disallow: /abonnement
+Disallow: /caisse
+Disallow: /portail
+Disallow: /platform
+Disallow: /reset-password
+
+Sitemap: https://senclass.com/sitemap.xml

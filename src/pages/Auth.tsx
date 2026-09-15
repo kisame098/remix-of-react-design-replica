@@ -5,6 +5,7 @@ import { Eye, EyeOff, Mail, Lock, User, ArrowLeft, Building2, Loader2 } from "lu
 import { Link } from "react-router-dom";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
+import { isCashierAccount } from "@/lib/permissions";
 import { z } from "zod";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -26,7 +27,9 @@ const signupSchema = z.object({
 });
 
 const Auth = () => {
-  const [isLogin, setIsLogin] = useState(true);
+  // /auth?inscription=1 (boutons « Commencer gratuitement » de l'accueil)
+  // ouvre directement le formulaire de création d'école.
+  const [isLogin, setIsLogin] = useState(() => !new URLSearchParams(window.location.search).has('inscription'));
   const [isForgotPassword, setIsForgotPassword] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -41,14 +44,28 @@ const Auth = () => {
   
   const { toast } = useToast();
   const navigate = useNavigate();
-  const { user, loading, signIn, signUpSchool } = useAuth();
+  const { user, loading, accountRole, staffPermissions, isPlatformAdmin, signIn, signUpSchool } = useAuth();
 
-  // Redirect if already logged in
+  // Rediriger vers la bonne page selon le rôle, une fois le rôle connu.
+  // Le chef du système n'a pas de accountRole (n'appartient à aucune école) —
+  // tranché séparément, sinon la condition `&& accountRole` ci-dessous ne se
+  // déclencherait jamais pour lui.
   useEffect(() => {
-    if (!loading && user) {
-      navigate('/dashboard');
+    if (loading || !user) return;
+    if (isPlatformAdmin) {
+      navigate('/platform', { replace: true });
+      return;
     }
-  }, [user, loading, navigate]);
+    if (accountRole) {
+      if (accountRole === 'student' || accountRole === 'teacher') {
+        navigate('/portail', { replace: true });
+      } else if (isCashierAccount(accountRole, staffPermissions)) {
+        navigate('/caisse', { replace: true });
+      } else {
+        navigate('/dashboard', { replace: true });
+      }
+    }
+  }, [user, loading, accountRole, staffPermissions, isPlatformAdmin, navigate]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -129,9 +146,10 @@ const Auth = () => {
 
         toast({
           title: "Connexion réussie",
-          description: "Bienvenue sur Teranga School !",
+          description: "Bienvenue sur SenClass !",
         });
-        navigate('/dashboard');
+        // La redirection se fait via le useEffect ci-dessus,
+        // une fois que le rôle est connu (admin → /dashboard, élève/prof → /portail)
 
       } else {
         // Validate signup
@@ -238,7 +256,7 @@ const Auth = () => {
                 <path d="M2 12l10 5 10-5" />
               </svg>
             </div>
-            <span className="text-xl font-bold text-foreground">Teranga School</span>
+            <span className="text-xl font-bold text-foreground">SenClass</span>
           </div>
 
           {/* Title */}
@@ -251,7 +269,7 @@ const Auth = () => {
                 ? "Entrez votre email pour recevoir un lien de réinitialisation"
                 : isLogin
                 ? "Connectez-vous pour accéder à votre espace"
-                : "Inscrivez votre établissement sur Teranga School"}
+                : "Inscrivez votre établissement sur SenClass"}
             </p>
           </div>
 
@@ -476,20 +494,20 @@ const Auth = () => {
           </div>
           
           <h2 className="text-3xl font-bold text-secondary-foreground mb-4">
-            {isLogin ? "Simplifiez la gestion de votre école" : "Rejoignez Teranga School"}
+            {isLogin ? "Simplifiez la gestion de votre école" : "Rejoignez SenClass"}
           </h2>
           <p className="text-secondary-foreground/80 text-lg leading-relaxed">
-            {isLogin 
-              ? "Rejoignez plus de 500 établissements qui font confiance à Teranga School pour gérer leurs inscriptions, notes et paiements."
+            {isLogin
+              ? "Gérez les inscriptions, les notes et les paiements de votre école, le tout au même endroit."
               : "Créez votre compte école et accédez à tous les outils de gestion : inscriptions, notes, emplois du temps, paiements et plus encore."}
           </p>
 
           {/* Features */}
           <div className="mt-10 grid grid-cols-3 gap-6">
             {[
-              { value: "500+", label: "Écoles" },
-              { value: "50k+", label: "Élèves" },
-              { value: "98%", label: "Satisfaction" },
+              { value: "📋", label: "Bulletins automatiques" },
+              { value: "💳", label: "Suivi des paiements" },
+              { value: "👨‍👩‍👧", label: "Portail parent" },
             ].map((stat, i) => (
               <motion.div
                 key={i}
@@ -498,7 +516,7 @@ const Auth = () => {
                 transition={{ delay: 0.4 + i * 0.1 }}
                 className="text-center"
               >
-                <div className="text-2xl font-bold text-primary">{stat.value}</div>
+                <div className="text-2xl">{stat.value}</div>
                 <div className="text-sm text-secondary-foreground/60">{stat.label}</div>
               </motion.div>
             ))}

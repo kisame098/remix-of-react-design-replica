@@ -1,8 +1,8 @@
 import { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { 
-  Users, Search, Filter, Grid3X3, List, Eye, Pencil, 
-  Phone, Mail, MapPin, Calendar, User, X, Save, Briefcase, Home, GraduationCap, Clock, Award
+import {
+  Users, Search, Filter, Grid3X3, List, Eye, Pencil,
+  Phone, Mail, MapPin, Calendar, User, X, Save, Briefcase, Home, GraduationCap, Clock, Award, Loader2
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -10,7 +10,7 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { 
   Select, 
   SelectContent, 
@@ -65,7 +65,7 @@ interface EditFormData {
 type ViewMode = 'grid' | 'table';
 
 const TeacherManagement = () => {
-  const { teachers, updateTeacher } = useSchool();
+  const { teachers, teachersLoading, updateTeacher } = useSchool();
   const { toast } = useToast();
 
   const [viewMode, setViewMode] = useState<ViewMode>('grid');
@@ -74,6 +74,7 @@ const TeacherManagement = () => {
   const [selectedTeacher, setSelectedTeacher] = useState<Teacher | null>(null);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isEditOpen, setIsEditOpen] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   
   const contractTypes = [
     { value: 'cdi', label: 'CDI' },
@@ -173,73 +174,50 @@ const TeacherManagement = () => {
     setIsEditOpen(true);
   };
 
-  const handleSaveEdit = () => {
+  const handleSaveEdit = async () => {
     if (!selectedTeacher) return;
 
-    // Validation
     if (!editForm.firstName.trim() || !editForm.lastName.trim()) {
-      toast({ title: "Erreur", description: "Le nom et prénom sont obligatoires", variant: "destructive" });
-      return;
-    }
-    if (!editForm.dateOfBirth || !editForm.placeOfBirth.trim()) {
-      toast({ title: "Erreur", description: "La date et lieu de naissance sont obligatoires", variant: "destructive" });
-      return;
-    }
-    if (!editForm.sex) {
-      toast({ title: "Erreur", description: "Le sexe est obligatoire", variant: "destructive" });
+      toast({ title: 'Erreur', description: 'Le nom et prénom sont obligatoires', variant: 'destructive' });
       return;
     }
     if (!editForm.phone.trim()) {
-      toast({ title: "Erreur", description: "Le numéro de téléphone est obligatoire", variant: "destructive" });
+      toast({ title: 'Erreur', description: 'Le numéro de téléphone est obligatoire', variant: 'destructive' });
       return;
     }
-    if (!editForm.residence.trim()) {
-      toast({ title: "Erreur", description: "Le lieu de résidence est obligatoire", variant: "destructive" });
+    if (!editForm.contractType || !editForm.paymentType) {
+      toast({ title: 'Erreur', description: 'Le contrat et le paiement sont obligatoires', variant: 'destructive' });
       return;
     }
-    if (!editForm.diploma.trim()) {
-      toast({ title: "Erreur", description: "Le diplôme est obligatoire", variant: "destructive" });
-      return;
-    }
-    if (!editForm.emergencyPhone.trim()) {
-      toast({ title: "Erreur", description: "Le numéro d'urgence est obligatoire", variant: "destructive" });
-      return;
-    }
-    if (!editForm.contractType) {
-      toast({ title: "Erreur", description: "Le type de contrat est obligatoire", variant: "destructive" });
-      return;
-    }
-    if (!editForm.paymentType) {
-      toast({ title: "Erreur", description: "Le type de paiement est obligatoire", variant: "destructive" });
-      return;
-    }
-    if (!editForm.salaryAmount || parseFloat(editForm.salaryAmount) <= 0) {
-      toast({ title: "Erreur", description: "Le montant du salaire est obligatoire", variant: "destructive" });
-      return;
-    }
-    
-    updateTeacher(selectedTeacher.id, {
-      firstName: editForm.firstName,
-      lastName: editForm.lastName,
-      dateOfBirth: editForm.dateOfBirth,
-      placeOfBirth: editForm.placeOfBirth,
-      sex: editForm.sex as 'homme' | 'femme',
-      phone: editForm.phone,
-      email: editForm.email || undefined,
-      residence: editForm.residence,
-      diploma: editForm.diploma,
-      yearsExperience: parseInt(editForm.yearsExperience) || 0,
-      emergencyPhone: editForm.emergencyPhone,
-      contractType: editForm.contractType as 'cdi' | 'cdd' | 'vacataire' | 'stagiaire',
-      paymentType: editForm.paymentType as 'hourly' | 'fixed',
-      salaryAmount: parseFloat(editForm.salaryAmount) || 0,
-    });
 
-    toast({
-      title: "Modifications enregistrées",
-      description: `Les informations de ${editForm.firstName} ${editForm.lastName} ont été mises à jour.`,
-    });
-    setIsEditOpen(false);
+    setIsSaving(true);
+    try {
+      await updateTeacher(selectedTeacher.id, {
+        firstName:       editForm.firstName,
+        lastName:        editForm.lastName,
+        dateOfBirth:     editForm.dateOfBirth,
+        placeOfBirth:    editForm.placeOfBirth,
+        sex:             editForm.sex as 'homme' | 'femme',
+        phone:           editForm.phone,
+        email:           editForm.email || undefined,
+        residence:       editForm.residence,
+        diploma:         editForm.diploma,
+        yearsExperience: parseInt(editForm.yearsExperience) || 0,
+        emergencyPhone:  editForm.emergencyPhone,
+        contractType:    editForm.contractType as 'cdi' | 'cdd' | 'vacataire' | 'stagiaire',
+        paymentType:     editForm.paymentType  as 'hourly' | 'fixed',
+        salaryAmount:    parseFloat(editForm.salaryAmount) || 0,
+      });
+      toast({
+        title: 'Modifications enregistrées',
+        description: `Les informations de ${editForm.firstName} ${editForm.lastName} ont été mises à jour.`,
+      });
+      setIsEditOpen(false);
+    } catch (err) {
+      toast({ title: 'Erreur', description: String(err), variant: 'destructive' });
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   return (
@@ -258,7 +236,7 @@ const TeacherManagement = () => {
             <div>
               <h1 className="text-2xl font-bold text-foreground">Gestion des Professeurs</h1>
               <p className="text-muted-foreground">
-                {teachers.length} professeur{teachers.length > 1 ? 's' : ''} inscrit{teachers.length > 1 ? 's' : ''}
+                {teachersLoading ? 'Chargement…' : `${teachers.length} professeur${teachers.length > 1 ? 's' : ''} inscrit${teachers.length > 1 ? 's' : ''}`}
               </p>
             </div>
           </div>
@@ -383,6 +361,7 @@ const TeacherManagement = () => {
                     <CardContent className="pt-6">
                       <div className="flex flex-col items-center text-center mb-4">
                         <Avatar className="w-16 h-16 mb-3 ring-2 ring-primary/20">
+                          {teacher.photoUrl && <AvatarImage src={teacher.photoUrl} alt={`${teacher.firstName} ${teacher.lastName}`} className="object-cover" />}
                           <AvatarFallback className="bg-primary/10 text-primary font-semibold text-lg">
                             {getInitials(teacher.firstName, teacher.lastName)}
                           </AvatarFallback>
@@ -468,6 +447,7 @@ const TeacherManagement = () => {
                         <TableCell>
                           <div className="flex items-center gap-3">
                             <Avatar className="w-10 h-10">
+                              {teacher.photoUrl && <AvatarImage src={teacher.photoUrl} alt={`${teacher.firstName} ${teacher.lastName}`} className="object-cover" />}
                               <AvatarFallback className="bg-primary/10 text-primary text-sm font-medium">
                                 {getInitials(teacher.firstName, teacher.lastName)}
                               </AvatarFallback>
@@ -543,6 +523,7 @@ const TeacherManagement = () => {
                     {/* Header with avatar */}
                     <div className="flex flex-col items-center text-center pb-4 border-b">
                       <Avatar className="w-20 h-20 mb-4 ring-4 ring-primary/20">
+                        {selectedTeacher.photoUrl && <AvatarImage src={selectedTeacher.photoUrl} alt={`${selectedTeacher.firstName} ${selectedTeacher.lastName}`} className="object-cover" />}
                         <AvatarFallback className="bg-primary/10 text-primary font-bold text-2xl">
                           {getInitials(selectedTeacher.firstName, selectedTeacher.lastName)}
                         </AvatarFallback>
@@ -840,12 +821,12 @@ const TeacherManagement = () => {
             </div>
 
             <DialogFooter>
-              <Button variant="outline" onClick={() => setIsEditOpen(false)}>
+              <Button variant="outline" onClick={() => setIsEditOpen(false)} disabled={isSaving}>
                 Annuler
               </Button>
-              <Button onClick={handleSaveEdit} className="gap-2">
-                <Save className="w-4 h-4" />
-                Enregistrer
+              <Button onClick={handleSaveEdit} className="gap-2" disabled={isSaving}>
+                {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                {isSaving ? 'Enregistrement…' : 'Enregistrer'}
               </Button>
             </DialogFooter>
           </DialogContent>

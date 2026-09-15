@@ -1,8 +1,12 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
-
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+@layer utilities {
+  .no-scrollbar::-webkit-scrollbar { display: none; }
+  .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+}
+
 
 @layer base {
   :root {
@@ -102,5 +106,44 @@
   
   .sidebar-scroll::-webkit-scrollbar-thumb:hover {
     background: hsl(var(--muted-foreground) / 0.5);
+  }
+}
+
+/* Impression ciblée : n'imprime que la carte d'identité désignée — le reste
+   de la page (modale, boutons…) est masqué. Le bulletin de notes, lui,
+   n'utilise plus l'impression navigateur : il est exporté en PDF directement
+   (voir src/lib/pdf.ts) pour un résultat identique sur tous les appareils. */
+@media print {
+  @page {
+    margin: 15mm;
+  }
+  body * {
+    visibility: hidden;
+  }
+  #id-card-print-area,
+  #id-card-print-area * {
+    visibility: visible;
+  }
+  #id-card-print-area {
+    position: fixed;
+    top: 0;
+    left: 50%;
+    /* Largeur IMPOSÉE. Sans elle, la zone d'impression — sortie du flux par
+       `position: fixed` — se dimensionne sur son contenu et la carte sortait
+       déformée, tantôt écrasée tantôt étirée sur toute la feuille.
+       86 mm : la largeur d'une carte d'identité réelle. */
+    width: 86mm;
+    transform: translateX(-50%);
+  }
+  /* Les navigateurs suppriment les fonds à l'impression par défaut : le
+     bandeau bleu de l'école et le carré d'initiales sortaient en blanc, et
+     leur texte blanc devenait invisible. */
+  #id-card-print-area * {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  /* Une carte imprimée n'a pas d'ombre portée. */
+  #id-card-print-area * {
+    box-shadow: none !important;
   }
 }

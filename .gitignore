@@ -22,3 +22,27 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Rapports et sessions du script de test de charge (contiennent des
+# identifiants de comptes de test) — voir scripts/load_test.py
+scripts/report_*.json
+scripts/.last_test_session.json
+
+# Rapports de couverture de tests (régénérés par npm run test:coverage)
+coverage
+
+# Sauvegardes temporaires du testeur de mutation
+.mutations-en-cours
+
+# Rapports de campagne
+rapports
+
+# Configuration locale de l'éditeur Claude (chemins propres à cette machine)
+.claude/
+
+# Captures d'écran de démonstration (données de test, 6,6 Mo) — gardées en local
+docs/captures/
+
+# Fichiers compilés générés par Python
+__pycache__/
+*.pyc
