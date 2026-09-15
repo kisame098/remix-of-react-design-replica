@@ -3,12 +3,13 @@ import { render, screen, fireEvent } from '@testing-library/react';
 import { MemoryRouter, Routes, Route, useLocation } from 'react-router-dom';
 import Hero from './Hero';
 import CTA from './CTA';
+import Footer from './Footer';
 import FAQ from './FAQ';
 import { QUESTIONS, donneesStructureesFAQ } from '@/lib/faq';
 import { Referencement } from './Referencement';
 import { TITRE_ACCUEIL } from '@/lib/referencement';
 import { TARIF_MENSUEL, FORMULES, prixPlein } from '@/lib/subscriptionPlans';
-import { WHATSAPP_NUMERO, ADRESSE_INSCRIPTION } from '@/lib/contact';
+import { WHATSAPP_NUMERO, ADRESSE_INSCRIPTION, EMAIL_CONTACT } from '@/lib/contact';
 
 // ════════════════════════════════════════════════════════════════════════════
 // LA PAGE D'ACCUEIL — celle que trouvent les directeurs d'école sur Google.
@@ -127,5 +128,17 @@ describe('Referencement — titre et consigne robots page par page', () => {
     monter(<Referencement />, '/dashboard');
     expect(document.title).toBe('Tableau de bord | SenClass');
     expect(robots()).toBe('noindex, nofollow');
+  });
+});
+
+describe('pied de page', () => {
+  it('l\'e-mail de contact est cliquable et ouvre la messagerie', () => {
+    render(<Footer />);
+    expect(screen.getByRole('link', { name: EMAIL_CONTACT }).getAttribute('href')).toBe(`mailto:${EMAIL_CONTACT}`);
+  });
+
+  it('plus aucune adresse sur un domaine qui n\'est pas le nôtre', () => {
+    const { container } = render(<Footer />);
+    expect(container.textContent).not.toMatch(/terangaschool|terranga/i);
   });
 });
