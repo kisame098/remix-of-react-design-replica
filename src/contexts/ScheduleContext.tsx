@@ -1,257 +1,226 @@
 import React, { createContext, useContext, useState, useCallback, useEffect, ReactNode } from 'react';
-import { ScheduleEvent, ScheduleConflict, GROUP_OPTIONS } from '@/types/schedule';
+import { ScheduleEvent, ScheduleConflict } from '@/types/schedule';
+import { findScheduleConflicts, validateTimeRange } from '@/lib/scheduleConflicts';
+import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/contexts/AuthContext';
+import { useSchoolYear } from '@/contexts/SchoolYearContext';
+import { fetchAllRows } from '@/lib/fetchAllRows';
 
-const STORAGE_KEY = 'school_schedule_events';
+// ─── Helpers horaires ──────────────────────────────────────────────────────────
+// Réexporté : la détection de conflits vit dans src/lib/scheduleConflicts.ts
+// (fonction pure couverte par scheduleConflicts.test.ts).
+export { validateTimeRange };
 
-// Helper to parse time string to minutes
-const timeToMinutes = (time: string): number => {
-  const [hours, minutes] = time.split(':').map(Number);
-  return hours * 60 + minutes;
-};
+// ─── Mapper ligne DB → ScheduleEvent ──────────────────────────────────────────
 
-// Check if two time ranges intersect
-const doTimesIntersect = (
-  start1: string,
-  end1: string,
-  start2: string,
-  end2: string
-): boolean => {
-  const s1 = timeToMinutes(start1);
-  const e1 = timeToMinutes(end1);
-  const s2 = timeToMinutes(start2);
-  const e2 = timeToMinutes(end2);
-  return s1 < e2 && s2 < e1;
-};
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const mapRow = (r: any): ScheduleEvent => ({
+  id:          r.id,
+  dayIndex:    r.day_index,
+  startTime:   r.start_time,
+  endTime:     r.end_time,
+  subjectId:   null,           // non utilisé côté schedule (subjectName suffit)
+  subjectName: r.subject_name,
+  classId:     r.class_id,    // UUID string
+  className:   r.class_name,
+  teacherId:   r.teacher_id   ?? null,
+  teacherName: r.teacher_name ?? null,
+  groupId:     r.group_id,
+  groupName:   r.group_name,
+  color:       r.color,
+});
 
-// Validate that endTime is after startTime
-export const validateTimeRange = (startTime: string, endTime: string): boolean => {
-  const start = timeToMinutes(startTime);
-  const end = timeToMinutes(endTime);
-  return end > start;
-};
+// ─── Interface du contexte ────────────────────────────────────────────────────
 
 interface ScheduleContextType {
   events: ScheduleEvent[];
-  addEvent: (event: Omit<ScheduleEvent, 'id'>) => { success: boolean; conflicts: ScheduleConflict[]; event?: ScheduleEvent };
-  updateEvent: (eventId: string, updates: Partial<ScheduleEvent>) => { success: boolean; conflicts: ScheduleConflict[] };
-  deleteEvent: (eventId: string) => void;
+  scheduleLoading: boolean;
+
+  addEvent:    (event: Omit<ScheduleEvent, 'id'>) => Promise<{ success: boolean; conflicts: ScheduleConflict[]; event?: ScheduleEvent }>;
+  updateEvent: (eventId: string, updates: Omit<ScheduleEvent, 'id'>) => Promise<{ success: boolean; conflicts: ScheduleConflict[] }>;
+  deleteEvent: (eventId: string) => Promise<void>;
+
   checkOverlap: (newEvent: Partial<ScheduleEvent>, excludeEventId?: string) => ScheduleConflict[];
-  getEventsByClass: (classId: number, groupFilter?: string) => ScheduleEvent[];
-  getEventsByTeacher: (teacherId: number) => ScheduleEvent[];
+  getEventsByClass:   (classId: string, groupFilter?: string) => ScheduleEvent[];
+  getEventsByTeacher: (teacherId: string) => ScheduleEvent[];
 }
 
 const ScheduleContext = createContext<ScheduleContextType | undefined>(undefined);
 
+// ─── Provider ─────────────────────────────────────────────────────────────────
+
 export const ScheduleProvider = ({ children }: { children: ReactNode }) => {
-  const [events, setEvents] = useState<ScheduleEvent[]>(() => {
-    // Load from localStorage on init
-    try {
-      const stored = localStorage.getItem(STORAGE_KEY);
-      return stored ? JSON.parse(stored) : [];
-    } catch {
-      return [];
-    }
-  });
+  const { school } = useAuth();
+  const { currentYear } = useSchoolYear();
 
-  // Persist to localStorage whenever events change
+  const schoolId: string | null = school?.id ?? null;
+
+  const [events, setEvents]               = useState<ScheduleEvent[]>([]);
+  const [scheduleLoading, setScheduleLoading] = useState(false);
+
+  // ── Chargement Supabase ────────────────────────────────────────────────────
+  // Recharge quand l'école ou l'année scolaire change.
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(events));
-  }, [events]);
+    if (!schoolId || !currentYear) {
+      setEvents([]);
+      return;
+    }
 
-  // STRICT CONSTRAINT VALIDATION (V2 Algorithm)
+    let cancelled = false;
+    setScheduleLoading(true);
+
+    // fetchAllRows : un emploi du temps complet (toutes classes confondues)
+    // dépasse vite 1000 lignes pour une grande école (limite PostgREST par
+    // défaut, tronquée sans erreur avec un .select('*') direct).
+    fetchAllRows('schedule_events', q => q
+      .eq('school_id', schoolId)
+      .eq('academic_year_label', currentYear.id)
+      .order('day_index', { ascending: true })
+      .order('start_time', { ascending: true }))
+      .then(({ data, error }) => {
+        if (cancelled) return;
+        if (!error && data) setEvents(data.map(mapRow));
+        setScheduleLoading(false);
+      });
+
+    return () => { cancelled = true; };
+  }, [schoolId, currentYear?.id]);
+
+  // ── Détection de conflits (V2 — logique groupe-aware) ────────────────────
   const checkOverlap = useCallback(
-    (
-      newEvent: Partial<ScheduleEvent>,
-      excludeEventId?: string
-    ): ScheduleConflict[] => {
-      const conflicts: ScheduleConflict[] = [];
-
-      if (
-        newEvent.dayIndex === undefined ||
-        !newEvent.startTime ||
-        !newEvent.endTime
-      ) {
-        return conflicts;
-      }
-
-      // Time validation: end must be after start
-      if (!validateTimeRange(newEvent.startTime, newEvent.endTime)) {
-        conflicts.push({
-          type: 'class',
-          severity: 'hard',
-          message: `L'heure de fin (${newEvent.endTime}) doit être après l'heure de début (${newEvent.startTime}).`,
-          existingEvent: {} as ScheduleEvent,
-          newEvent,
-        });
-        return conflicts;
-      }
-
-      // Get all events on the same day that intersect with the new time slot
-      const overlappingEvents = events.filter(
-        (e) =>
-          e.id !== excludeEventId &&
-          e.dayIndex === newEvent.dayIndex &&
-          doTimesIntersect(
-            e.startTime,
-            e.endTime,
-            newEvent.startTime!,
-            newEvent.endTime!
-          )
-      );
-
-      for (const existingEvent of overlappingEvents) {
-        // RULE A: Teacher constraint (HARD - always blocking)
-        if (
-          newEvent.teacherId &&
-          existingEvent.teacherId === newEvent.teacherId
-        ) {
-          conflicts.push({
-            type: 'teacher',
-            severity: 'hard',
-            message: `Le professeur est déjà assigné à un autre cours (${existingEvent.subjectName} - ${existingEvent.className}) à cette heure.`,
-            existingEvent,
-            newEvent,
-          });
-        }
-
-        // RULE B: Class constraint (STRICT logic based on Scope/Group)
-        if (
-          newEvent.classId &&
-          existingEvent.classId === newEvent.classId
-        ) {
-          const newScope = newEvent.groupId;
-          const existingScope = existingEvent.groupId;
-
-          if (newScope === 'all') {
-            conflicts.push({
-              type: 'class',
-              severity: 'hard',
-              message: `Un cours "Classe Entière" ne peut pas chevaucher un cours existant (${existingEvent.subjectName} - ${existingEvent.groupName}).`,
-              existingEvent,
-              newEvent,
-            });
-          } else {
-            if (existingScope === 'all') {
-              conflicts.push({
-                type: 'class',
-                severity: 'hard',
-                message: `Le Groupe "${GROUP_OPTIONS.find(g => g.id === newScope)?.name}" ne peut pas avoir cours pendant un cours "Classe Entière" (${existingEvent.subjectName}).`,
-                existingEvent,
-                newEvent,
-              });
-            } else if (existingScope === newScope) {
-              conflicts.push({
-                type: 'class',
-                severity: 'hard',
-                message: `Le ${GROUP_OPTIONS.find(g => g.id === newScope)?.name} a déjà un cours (${existingEvent.subjectName}) sur ce créneau.`,
-                existingEvent,
-                newEvent,
-              });
-            }
-          }
-        }
-      }
-
-      return conflicts;
-    },
+    (newEvent: Partial<ScheduleEvent>, excludeEventId?: string): ScheduleConflict[] =>
+      findScheduleConflicts(events, newEvent, excludeEventId),
     [events]
   );
 
-  // Add a new event
-  const addEvent = useCallback(
-    (event: Omit<ScheduleEvent, 'id'>): { success: boolean; conflicts: ScheduleConflict[]; event?: ScheduleEvent } => {
-      const newId = `evt_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-      const newEvent: ScheduleEvent = { ...event, id: newId };
+  // ── Ajout d'un créneau ────────────────────────────────────────────────────
+  const addEvent = useCallback(async (
+    eventData: Omit<ScheduleEvent, 'id'>
+  ): Promise<{ success: boolean; conflicts: ScheduleConflict[]; event?: ScheduleEvent }> => {
+    if (!schoolId || !currentYear) {
+      return { success: false, conflicts: [] };
+    }
 
-      const conflicts = checkOverlap(newEvent);
-      
-      if (conflicts.length > 0) {
-        return { success: false, conflicts };
-      }
+    // Vérification locale des conflits avant l'INSERT
+    const conflicts = checkOverlap(eventData);
+    if (conflicts.length > 0) return { success: false, conflicts };
 
-      setEvents((prev) => [...prev, newEvent]);
-      return { success: true, conflicts: [], event: newEvent };
-    },
-    [checkOverlap]
-  );
+    const { data: row, error } = await supabase
+      .from('schedule_events')
+      .insert({
+        school_id:           schoolId,
+        academic_year_label: currentYear.id,
+        day_index:    eventData.dayIndex,
+        start_time:   eventData.startTime,
+        end_time:     eventData.endTime,
+        subject_name: eventData.subjectName,
+        class_id:     eventData.classId,
+        class_name:   eventData.className,
+        teacher_id:   eventData.teacherId   ?? null,
+        teacher_name: eventData.teacherName ?? null,
+        group_id:     eventData.groupId,
+        group_name:   eventData.groupName,
+        color:        eventData.color,
+      })
+      .select()
+      .single();
 
-  // Update an existing event
-  const updateEvent = useCallback(
-    (eventId: string, updates: Partial<ScheduleEvent>): { success: boolean; conflicts: ScheduleConflict[] } => {
-      const existingEvent = events.find((e) => e.id === eventId);
-      if (!existingEvent) {
-        return { success: false, conflicts: [] };
-      }
+    if (error) return { success: false, conflicts: [] };
 
-      const updatedEvent = { ...existingEvent, ...updates };
-      const conflicts = checkOverlap(updatedEvent, eventId);
+    const newEvent = mapRow(row);
+    setEvents(prev => [...prev, newEvent]);
+    return { success: true, conflicts: [], event: newEvent };
+  }, [schoolId, currentYear, checkOverlap]);
 
-      if (conflicts.length > 0) {
-        return { success: false, conflicts };
-      }
+  // ── Mise à jour d'un créneau ──────────────────────────────────────────────
+  const updateEvent = useCallback(async (
+    eventId: string,
+    updates: Omit<ScheduleEvent, 'id'>
+  ): Promise<{ success: boolean; conflicts: ScheduleConflict[] }> => {
+    if (!schoolId) return { success: false, conflicts: [] };
 
-      setEvents((prev) =>
-        prev.map((e) => (e.id === eventId ? updatedEvent : e))
-      );
-      return { success: true, conflicts: [] };
-    },
-    [events, checkOverlap]
-  );
+    const conflicts = checkOverlap({ ...updates, id: eventId }, eventId);
+    if (conflicts.length > 0) return { success: false, conflicts };
 
-  // Delete an event
-  const deleteEvent = useCallback((eventId: string) => {
-    setEvents((prev) => prev.filter((e) => e.id !== eventId));
-  }, []);
+    const { data: row, error } = await supabase
+      .from('schedule_events')
+      .update({
+        day_index:    updates.dayIndex,
+        start_time:   updates.startTime,
+        end_time:     updates.endTime,
+        subject_name: updates.subjectName,
+        class_id:     updates.classId,
+        class_name:   updates.className,
+        teacher_id:   updates.teacherId   ?? null,
+        teacher_name: updates.teacherName ?? null,
+        group_id:     updates.groupId,
+        group_name:   updates.groupName,
+        color:        updates.color,
+        updated_at:   new Date().toISOString(),
+      })
+      .eq('id', eventId)
+      .eq('school_id', schoolId)
+      .select()
+      .single();
 
-  // Get events for a specific class with STRICT group filtering
+    if (error) return { success: false, conflicts: [] };
+
+    const updated = mapRow(row);
+    setEvents(prev => prev.map(e => e.id === eventId ? updated : e));
+    return { success: true, conflicts: [] };
+  }, [schoolId, checkOverlap]);
+
+  // ── Suppression d'un créneau ──────────────────────────────────────────────
+  const deleteEvent = useCallback(async (eventId: string): Promise<void> => {
+    if (!schoolId) return;
+    const { error } = await supabase
+      .from('schedule_events')
+      .delete()
+      .eq('id', eventId)
+      .eq('school_id', schoolId);
+    if (!error) setEvents(prev => prev.filter(e => e.id !== eventId));
+  }, [schoolId]);
+
+  // ── Filtres ────────────────────────────────────────────────────────────────
+
+  /** Retourne les créneaux d'une classe avec filtrage groupe-aware. */
   const getEventsByClass = useCallback(
-    (classId: number, groupFilter?: string): ScheduleEvent[] => {
-      return events.filter((e) => {
+    (classId: string, groupFilter?: string): ScheduleEvent[] => {
+      return events.filter(e => {
         if (e.classId !== classId) return false;
-        
-        if (groupFilter === undefined) {
-          return true;
-        }
-        
-        if (groupFilter === 'all') {
-          return e.groupId === 'all';
-        }
-        
+        if (groupFilter === undefined) return true;
+        if (groupFilter === 'all') return e.groupId === 'all';
         return e.groupId === 'all' || e.groupId === groupFilter;
       });
     },
     [events]
   );
 
-  // Get events for a specific teacher
+  /** Retourne tous les créneaux d'un professeur. */
   const getEventsByTeacher = useCallback(
-    (teacherId: number): ScheduleEvent[] => {
-      return events.filter((e) => e.teacherId === teacherId);
-    },
+    (teacherId: string): ScheduleEvent[] =>
+      events.filter(e => e.teacherId === teacherId),
     [events]
   );
 
   return (
-    <ScheduleContext.Provider
-      value={{
-        events,
-        addEvent,
-        updateEvent,
-        deleteEvent,
-        checkOverlap,
-        getEventsByClass,
-        getEventsByTeacher,
-      }}
-    >
+    <ScheduleContext.Provider value={{
+      events,
+      scheduleLoading,
+      addEvent,
+      updateEvent,
+      deleteEvent,
+      checkOverlap,
+      getEventsByClass,
+      getEventsByTeacher,
+    }}>
       {children}
     </ScheduleContext.Provider>
   );
 };
 
 export const useSchedule = () => {
-  const context = useContext(ScheduleContext);
-  if (context === undefined) {
-    throw new Error('useSchedule must be used within a ScheduleProvider');
-  }
-  return context;
+  const ctx = useContext(ScheduleContext);
+  if (!ctx) throw new Error('useSchedule must be used within a ScheduleProvider');
+  return ctx;
 };

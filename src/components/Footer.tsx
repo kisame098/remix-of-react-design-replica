@@ -1,4 +1,5 @@
 import { Facebook, Twitter, Linkedin, MapPin, Phone, Mail } from "lucide-react";
+import { TELEPHONE_LISIBLE, lienWhatsApp } from "@/lib/contact";
 
 const Footer = () => {
   return (
@@ -7,27 +8,27 @@ const Footer = () => {
         <div className="grid md:grid-cols-4 gap-8">
           {/* Brand */}
           <div>
-            <a href="#" className="flex items-center gap-2 mb-4">
+            <a href="/" className="flex items-center gap-2 mb-4">
               <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center">
-                <svg className="w-5 h-5 text-primary-foreground" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <svg className="w-5 h-5 text-primary-foreground" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
                   <path d="M12 2L2 7l10 5 10-5-10-5z" />
                   <path d="M2 17l10 5 10-5" />
                   <path d="M2 12l10 5 10-5" />
                 </svg>
               </div>
-              <span className="text-lg font-bold text-foreground">Teranga School</span>
+              <span className="text-lg font-bold text-foreground">SenClass</span>
             </a>
             <p className="text-sm text-muted-foreground mb-4">
-              La solution de gestion scolaire conçue pour l'excellence éducative en Afrique. Simple, fiable et sécurisée.
+              Le logiciel de gestion scolaire conçu à Dakar pour les écoles du Sénégal et d'Afrique. Simple, fiable et sécurisé.
             </p>
             <div className="flex gap-4">
-              <a href="#" className="text-muted-foreground hover:text-foreground transition-colors">
+              <a href="#" aria-label="Facebook" className="text-muted-foreground hover:text-foreground transition-colors">
                 <Facebook className="w-5 h-5" />
               </a>
-              <a href="#" className="text-muted-foreground hover:text-foreground transition-colors">
+              <a href="#" aria-label="Twitter" className="text-muted-foreground hover:text-foreground transition-colors">
                 <Twitter className="w-5 h-5" />
               </a>
-              <a href="#" className="text-muted-foreground hover:text-foreground transition-colors">
+              <a href="#" aria-label="LinkedIn" className="text-muted-foreground hover:text-foreground transition-colors">
                 <Linkedin className="w-5 h-5" />
               </a>
             </div>
@@ -48,12 +49,12 @@ const Footer = () => {
                 </a>
               </li>
               <li>
-                <a href="#" className="text-sm text-muted-foreground hover:text-foreground transition-colors">
+                <a href="#temoignages" className="text-sm text-muted-foreground hover:text-foreground transition-colors">
                   Témoignages
                 </a>
               </li>
               <li>
-                <a href="#" className="text-sm text-muted-foreground hover:text-foreground transition-colors">
+                <a href="#faq" className="text-sm text-muted-foreground hover:text-foreground transition-colors">
                   FAQ
                 </a>
               </li>
@@ -94,14 +95,21 @@ const Footer = () => {
               </li>
               <li className="flex items-center gap-3">
                 <Phone className="w-4 h-4 text-muted-foreground flex-shrink-0" />
-                <span className="text-sm text-muted-foreground">
-                  +221 33 800 00 00
-                </span>
+                {/* Le numéro WhatsApp réel — l'ancien « 33 800 00 00 » était un
+                    numéro de démonstration. */}
+                <a
+                  href={lienWhatsApp("Bonjour, je souhaite en savoir plus sur SenClass.")}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  {TELEPHONE_LISIBLE} (WhatsApp)
+                </a>
               </li>
               <li className="flex items-center gap-3">
                 <Mail className="w-4 h-4 text-muted-foreground flex-shrink-0" />
                 <span className="text-sm text-muted-foreground">
-                  bonjour@terangaschool.sn
+                  contact@senclass.com
                 </span>
               </li>
             </ul>
@@ -111,7 +119,7 @@ const Footer = () => {
         {/* Bottom Bar */}
         <div className="mt-12 pt-8 border-t border-border text-center">
           <p className="text-sm text-muted-foreground">
-            © 2025 Teranga School. Fait avec passion à Dakar.
+            © {new Date().getFullYear()} SenClass. Fait avec passion à Dakar.
           </p>
         </div>
       </div>

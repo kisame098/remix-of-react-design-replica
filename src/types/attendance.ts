@@ -5,8 +5,8 @@ export type StudentAttendanceStatus = 'present' | 'absent' | 'late' | 'expelled'
 
 export interface StudentAttendance {
   id: string;
-  sessionId: string; // Lié au ScheduleEvent
-  studentId: number;
+  sessionId: string;  // Lié au ScheduleEvent
+  studentId: string;  // UUID → student_enrollments.id  (était number — CORRIGÉ)
   status: StudentAttendanceStatus; // Défaut: 'present'
   justification?: string;
   isJustified: boolean;
@@ -20,7 +20,7 @@ export type TeacherAttendanceStatus = 'undefined' | 'present' | 'absent' | 'late
 export interface TeacherAttendance {
   id: string;
   sessionId: string; // Lié au ScheduleEvent
-  teacherId: number;
+  teacherId: string; // UUID → teacher_enrollments.id (Teacher.id)
   status: TeacherAttendanceStatus; // Défaut: 'undefined' (sécurité financière)
   effectiveMinutes: number; // Durée effective pour la paie
   theoreticalMinutes: number; // Durée théorique du créneau
@@ -38,9 +38,9 @@ export interface AttendanceSession {
   dayIndex: number;
   startTime: string;
   endTime: string;
-  classId: number;
+  classId: string;   // UUID → classes.id  (était number — CORRIGÉ)
   className: string;
-  teacherId: number | null;
+  teacherId: string | null; // UUID → teacher_enrollments.id (Teacher.id)
   teacherName: string | null;
   subjectName: string;
   groupId: string;
@@ -52,7 +52,7 @@ export interface AttendanceSession {
 
 // === RÉSUMÉ MENSUEL PROF ===
 export interface TeacherMonthlyHours {
-  teacherId: number;
+  teacherId: string; // UUID → teacher_enrollments.id (Teacher.id)
   teacherName: string;
   month: number; // 1-12
   year: number;

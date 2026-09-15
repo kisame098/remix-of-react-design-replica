@@ -1,5 +1,5 @@
 import React from 'react';
-import { ScheduleEvent, DAYS, DEFAULT_TIME_SLOTS } from '@/types/schedule';
+import { ScheduleEvent, DAYS, generateTimeSlots, DEFAULT_MIN_HOUR, DEFAULT_MAX_HOUR } from '@/types/schedule';
 import { cn } from '@/lib/utils';
 
 interface ScheduleGridProps {
@@ -7,6 +7,8 @@ interface ScheduleGridProps {
   viewMode: 'class' | 'teacher';
   onSlotClick: (dayIndex: number, startTime: string, endTime: string) => void;
   onEventClick: (event: ScheduleEvent) => void;
+  minHour?: string;
+  maxHour?: string;
 }
 
 const timeToMinutes = (time: string): number => {
@@ -19,9 +21,12 @@ export const ScheduleGrid: React.FC<ScheduleGridProps> = ({
   viewMode,
   onSlotClick,
   onEventClick,
+  minHour = DEFAULT_MIN_HOUR,
+  maxHour = DEFAULT_MAX_HOUR,
 }) => {
-  const gridStartTime = timeToMinutes(DEFAULT_TIME_SLOTS[0].start);
-  const gridEndTime = timeToMinutes(DEFAULT_TIME_SLOTS[DEFAULT_TIME_SLOTS.length - 1].end);
+  const timeSlots = generateTimeSlots(minHour, maxHour);
+  const gridStartTime = timeToMinutes(timeSlots[0].start);
+  const gridEndTime = timeToMinutes(timeSlots[timeSlots.length - 1].end);
   const totalMinutes = gridEndTime - gridStartTime;
 
   const getEventPosition = (event: ScheduleEvent) => {
@@ -58,7 +63,7 @@ export const ScheduleGrid: React.FC<ScheduleGridProps> = ({
       <div className="grid grid-cols-[80px_repeat(6,1fr)]">
         {/* Time Column */}
         <div className="border-r border-border">
-          {DEFAULT_TIME_SLOTS.map((slot, index) => (
+          {timeSlots.map((slot, index) => (
             <div
               key={slot.start}
               className={cn(
@@ -79,10 +84,10 @@ export const ScheduleGrid: React.FC<ScheduleGridProps> = ({
             <div
               key={day.index}
               className="relative border-l border-border"
-              style={{ minHeight: `${DEFAULT_TIME_SLOTS.length * 64}px` }}
+              style={{ minHeight: `${timeSlots.length * 64}px` }}
             >
               {/* Slot backgrounds for clicking */}
-              {DEFAULT_TIME_SLOTS.map((slot, index) => (
+              {timeSlots.map((slot, index) => (
                 <div
                   key={slot.start}
                   className={cn(

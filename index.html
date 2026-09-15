@@ -2,19 +2,113 @@
 <html lang="fr">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Teranga School - L'Excellence Scolaire à Portée de Main</title>
-    <meta name="description" content="Teranga School est la plateforme tout-en-un conçue pour simplifier la gestion des écoles africaines. Gagnez du temps, réduisez les coûts." />
-    <meta name="author" content="Teranga School" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
 
-    <meta property="og:title" content="Teranga School - Gestion Scolaire pour l'Afrique" />
-    <meta property="og:description" content="La plateforme tout-en-un pour digitaliser votre établissement scolaire." />
+    <!-- Référencement : le titre et la description sont ce que Google affiche
+         dans ses résultats. Mot-clé en tête — c'est ce que tapent les
+         directeurs d'école, et tous les concurrents l'ont dans leur titre.
+         Le titre doit rester identique à TITRE_ACCUEIL (src/lib/referencement.ts). -->
+    <title>Logiciel de gestion scolaire au Sénégal | SenClass</title>
+    <meta name="description" content="SenClass, logiciel de gestion scolaire en ligne pour les écoles du Sénégal : inscriptions, notes et bulletins, emplois du temps, présences et paiements." />
+    <meta name="robots" content="index, follow, max-image-preview:large" />
+    <link rel="canonical" href="%VITE_SITE_URL%/" />
+    <meta name="author" content="SenClass" />
+
+    <!-- Icônes : onglet du navigateur et résultats Google (multiple de 48 px) -->
+    <link rel="icon" href="/favicon.ico" sizes="48x48" />
+    <link rel="icon" type="image/png" sizes="96x96" href="/favicon-96x96.png" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon-180x180.png" />
+
+    <!-- Application installable (manifeste injecté au build par vite-plugin-pwa) -->
+    <meta name="theme-color" content="#F59E0B" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="SenClass" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+
+    <!-- Connexions ouvertes d'avance : depuis Dakar, la poignée de main TLS
+         vers Supabase (Irlande) coûte plusieurs centaines de millisecondes. -->
+    <link rel="preconnect" href="%VITE_SUPABASE_URL%" crossorigin />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <!-- Police chargée ici plutôt que par @import dans le CSS : le navigateur
+         la découvre tout de suite, sans attendre la feuille de style. -->
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" />
+
+    <!-- Aperçu des liens partagés (WhatsApp, Facebook…) — adresses absolues exigées -->
+    <meta property="og:site_name" content="SenClass" />
+    <meta property="og:title" content="SenClass — Logiciel de gestion scolaire au Sénégal" />
+    <meta property="og:description" content="Inscriptions, notes et bulletins, emplois du temps, présences et paiements : toute la gestion de votre école en un seul outil." />
     <meta property="og:type" content="website" />
-    <meta property="og:image" content="https://lovable.dev/opengraph-image-p98pqg.png" />
+    <meta property="og:url" content="%VITE_SITE_URL%/" />
+    <meta property="og:image" content="%VITE_SITE_URL%/og-image.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="SenClass, logiciel de gestion scolaire au Sénégal" />
+    <meta property="og:locale" content="fr_FR" />
 
     <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:site" content="@TerangaSchool" />
-    <meta name="twitter:image" content="https://lovable.dev/opengraph-image-p98pqg.png" />
+    <meta name="twitter:image" content="%VITE_SITE_URL%/og-image.png" />
+
+    <!-- Données structurées : ce que Google comprend de l'entreprise et du
+         produit (nom, logo, prix, fonctionnalités). Aucune note ni avis
+         inventé — Google sanctionne les avis fictifs. -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@graph": [
+        {
+          "@type": "Organization",
+          "@id": "%VITE_SITE_URL%/#organisation",
+          "name": "SenClass",
+          "url": "%VITE_SITE_URL%/",
+          "logo": "%VITE_SITE_URL%/logo-512.png",
+          "address": { "@type": "PostalAddress", "addressLocality": "Dakar", "addressCountry": "SN" },
+          "contactPoint": {
+            "@type": "ContactPoint",
+            "telephone": "+221706811277",
+            "contactType": "sales",
+            "areaServed": "SN",
+            "availableLanguage": "French"
+          }
+        },
+        {
+          "@type": "WebSite",
+          "@id": "%VITE_SITE_URL%/#site",
+          "url": "%VITE_SITE_URL%/",
+          "name": "SenClass",
+          "inLanguage": "fr",
+          "publisher": { "@id": "%VITE_SITE_URL%/#organisation" }
+        },
+        {
+          "@type": "SoftwareApplication",
+          "name": "SenClass",
+          "url": "%VITE_SITE_URL%/",
+          "applicationCategory": "EducationalApplication",
+          "operatingSystem": "Web, Android, iOS",
+          "inLanguage": "fr",
+          "description": "Logiciel de gestion scolaire en ligne pour les écoles du Sénégal, du CI à la Terminale.",
+          "featureList": [
+            "Inscription des élèves",
+            "Notes et bulletins de notes",
+            "Emplois du temps",
+            "Suivi des présences",
+            "Paiements de scolarité (espèces, Wave, Orange Money)",
+            "Salaires des professeurs",
+            "Espace élève sur téléphone"
+          ],
+          "offers": {
+            "@type": "Offer",
+            "price": "25000",
+            "priceCurrency": "XOF",
+            "description": "Abonnement mensuel, pour tout l'établissement",
+            "url": "%VITE_SITE_URL%/#tarifs"
+          },
+          "publisher": { "@id": "%VITE_SITE_URL%/#organisation" }
+        }
+      ]
+    }
+    </script>
   </head>
 
   <body>

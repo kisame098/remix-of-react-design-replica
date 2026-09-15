@@ -1,0 +1,14 @@
+#!/bin/sh
+# Empêche de pousser du code qui ne compile pas ou dont les tests échouent.
+# Installation (une seule fois, par machine) :
+#   git config core.hooksPath .githooks
+# Contourner exceptionnellement :
+#   git push --no-verify
+
+echo "→ Vérification avant push (types, lint, tests)…"
+npm run verify || {
+  echo ""
+  echo "✗ Push annulé : corrigez les erreurs ci-dessus, ou 'git push --no-verify' si c'est vraiment urgent."
+  exit 1
+}
+echo "✓ Tout est vert."

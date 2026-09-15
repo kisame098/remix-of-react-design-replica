@@ -1,0 +1,56 @@
+name: CI
+
+# Filet de sécurité avant mise en production : types, lint, tests et build
+# tournent à chaque push et à chaque pull request. Si ce job est rouge,
+# ne déployez pas.
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Même version de Node que l'hébergeur : tous deux lisent .nvmrc.
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: '.nvmrc'
+          cache: npm
+
+      # `npm ci` lit .npmrc (legacy-peer-deps) — exactement la commande
+      # que lancera l'hébergeur. Si elle casse ici, elle casserait là-bas.
+      - name: Installer les dépendances
+        run: npm ci
+
+      - name: Types
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Tests
+        run: npm run test
+
+      - name: Build de production
+        run: npm run build
+
+      # Le build doit produire une application installable : sans service
+      # worker ni manifeste, le site marcherait mais ne s'installerait plus
+      # et ne s'ouvrirait plus hors connexion — sans qu'aucune erreur le dise.
+      - name: Application installable (PWA)
+        run: |
+          test -f dist/sw.js
+          test -f dist/manifest.webmanifest
+          grep -q 'rel="manifest"' dist/index.html
+
+      # Référencement : un build qui perdrait ses fichiers pour Google ou
+      # laisserait un %VITE_…% non remplacé dans la page passerait inaperçu.
+      - name: Référencement et hébergement
+        run: |
+          test -f dist/_headers
+          test -f dist/robots.txt
+          test -f dist/sitemap.xml
+          ! grep -q '%VITE_' dist/index.html

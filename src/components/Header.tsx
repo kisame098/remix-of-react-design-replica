@@ -19,7 +19,7 @@ const Header = () => {
                 <path d="M2 12l10 5 10-5" />
               </svg>
             </div>
-            <span className="text-lg font-bold text-foreground">Teranga School</span>
+            <span className="text-lg font-bold text-foreground">SenClass</span>
           </Link>
 
           {/* Desktop Navigation */}

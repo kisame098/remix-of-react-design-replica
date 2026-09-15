@@ -1,202 +1,91 @@
-import { useState, useMemo } from 'react';
-import { useSchool } from '@/contexts/SchoolContext';
+import { useEffect, useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Label } from '@/components/ui/label';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { ScrollArea } from '@/components/ui/scroll-area';
-import { Trophy, Medal, Award } from 'lucide-react';
+import { Trophy, Medal, Award, FileText, Printer, Upload, Loader2, CheckCircle2, XCircle, Download } from 'lucide-react';
+import { useClassRanking, RankingCalculationMode } from '@/hooks/useClassRanking';
+import { useBulletinDataList } from '@/hooks/useBulletinData';
+import { useSchool } from '@/contexts/SchoolContext';
+import { useAuth } from '@/contexts/AuthContext';
+import { hasPermission } from '@/lib/permissions';
+import { publishBulletins, unpublishBulletins, getBulletinPublishStatus, BulletinPublishStatus } from '@/lib/bulletinPublishing';
+import { toast } from '@/hooks/use-toast';
+import BulletinModal from '@/components/BulletinModal';
+import ExportRankingDialog from '@/components/ExportRankingDialog';
 
-type CalculationMode = 'top2' | 'top3' | 'all';
+type CalculationMode = RankingCalculationMode;
 
 interface ClassRankingModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  periodId: number;
-  classId: number;
-}
-
-interface StudentRanking {
-  studentId: number;
-  studentCode: string;
-  firstName: string;
-  lastName: string;
-  averageGeneral: number;
-  totalCoef: number;
-  rank: number;
-  subjectDetails: {
-    subjectName: string;
-    muDev: number | null;
-    muMat: number | null;
-    coef: number;
-    pPond: number | null;
-  }[];
+  periodId: string;  // UUID → grade_periods.id
+  classId: string;   // UUID → classes.id
 }
 
 const ClassRankingModal = ({ open, onOpenChange, periodId, classId }: ClassRankingModalProps) => {
-  const { students, subjects, grades, getSubjectSettings } = useSchool();
+  const { gradePeriods } = useSchool();
+  // Un examen interne n'a qu'une seule note par matière — pas de devoirs/
+  // composition, donc aucun "mode de calcul" à choisir : on saute directement
+  // aux résultats, sans jamais passer par l'étape de sélection top2/top3/tout.
+  const isExam = gradePeriods.find(p => p.id === periodId)?.type === 'exam';
+
   const [mode, setMode] = useState<CalculationMode>('all');
   const [showResults, setShowResults] = useState(false);
+  const effectiveShowResults = isExam || showResults;
+  const [bulletinStudentId, setBulletinStudentId] = useState<string | null>(null);
+  const [bulletinAllClass, setBulletinAllClass] = useState(false);
+  const [isExportOpen, setIsExportOpen] = useState(false);
 
-  const classStudents = students.filter(s => s.classId === classId);
-  const classSubjects = subjects.filter(s => s.periodId === periodId && s.classId === classId);
+  const rankings = useClassRanking(periodId, classId, mode, effectiveShowResults);
+  const bulletinDataList = useBulletinDataList(periodId, classId, mode, effectiveShowResults);
 
-  // Algorithme de calcul selon les spécifications
-  const rankings = useMemo((): StudentRanking[] => {
-    if (!showResults) return [];
+  const { accountRole, staffPermissions, school } = useAuth();
+  const canPublish = hasPermission(accountRole, staffPermissions, 'bulletins');
+  const [publishStatus, setPublishStatus] = useState<BulletinPublishStatus | null>(null);
+  const [isPublishing, setIsPublishing] = useState(false);
+  const [isLoadingStatus, setIsLoadingStatus] = useState(false);
 
-    const studentRankings: StudentRanking[] = [];
+  useEffect(() => {
+    if (!effectiveShowResults || !periodId || !classId) { setPublishStatus(null); return; }
+    let cancelled = false;
+    setIsLoadingStatus(true);
+    getBulletinPublishStatus(periodId, classId)
+      .then(status => { if (!cancelled) setPublishStatus(status); })
+      .finally(() => { if (!cancelled) setIsLoadingStatus(false); });
+    return () => { cancelled = true; };
+  }, [effectiveShowResults, periodId, classId]);
 
-    for (const student of classStudents) {
-      const settings = classSubjects.map(subj => getSubjectSettings(subj.id, periodId));
-      
-      // Vérifier si l'élève est actif pour au moins une matière
-      const activeSubjects = classSubjects.filter((subj, idx) => {
-        const setting = settings[idx];
-        if (setting?.studentSettings?.[student.id]?.active === false) return false;
-        return true;
+  const handlePublish = async () => {
+    if (!school?.id || bulletinDataList.length === 0) return;
+    setIsPublishing(true);
+    try {
+      await publishBulletins(school.id, periodId, classId, bulletinDataList);
+      setPublishStatus({ publishedAt: new Date().toISOString(), count: bulletinDataList.length });
+      toast({
+        title: 'Bulletins publiés',
+        description: `${bulletinDataList.length} élève(s) peuvent maintenant voir et télécharger leur bulletin sur le portail.`,
       });
-
-      if (activeSubjects.length === 0) continue;
-
-      let totalPPond = 0;
-      let totalCoef = 0;
-      const subjectDetails: StudentRanking['subjectDetails'] = [];
-
-      for (const subject of classSubjects) {
-        const setting = getSubjectSettings(subject.id, periodId);
-        
-        // Vérifier si l'élève est actif pour cette matière
-        if (setting?.studentSettings?.[student.id]?.active === false) continue;
-
-        // Récupérer le coefficient personnalisé de l'élève ou le coefficient par défaut
-        const customCoefStr = setting?.studentSettings?.[student.id]?.customCoef;
-        const studentCoef = customCoefStr && customCoefStr !== '' 
-          ? parseFloat(customCoefStr) 
-          : subject.coefficient;
-
-        // Récupérer les notes
-        const grade = grades.find(
-          g => g.studentId === student.id && g.subjectId === subject.id && g.periodId === periodId
-        );
-
-        if (!grade) {
-          subjectDetails.push({
-            subjectName: subject.name,
-            muDev: null,
-            muMat: null,
-            coef: studentCoef,
-            pPond: null
-          });
-          continue;
-        }
-
-        // Étape A: Calcul de la moyenne des devoirs (μ_dev)
-        const devoir1Active = setting?.devoir1Active ?? true;
-        const devoir2Active = setting?.devoir2Active ?? true;
-        const devoir3Active = setting?.devoir3Active ?? true;
-        const devoir4Active = setting?.devoir4Active ?? false;
-        const devoir5Active = setting?.devoir5Active ?? false;
-
-        const devoirNotes: number[] = [];
-        if (devoir1Active && grade.devoir1 !== undefined) devoirNotes.push(grade.devoir1);
-        if (devoir2Active && grade.devoir2 !== undefined) devoirNotes.push(grade.devoir2);
-        if (devoir3Active && grade.devoir3 !== undefined) devoirNotes.push(grade.devoir3);
-        if (devoir4Active && grade.devoir4 !== undefined) devoirNotes.push(grade.devoir4);
-        if (devoir5Active && grade.devoir5 !== undefined) devoirNotes.push(grade.devoir5);
-
-        // Appliquer le mode de calcul
-        let selectedNotes: number[] = [];
-        const k = devoirNotes.length;
-        
-        if (mode === 'top2') {
-          const n = 2;
-          if (k <= n) {
-            selectedNotes = [...devoirNotes];
-          } else {
-            selectedNotes = [...devoirNotes].sort((a, b) => b - a).slice(0, n);
-          }
-        } else if (mode === 'top3') {
-          const n = 3;
-          if (k <= n) {
-            selectedNotes = [...devoirNotes];
-          } else {
-            selectedNotes = [...devoirNotes].sort((a, b) => b - a).slice(0, n);
-          }
-        } else {
-          // mode === 'all'
-          selectedNotes = [...devoirNotes];
-        }
-
-        // Calculer μ_dev
-        let muDev: number | null = null;
-        if (selectedNotes.length > 0) {
-          muDev = selectedNotes.reduce((sum, n) => sum + n, 0) / selectedNotes.length;
-        }
-
-        // Étape B: Calcul de la moyenne matière (μ_mat)
-        const composition = grade.composition;
-        let muMat: number | null = null;
-
-        if (muDev !== null && composition !== undefined) {
-          muMat = (muDev + composition) / 2;
-        } else if (muDev !== null && composition === undefined) {
-          muMat = muDev;
-        } else if (muDev === null && composition !== undefined) {
-          muMat = composition;
-        }
-
-        // Étape C: Calcul des points pondérés (P_pond)
-        let pPond: number | null = null;
-        if (muMat !== null) {
-          pPond = muMat * studentCoef;
-          totalPPond += pPond;
-          totalCoef += studentCoef;
-        }
-
-        subjectDetails.push({
-          subjectName: subject.name,
-          muDev,
-          muMat,
-          coef: studentCoef,
-          pPond
-        });
-      }
-
-      // Étape D: Calcul de la moyenne générale (μ_gen)
-      const averageGeneral = totalCoef > 0 ? totalPPond / totalCoef : 0;
-
-      studentRankings.push({
-        studentId: student.id,
-        studentCode: student.studentId,
-        firstName: student.firstName,
-        lastName: student.lastName,
-        averageGeneral,
-        totalCoef,
-        rank: 0,
-        subjectDetails
-      });
+    } catch (err) {
+      toast({ title: 'Erreur', description: String(err), variant: 'destructive' });
+    } finally {
+      setIsPublishing(false);
     }
+  };
 
-    // Trier par moyenne générale décroissante
-    studentRankings.sort((a, b) => b.averageGeneral - a.averageGeneral);
-
-    // Calculer les rangs avec gestion des égalités
-    for (let i = 0; i < studentRankings.length; i++) {
-      if (i === 0) {
-        studentRankings[i].rank = 1;
-      } else {
-        if (studentRankings[i].averageGeneral === studentRankings[i - 1].averageGeneral) {
-          studentRankings[i].rank = studentRankings[i - 1].rank;
-        } else {
-          studentRankings[i].rank = i + 1;
-        }
-      }
+  const handleUnpublish = async () => {
+    setIsPublishing(true);
+    try {
+      await unpublishBulletins(periodId, classId);
+      setPublishStatus(null);
+      toast({ title: 'Publication annulée', description: "Les élèves n'ont plus accès à ce bulletin sur le portail." });
+    } catch (err) {
+      toast({ title: 'Erreur', description: String(err), variant: 'destructive' });
+    } finally {
+      setIsPublishing(false);
     }
-
-    return studentRankings;
-  }, [showResults, mode, classStudents, classSubjects, grades, getSubjectSettings, periodId]);
+  };
 
   const handleCalculate = () => {
     setShowResults(true);
@@ -249,7 +138,7 @@ const ClassRankingModal = ({ open, onOpenChange, periodId, classId }: ClassRanki
           </DialogDescription>
         </DialogHeader>
 
-        {!showResults ? (
+        {!effectiveShowResults ? (
           <div className="space-y-6 py-4">
             <div className="space-y-4">
               <Label className="text-base font-semibold">Mode de calcul de la moyenne des devoirs</Label>
@@ -305,16 +194,67 @@ const ClassRankingModal = ({ open, onOpenChange, periodId, classId }: ClassRanki
           </div>
         ) : (
           <div className="flex-1 flex flex-col min-h-0 space-y-4">
-            <div className="flex items-center justify-between">
-              <p className="text-sm text-muted-foreground">
-                Mode : <span className="font-medium text-foreground">{getModeLabel(mode)}</span>
-              </p>
-              <Button variant="outline" size="sm" onClick={handleReset}>
-                Modifier le mode
-              </Button>
+            <div className="flex items-center justify-between flex-wrap gap-2">
+              {isExam ? (
+                <p className="text-sm text-muted-foreground">Examen — une seule note par matière</p>
+              ) : (
+                <p className="text-sm text-muted-foreground">
+                  Mode : <span className="font-medium text-foreground">{getModeLabel(mode)}</span>
+                </p>
+              )}
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline" size="sm" className="gap-1.5"
+                  disabled={rankings.length === 0}
+                  onClick={() => setIsExportOpen(true)}
+                >
+                  <Download className="h-3.5 w-3.5" />
+                  Exporter
+                </Button>
+                <Button
+                  variant="outline" size="sm" className="gap-1.5"
+                  disabled={rankings.length === 0}
+                  onClick={() => setBulletinAllClass(true)}
+                >
+                  <Printer className="h-3.5 w-3.5" />
+                  Bulletins de la classe
+                </Button>
+                {canPublish && (
+                  publishStatus ? (
+                    <Button
+                      variant="outline" size="sm" className="gap-1.5 text-destructive hover:text-destructive"
+                      disabled={isPublishing || isLoadingStatus}
+                      onClick={handleUnpublish}
+                    >
+                      {isPublishing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <XCircle className="h-3.5 w-3.5" />}
+                      Annuler la publication
+                    </Button>
+                  ) : (
+                    <Button
+                      variant="outline" size="sm" className="gap-1.5"
+                      disabled={isPublishing || isLoadingStatus || bulletinDataList.length === 0}
+                      onClick={handlePublish}
+                    >
+                      {isPublishing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
+                      Publier au portail
+                    </Button>
+                  )
+                )}
+                {!isExam && (
+                  <Button variant="outline" size="sm" onClick={handleReset}>
+                    Modifier le mode
+                  </Button>
+                )}
+              </div>
             </div>
+            {canPublish && publishStatus && (
+              <p className="flex items-center gap-1.5 text-xs text-green-700 -mt-2">
+                <CheckCircle2 className="h-3.5 w-3.5" />
+                Publié le {new Date(publishStatus.publishedAt).toLocaleDateString('fr-FR')} — {publishStatus.count} élève(s) peuvent voir leur bulletin sur le portail.
+              </p>
+            )}
 
-            <ScrollArea className="flex-1 border rounded-lg">
+            <div className="flex-1 min-h-0 overflow-y-auto border rounded-lg">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -324,19 +264,20 @@ const ClassRankingModal = ({ open, onOpenChange, periodId, classId }: ClassRanki
                     <TableHead className="min-w-[120px]">Prénom</TableHead>
                     <TableHead className="text-center min-w-[100px]">Moyenne</TableHead>
                     <TableHead className="text-center min-w-[80px]">Coef. Total</TableHead>
+                    <TableHead className="w-[110px]" />
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {rankings.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                      <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
                         Aucun élève avec des notes disponibles
                       </TableCell>
                     </TableRow>
                   ) : (
                     rankings.map((student) => {
-                      const avgColor = student.averageGeneral >= 10 
-                        ? 'text-green-600' 
+                      const avgColor = student.averageGeneral >= 10
+                        ? 'text-green-600'
                         : 'text-red-600';
 
                       return (
@@ -354,13 +295,22 @@ const ClassRankingModal = ({ open, onOpenChange, periodId, classId }: ClassRanki
                             {student.averageGeneral.toFixed(2)}
                           </TableCell>
                           <TableCell className="text-center">{student.totalCoef}</TableCell>
+                          <TableCell>
+                            <Button
+                              variant="ghost" size="sm" className="gap-1.5 h-7 text-xs"
+                              onClick={() => setBulletinStudentId(student.studentId)}
+                            >
+                              <FileText className="h-3.5 w-3.5" />
+                              Bulletin
+                            </Button>
+                          </TableCell>
                         </TableRow>
                       );
                     })
                   )}
                 </TableBody>
               </Table>
-            </ScrollArea>
+            </div>
 
             <div className="flex justify-end">
               <Button onClick={handleClose}>
@@ -370,6 +320,25 @@ const ClassRankingModal = ({ open, onOpenChange, periodId, classId }: ClassRanki
           </div>
         )}
       </DialogContent>
+
+      {(bulletinStudentId || bulletinAllClass) && (
+        <BulletinModal
+          open
+          onOpenChange={(o) => { if (!o) { setBulletinStudentId(null); setBulletinAllClass(false); } }}
+          periodId={periodId}
+          classId={classId}
+          mode={mode}
+          studentId={bulletinAllClass ? undefined : bulletinStudentId ?? undefined}
+        />
+      )}
+
+      <ExportRankingDialog
+        open={isExportOpen}
+        onOpenChange={setIsExportOpen}
+        periodId={periodId}
+        classId={classId}
+        rankings={rankings}
+      />
     </Dialog>
   );
 };

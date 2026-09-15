@@ -1,16 +1,17 @@
 import { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { 
-  Users, Search, Filter, Grid3X3, List, Eye, Pencil, 
-  Phone, Mail, MapPin, Calendar, User, X, Save, GraduationCap, Home
+import {
+  Users, Search, Filter, Grid3X3, List, Eye, Pencil,
+  Phone, Mail, MapPin, Calendar, User, X, Save, GraduationCap, Home, Download
 } from 'lucide-react';
+import StudentExportDialog from '@/components/student/StudentExportDialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { 
   Select, 
   SelectContent, 
@@ -42,8 +43,15 @@ import {
   TableRow 
 } from '@/components/ui/table';
 import { Separator } from '@/components/ui/separator';
-import { useSchool, Student, Tutor } from '@/contexts/SchoolContext';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Switch } from '@/components/ui/switch';
+import { useSchool, Student, Tutor, NIVEAUX_ELEMENTAIRE } from '@/contexts/SchoolContext';
+import { useSchoolYear } from '@/contexts/SchoolYearContext';
 import { useToast } from '@/hooks/use-toast';
+import { resolveAcademicProfile } from '@/lib/academicProfile';
+import AcademicChoicesFields, { useAcademicChoicesRequirement } from '@/components/student/AcademicChoicesFields';
+import { mergeFiliereChoiceGroups, mergeFiliereFacultativeSubjects } from '@/contexts/SchoolContext';
+import { ListChecks } from 'lucide-react';
 
 interface EditFormData {
   firstName: string;
@@ -54,7 +62,7 @@ interface EditFormData {
   phone: string;
   email: string;
   residence: string;
-  classId: number | null;
+  classId: string | null;
   tutor1: Tutor;
   tutor2: Tutor;
 }
@@ -62,7 +70,15 @@ interface EditFormData {
 type ViewMode = 'grid' | 'table';
 
 const StudentManagement = () => {
-  const { students, classes, updateStudent } = useSchool();
+  const {
+    students, classes, updateStudent,
+    subjects, gradePeriods, getSubjectSettings, updateStudentSubjectOverride,
+    resolveFiliereChoice, setFacultativeActive, getStudentFiliereChoice,
+    getClassFiliereAssignment, getUnresolvedChoiceGroups,
+    filiereChoiceGroups, filiereFacultativeSubjects,
+    elementaryClassLines, elementaryLineSettings, setElementaryLineExemption,
+  } = useSchool();
+  const { currentYear } = useSchoolYear();
   const { toast } = useToast();
 
   const [viewMode, setViewMode] = useState<ViewMode>('grid');
@@ -71,6 +87,9 @@ const StudentManagement = () => {
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isEditOpen, setIsEditOpen] = useState(false);
+  const [isExportOpen, setIsExportOpen] = useState(false);
+  const [editGroupChoices, setEditGroupChoices] = useState<Record<string, string>>({});
+  const [editFacultativeChoices, setEditFacultativeChoices] = useState<Record<string, boolean>>({});
   
   const tutorStatuses = [
     { value: 'pere', label: 'Père' },
@@ -92,6 +111,7 @@ const StudentManagement = () => {
     tutor1: { phone: '', status: '', email: '' },
     tutor2: { phone: '', status: '', email: '' },
   });
+  const { groups: editRequiredGroups, facultatives: editRequiredFacultatives } = useAcademicChoicesRequirement(editForm.classId);
 
   // Filter and search students
   const filteredStudents = useMemo(() => {
@@ -112,7 +132,7 @@ const StudentManagement = () => {
     });
   }, [students, searchQuery, classFilter]);
 
-  const getClassName = (classId: number | null): string => {
+  const getClassName = (classId: string | null): string => {
     if (!classId) return 'Non assigné';
     const cls = classes.find(c => c.id === classId);
     return cls?.name || 'Classe inconnue';
@@ -169,10 +189,35 @@ const StudentManagement = () => {
         email: student.tutor2?.email || '',
       },
     });
+
+    // Pré-remplir les choix déjà résolus pour la classe actuelle de l'élève,
+    // pour que l'admin les voie et puisse les corriger si besoin. Calculé
+    // directement pour `student.classId` (pas `editForm.classId`, qui n'a pas
+    // encore été mis à jour par le setEditForm ci-dessus).
+    const seededGroups: Record<string, string> = {};
+    const seededFacultatives: Record<string, boolean> = {};
+    const cls = student.classId ? classes.find(c => c.id === student.classId) : undefined;
+    if (cls?.niveau && currentYear) {
+      const assignment = getClassFiliereAssignment(cls.id, currentYear.id);
+      if (assignment) {
+        for (const g of mergeFiliereChoiceGroups(filiereChoiceGroups, assignment.filiereId, cls.niveau)) {
+          const choice = getStudentFiliereChoice(student.id, g.id);
+          if (choice) seededGroups[g.id] = choice.chosenSubjectName;
+        }
+        for (const f of mergeFiliereFacultativeSubjects(filiereFacultativeSubjects, assignment.filiereId, cls.niveau)) {
+          const subj = subjects.find(s => s.classId === cls.id && s.name === f.name && s.subjectType === 'facultative');
+          if (subj && getSubjectSettings(subj.id)?.studentSettings?.[student.id]?.active) {
+            seededFacultatives[f.name] = true;
+          }
+        }
+      }
+    }
+    setEditGroupChoices(seededGroups);
+    setEditFacultativeChoices(seededFacultatives);
     setIsEditOpen(true);
   };
 
-  const handleSaveEdit = () => {
+  const handleSaveEdit = async () => {
     if (!selectedStudent) return;
 
     // Validation
@@ -196,8 +241,13 @@ const StudentManagement = () => {
       toast({ title: "Erreur", description: "Les informations du tuteur 1 sont obligatoires", variant: "destructive" });
       return;
     }
-    
-    updateStudent(selectedStudent.id, {
+    const unanswered = editRequiredGroups.filter(g => !editGroupChoices[g.id]);
+    if (unanswered.length > 0) {
+      toast({ title: 'Choix de matières requis', description: `Veuillez choisir : ${unanswered.map(g => g.label).join(', ')}`, variant: 'destructive' });
+      return;
+    }
+
+    await updateStudent(selectedStudent.id, {
       firstName: editForm.firstName,
       lastName: editForm.lastName,
       dateOfBirth: editForm.dateOfBirth,
@@ -211,12 +261,89 @@ const StudentManagement = () => {
       tutor2: editForm.tutor2.phone ? editForm.tutor2 as Tutor : undefined,
     });
 
+    for (const [groupId, subjectName] of Object.entries(editGroupChoices)) {
+      await resolveFiliereChoice(groupId, selectedStudent.id, subjectName, 'admin_correction');
+    }
+    for (const [subjectName, active] of Object.entries(editFacultativeChoices)) {
+      await setFacultativeActive(selectedStudent.id, subjectName, active);
+    }
+
     toast({
       title: "Modifications enregistrées",
       description: `Les informations de ${editForm.firstName} ${editForm.lastName} ont été mises à jour.`,
     });
     setIsEditOpen(false);
   };
+
+  // Profil académique résolu du profil ouvert : une ligne par matière
+  // effectivement active pour l'élève, avec sa source (hérité/choix/
+  // facultative/exception manuelle) — le geste central de "élève = profil
+  // individuel" plutôt que "classe = configuration".
+  const academicProfile = useMemo(
+    () => resolveAcademicProfile(
+      subjects, gradePeriods, getSubjectSettings,
+      selectedStudent?.id ?? '', selectedStudent?.classId ?? null, currentYear?.id ?? null),
+    [selectedStudent, currentYear, gradePeriods, subjects, getSubjectSettings]);
+
+  // Profil académique d'un élève d'élémentaire : pas de matières à coefficient
+  // mais des disciplines à barème de points. Une ligne par discipline, avec la
+  // possibilité de dispenser l'élève (ex: inapte EPS) — la discipline sort
+  // alors de SA moyenne et de SON bulletin, sans toucher aux autres élèves.
+  const elementaryProfile = useMemo(() => {
+    if (!selectedStudent?.classId || !currentYear) return [];
+    const cls = classes.find(c => c.id === selectedStudent.classId);
+    if (!cls?.niveau || !(NIVEAUX_ELEMENTAIRE as readonly string[]).includes(cls.niveau)) return [];
+
+    const periodIds = gradePeriods.filter(p => p.academicYearLabel === currentYear.id).map(p => p.id);
+    const lines = elementaryClassLines
+      .filter(l => l.classId === selectedStudent.classId && periodIds.includes(l.periodId));
+
+    // Une même discipline existe dans chaque période : on la présente une fois,
+    // et la dispense s'appliquera à toutes ses occurrences.
+    //
+    // Regroupement par nom ET registre : un même intitulé est évalué dans les
+    // DEUX registres (Mathématiques compte en Compétence et en Ressources, avec
+    // des barèmes différents). Grouper sur le seul nom fusionnerait ces deux
+    // disciplines distinctes en un seul interrupteur — dispenser l'élève de
+    // l'une le dispenserait silencieusement de l'autre.
+    const byDiscipline = new Map<string, typeof lines>();
+    for (const l of lines) {
+      const key = `${l.registre}:${l.name}`;
+      if (!byDiscipline.has(key)) byDiscipline.set(key, []);
+      byDiscipline.get(key)!.push(l);
+    }
+
+    return [...byDiscipline.entries()].map(([key, group]) => {
+      const exempted = group.some(l => elementaryLineSettings.some(
+        s => s.lineId === l.id && s.studentEnrollmentId === selectedStudent.id && !s.active
+      ));
+      return {
+        key, name: group[0].name, lines: group,
+        registre: group[0].registre, pointMax: group[0].pointMax, active: !exempted,
+      };
+    }).sort((a, b) =>
+      a.registre === b.registre ? a.name.localeCompare(b.name) : a.registre === 'COMPETENCE' ? -1 : 1
+    );
+  }, [selectedStudent, currentYear, classes, gradePeriods, elementaryClassLines, elementaryLineSettings]);
+
+  const toggleElementaryExemption = async (lines: { id: string }[], active: boolean) => {
+    if (!selectedStudent) return;
+    try {
+      await Promise.all(lines.map(l => setElementaryLineExemption(selectedStudent.id, l.id, active)));
+      toast({
+        title: active ? 'Discipline réintégrée' : 'Élève dispensé',
+        description: active
+          ? 'Elle compte de nouveau dans sa moyenne.'
+          : 'Elle ne compte plus ni dans sa moyenne ni sur son bulletin.',
+      });
+    } catch (err) {
+      toast({ title: 'Erreur', description: String(err), variant: 'destructive' });
+    }
+  };
+
+  const unresolvedGroups = (selectedStudent?.classId && currentYear)
+    ? getUnresolvedChoiceGroups(selectedStudent.id, selectedStudent.classId, currentYear.id)
+    : [];
 
   return (
     <div className="p-6">
@@ -238,6 +365,10 @@ const StudentManagement = () => {
               </p>
             </div>
           </div>
+          <Button variant="outline" className="gap-2" onClick={() => setIsExportOpen(true)}>
+            <Download className="w-4 h-4" />
+            Exporter
+          </Button>
         </div>
 
         {/* Filters & Search Bar */}
@@ -359,6 +490,7 @@ const StudentManagement = () => {
                     <CardContent className="pt-6">
                       <div className="flex flex-col items-center text-center mb-4">
                         <Avatar className="w-16 h-16 mb-3 ring-2 ring-primary/20">
+                          <AvatarImage src={student.photoUrl} alt={`${student.firstName} ${student.lastName}`} className="object-cover" />
                           <AvatarFallback className="bg-primary/10 text-primary font-semibold text-lg">
                             {getInitials(student.firstName, student.lastName)}
                           </AvatarFallback>
@@ -441,6 +573,7 @@ const StudentManagement = () => {
                         <TableCell>
                           <div className="flex items-center gap-3">
                             <Avatar className="w-10 h-10">
+                              <AvatarImage src={student.photoUrl} alt={`${student.firstName} ${student.lastName}`} className="object-cover" />
                               <AvatarFallback className="bg-primary/10 text-primary text-sm font-medium">
                                 {getInitials(student.firstName, student.lastName)}
                               </AvatarFallback>
@@ -527,6 +660,7 @@ const StudentManagement = () => {
                   {/* Header */}
                   <div className="flex items-center gap-4">
                     <Avatar className="w-20 h-20 ring-4 ring-primary/20">
+                      <AvatarImage src={selectedStudent.photoUrl} alt={`${selectedStudent.firstName} ${selectedStudent.lastName}`} className="object-cover" />
                       <AvatarFallback className="bg-primary/10 text-primary font-bold text-2xl">
                         {getInitials(selectedStudent.firstName, selectedStudent.lastName)}
                       </AvatarFallback>
@@ -538,14 +672,27 @@ const StudentManagement = () => {
                       <p className="text-muted-foreground font-mono text-sm">
                         {selectedStudent.studentId}
                       </p>
-                      <Badge className="mt-2">
-                        {getClassName(selectedStudent.classId)}
-                      </Badge>
+                      <div className="flex items-center gap-2 mt-2 flex-wrap">
+                        <Badge>{getClassName(selectedStudent.classId)}</Badge>
+                        {unresolvedGroups.length > 0 && (
+                          <Badge variant="destructive" className="gap-1">
+                            <ListChecks className="w-3 h-3" />
+                            Choix à finaliser
+                          </Badge>
+                        )}
+                      </div>
                     </div>
                   </div>
 
                   <Separator />
 
+                  <Tabs defaultValue="personnel">
+                  <TabsList className="grid w-full grid-cols-2">
+                    <TabsTrigger value="personnel">Personnel</TabsTrigger>
+                    <TabsTrigger value="academique">Profil académique</TabsTrigger>
+                  </TabsList>
+
+                  <TabsContent value="personnel" className="space-y-6 mt-4">
                   {/* Personal Info */}
                   <div>
                     <h3 className="font-semibold text-foreground mb-3">Informations Personnelles</h3>
@@ -633,12 +780,84 @@ const StudentManagement = () => {
                       </div>
                     </div>
                   )}
+                  </TabsContent>
+
+                  <TabsContent value="academique" className="space-y-4 mt-4">
+                    {unresolvedGroups.length > 0 && (
+                      <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">
+                        Choix en attente : {unresolvedGroups.map(g => g.label).join(', ')} — à finaliser dans "Modifier les informations".
+                      </div>
+                    )}
+                    {elementaryProfile.length > 0 ? (
+                      <div className="space-y-2">
+                        <p className="text-xs text-muted-foreground">
+                          Décochez une discipline pour en dispenser l'élève (ex: inapte en EPS) : elle ne comptera
+                          plus dans sa moyenne ni sur son bulletin, sans effet sur ses camarades.
+                        </p>
+                        {elementaryProfile.map(row => (
+                          <div key={row.key} className="flex items-center justify-between gap-3 rounded-lg border p-3">
+                            <div className="min-w-0">
+                              <p className={`font-medium text-sm truncate ${row.active ? '' : 'text-muted-foreground line-through'}`}>
+                                {row.name}
+                              </p>
+                              <div className="flex items-center gap-1.5 mt-1">
+                                <Badge variant="outline" className="text-[10px]">
+                                  {row.registre === 'COMPETENCE' ? 'Compétence' : 'Ressources'}
+                                </Badge>
+                                <Badge variant="outline" className="text-[10px]">/{row.pointMax}</Badge>
+                                {!row.active && (
+                                  <Badge variant="secondary" className="text-[10px]">Dispensé</Badge>
+                                )}
+                              </div>
+                            </div>
+                            <Switch
+                              checked={row.active}
+                              onCheckedChange={(checked) => toggleElementaryExemption(row.lines, checked)}
+                            />
+                          </div>
+                        ))}
+                      </div>
+                    ) : academicProfile.length === 0 ? (
+                      <p className="text-sm text-muted-foreground text-center py-8">
+                        Aucune matière résolue pour l'instant — assignez une classe avec une année scolaire active.
+                      </p>
+                    ) : (
+                      <div className="space-y-2">
+                        {academicProfile.map(row => (
+                          <div key={row.subject.id} className="flex items-center justify-between gap-3 rounded-lg border p-3">
+                            <div className="min-w-0">
+                              <p className="font-medium text-sm truncate">{row.subject.name}</p>
+                              <Badge variant="outline" className="text-[10px] mt-1">{row.source}</Badge>
+                            </div>
+                            <div className="flex items-center gap-3 flex-shrink-0">
+                              <Input
+                                type="number" min="0" step="0.5"
+                                className="w-16 h-8 text-center text-sm"
+                                defaultValue={row.coefficient}
+                                onBlur={(e) => {
+                                  const v = e.target.value;
+                                  if (v && Number(v) !== row.coefficient) {
+                                    updateStudentSubjectOverride(selectedStudent.id, row.subject.id, row.active, v);
+                                  }
+                                }}
+                              />
+                              <Switch
+                                checked={row.active}
+                                onCheckedChange={(checked) => updateStudentSubjectOverride(selectedStudent.id, row.subject.id, checked)}
+                              />
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </TabsContent>
+                  </Tabs>
 
                   <Separator />
 
                   {/* Footer */}
                   <div className="text-sm text-muted-foreground">
-                    Inscrit le {selectedStudent.createdAt.toLocaleDateString('fr-FR', {
+                    Inscrit le {new Date(selectedStudent.createdAt).toLocaleDateString('fr-FR', {
                       day: 'numeric',
                       month: 'long',
                       year: 'numeric'
@@ -896,9 +1115,9 @@ const StudentManagement = () => {
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <Select 
-                      value={editForm.classId?.toString() || ''} 
-                      onValueChange={(value) => setEditForm(prev => ({ ...prev, classId: parseInt(value) }))}
+                    <Select
+                      value={editForm.classId || ''}
+                      onValueChange={(value) => setEditForm(prev => ({ ...prev, classId: value }))}
                     >
                       <SelectTrigger className="w-full md:w-1/2">
                         <SelectValue placeholder="Sélectionner une classe" />
@@ -913,6 +1132,14 @@ const StudentManagement = () => {
                     </Select>
                   </CardContent>
                 </Card>
+
+                <AcademicChoicesFields
+                  classId={editForm.classId}
+                  groupChoices={editGroupChoices}
+                  onGroupChoiceChange={(groupId, subjectName) => setEditGroupChoices(prev => ({ ...prev, [groupId]: subjectName }))}
+                  facultativeChoices={editFacultativeChoices}
+                  onFacultativeToggle={(subjectName, active) => setEditFacultativeChoices(prev => ({ ...prev, [subjectName]: active }))}
+                />
               </div>
             </ScrollArea>
 
@@ -927,6 +1154,14 @@ const StudentManagement = () => {
             </DialogFooter>
           </DialogContent>
         </Dialog>
+
+        <StudentExportDialog
+          open={isExportOpen}
+          onOpenChange={setIsExportOpen}
+          students={filteredStudents}
+          classes={classes}
+          currentClassName={classFilter !== 'all' ? classes.find(c => c.id === classFilter)?.name : undefined}
+        />
       </motion.div>
     </div>
   );

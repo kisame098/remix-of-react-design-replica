@@ -1,0 +1,35 @@
+# ═══════════════════════════════════════════════════════════════════════════
+# En-têtes HTTP — lus par Cloudflare Pages.
+#
+# Trois règles comptent plus que les autres :
+#   • /assets/* est immuable : chaque fichier porte une empreinte dans son nom,
+#     un nouveau déploiement produit de nouveaux noms.
+#   • sw.js n'est JAMAIS mis en cache. S'il l'était, le navigateur garderait
+#     l'ancien service worker et les utilisateurs resteraient bloqués sur une
+#     ancienne version de l'application, sans moyen de la mettre à jour.
+#   • Les adresses *.pages.dev ne sont pas indexées : seul senclass.com doit
+#     apparaître sur Google, sinon le site y serait en double et partagerait
+#     son classement.
+# ═══════════════════════════════════════════════════════════════════════════
+
+/*
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+  X-Frame-Options: DENY
+  Permissions-Policy: camera=(self), microphone=(), geolocation=(), payment=(), usb=()
+
+/assets/*
+  Cache-Control: public, max-age=31536000, immutable
+
+/sw.js
+  Cache-Control: no-cache, no-store, must-revalidate
+
+/manifest.webmanifest
+  Cache-Control: no-cache
+  Content-Type: application/manifest+json
+
+https://:project.pages.dev/*
+  X-Robots-Tag: noindex
+
+https://:version.:project.pages.dev/*
+  X-Robots-Tag: noindex
