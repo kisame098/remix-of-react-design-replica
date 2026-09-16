@@ -8,6 +8,8 @@ import { useAuth } from "@/hooks/useAuth";
 import { isCashierAccount } from "@/lib/permissions";
 import { z } from "zod";
 import { supabase } from "@/integrations/supabase/client";
+import { adresseRetourConfirmation } from "@/lib/confirmationEmail";
+import { EcranConfirmationEmail } from "@/components/auth/EcranConfirmationEmail";
 
 // Validation schemas
 const loginSchema = z.object({
@@ -41,6 +43,10 @@ const Auth = () => {
     confirmPassword: "",
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
+  // Adresse en attente de confirmation : tant qu'elle est renseignée,
+  // la page affiche l'écran « Vérifiez votre boîte mail ».
+  const [emailAConfirmer, setEmailAConfirmer] = useState<string | null>(null);
+  const [renvoiEnCours, setRenvoiEnCours] = useState(false);
   
   const { toast } = useToast();
   const navigate = useNavigate();
@@ -133,6 +139,7 @@ const Auth = () => {
               title: "Email non confirmé",
               description: "Veuillez confirmer votre email avant de vous connecter.",
             });
+            setEmailAConfirmer(formData.email);
           } else {
             toast({
               variant: "destructive",
@@ -168,7 +175,7 @@ const Auth = () => {
         }
 
         // Sign up school
-        const { error } = await signUpSchool(
+        const { error, confirmationRequise } = await signUpSchool(
           formData.email,
           formData.password,
           formData.schoolName,
@@ -193,11 +200,18 @@ const Auth = () => {
           return;
         }
 
-        toast({
-          title: "Inscription réussie !",
-          description: "Vérifiez votre email pour confirmer votre compte.",
-        });
-        setIsLogin(true);
+        if (confirmationRequise) {
+          // Supabase attend la confirmation : on le dit clairement, au lieu de
+          // renvoyer vers la connexion avec un message que rien ne justifie.
+          setEmailAConfirmer(formData.email);
+        } else {
+          // Confirmation désactivée : la session est déjà ouverte, la
+          // redirection se fait par le useEffect une fois le rôle connu.
+          toast({
+            title: "Inscription réussie !",
+            description: "Bienvenue sur SenClass, votre école est créée.",
+          });
+        }
       }
     } catch (error) {
       console.error('Auth error:', error);
@@ -225,6 +239,31 @@ const Auth = () => {
       <div className="min-h-screen bg-muted/30 flex items-center justify-center">
         <Loader2 className="w-8 h-8 animate-spin text-primary" />
       </div>
+    );
+  }
+
+  const renvoyerConfirmation = async () => {
+    if (!emailAConfirmer) return;
+    setRenvoiEnCours(true);
+    const { error } = await supabase.auth.resend({
+      type: 'signup',
+      email: emailAConfirmer,
+      options: { emailRedirectTo: adresseRetourConfirmation(window.location.origin) },
+    });
+    setRenvoiEnCours(false);
+    toast(error
+      ? { variant: "destructive", title: "Envoi impossible", description: error.message }
+      : { title: "E-mail renvoyé", description: `Un nouveau lien vient de partir vers ${emailAConfirmer}.` });
+  };
+
+  if (emailAConfirmer) {
+    return (
+      <EcranConfirmationEmail
+        email={emailAConfirmer}
+        envoiEnCours={renvoiEnCours}
+        onRenvoyer={renvoyerConfirmation}
+        onRetour={() => { setEmailAConfirmer(null); setIsLogin(true); }}
+      />
     );
   }
 

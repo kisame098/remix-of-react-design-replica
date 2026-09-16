@@ -63,6 +63,44 @@ Les comptes créés désormais reçoivent une adresse `prenom.nom.12345@senclass
 
 ---
 
+## 3 bis. E-mails de confirmation (Resend)
+
+**Qui est concerné.** Uniquement le **directeur qui inscrit son école** par le formulaire public. Les comptes élèves, professeurs et personnel sont créés par les fonctions Supabase (`create-school-account`, `create-staff-account`) avec `email_confirm: true` : ils sont confirmés d'office et ne reçoivent jamais d'e-mail — leurs adresses `@senclass.com` ne reçoivent d'ailleurs pas de courrier.
+
+**Pourquoi Resend.** Le serveur d'e-mails intégré de Supabase est limité à quelques messages par heure et réservé aux tests. Resend envoie 3 000 e-mails par mois et 100 par jour gratuitement, ce qui couvre largement les inscriptions d'écoles.
+
+### a. Chez Resend (à faire par vous — une création de compte)
+1. [resend.com](https://resend.com) → **Sign up** → *Continue with Google*.
+2. **Domains → Add domain** → `senclass.com`. Resend affiche des enregistrements DNS (DKIM, SPF, et parfois DMARC).
+3. Transmettez-les : ils s'ajoutent dans Cloudflare → `senclass.com` → **DNS**. Resend passe alors le domaine en **Verified**.
+4. **API Keys → Create API key** (droit *Sending access* suffit). **Copiez la clé** : elle ne s'affiche qu'une fois. Ne la collez nulle part ailleurs que dans Supabase.
+
+### b. Dans Supabase (à faire par vous — la clé ne doit transiter par personne)
+1. **Authentication → Emails → SMTP Settings** → activer **Enable Custom SMTP** :
+
+| Champ | Valeur |
+|---|---|
+| Host | `smtp.resend.com` |
+| Port | `465` |
+| Username | `resend` |
+| Password | votre clé d'API Resend |
+| Sender email | `contact@senclass.com` |
+| Sender name | `SenClass` |
+
+2. **Authentication → Providers → Email** : activer **Confirm email**.
+3. **Authentication → Rate limits** : Supabase bride un SMTP neuf à 30 e-mails par heure. Montez-le si besoin.
+4. **Authentication → Emails → Templates** : traduisez en français le message « Confirm your signup ». Le lien doit rester `{{ .ConfirmationURL }}`.
+
+### c. Côté application (déjà fait)
+- L'inscription détecte que Supabase attend une confirmation (utilisateur créé sans session) et affiche **« Vérifiez votre boîte mail »**, avec l'adresse et un bouton **Renvoyer l'e-mail**.
+- Une connexion refusée parce que l'e-mail n'est pas confirmé mène au même écran.
+- Le lien de l'e-mail ouvre `https://senclass.com/dashboard`.
+- Tant que **Confirm email** reste désactivé, rien ne change : le directeur entre directement après inscription.
+
+**Ordre à respecter :** le code ci-dessus doit être en ligne **avant** d'activer « Confirm email », sinon l'inscription reste bloquée sans message.
+
+---
+
 ## 4. Référencement Google
 
 ### La concurrence

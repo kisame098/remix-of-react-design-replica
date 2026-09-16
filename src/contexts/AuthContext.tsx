@@ -4,6 +4,7 @@ import { supabase } from '@/integrations/supabase/client';
 import type { Profile, School } from '@/lib/supabase';
 import type { Json } from '@/integrations/supabase/types';
 import { getSubscriptionGate } from '@/lib/subscription';
+import { confirmationRequise, adresseRetourConfirmation } from '@/lib/confirmationEmail';
 
 // platform_admins n'est pas encore dans les types générés (table ajoutée
 // après la dernière génération) — cast localisé, comme ailleurs dans l'app
@@ -54,7 +55,9 @@ interface AuthContextType {
    *  et surtout d'en déduire « école neuve, il faut tout initialiser ». */
   isSchoolAccessBlocked: boolean;
 
-  signUp:        (params: SignUpParams) => Promise<{ error: AuthError | null }>;
+  /** `confirmationRequise` : Supabase a créé le compte mais attend que le
+   *  directeur clique le lien reçu par e-mail (réglage Supabase, pas code). */
+  signUp:        (params: SignUpParams) => Promise<{ error: AuthError | null; confirmationRequise: boolean }>;
   signIn:        (email: string, password: string) => Promise<{ error: AuthError | null }>;
   signOut:       () => Promise<void>;
   updateProfile: (data: Partial<Pick<Profile, 'full_name' | 'avatar_url'>>) => Promise<void>;
@@ -294,15 +297,15 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const signUp = useCallback(async ({ email, password, fullName, schoolName }: SignUpParams) => {
     setAuthLoading(true);
     try {
-      const { error } = await supabase.auth.signUp({
+      const { data, error } = await supabase.auth.signUp({
         email,
         password,
         options: {
-          emailRedirectTo: `${window.location.origin}/dashboard`,
+          emailRedirectTo: adresseRetourConfirmation(window.location.origin),
           data: { full_name: fullName, school_name: schoolName },
         },
       });
-      return { error };
+      return { error, confirmationRequise: confirmationRequise(data) };
     } finally {
       setAuthLoading(false);
     }
