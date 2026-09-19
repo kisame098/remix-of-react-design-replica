@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import { initials } from './portalHelpers';
 import { IdCard } from '@/components/portal/IdCard';
+import CarteNotifications from '@/components/portal/CarteNotifications';
 import {
   Dialog, DialogContent, DialogTitle, DialogHeader, DialogDescription,
 } from '@/components/ui/dialog';
@@ -220,6 +221,9 @@ export default function PortalProfil() {
             </div>
           </div>
         </div>
+
+        {/* ── Notifications (élèves) ─────────────────────────────────── */}
+        {isStudent && <CarteNotifications />}
 
         {/* ── Comptes liés ──────────────────────────────────────────── */}
         <div>

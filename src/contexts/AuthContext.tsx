@@ -6,6 +6,7 @@ import type { Json } from '@/integrations/supabase/types';
 import { getSubscriptionGate } from '@/lib/subscription';
 import { confirmationRequise, adresseRetourConfirmation } from '@/lib/confirmationEmail';
 import { enregistrer, lire, effacerUtilisateur } from '@/lib/cacheHorsLigne';
+import { retirerAbonnementDuCompte } from '@/lib/notificationsPush';
 
 // platform_admins n'est pas encore dans les types générés (table ajoutée
 // après la dernière génération) — cast localisé, comme ailleurs dans l'app
@@ -371,6 +372,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     // Avant de perdre l'identifiant : effacer les données gardées sur
     // l'appareil pour ce compte (le téléphone peut être partagé).
     effacerUtilisateur(userIdRef.current);
+    // Tant que la session existe : le serveur doit savoir de quel compte retirer
+    // l'abonnement aux notifications de cet appareil.
+    await retirerAbonnementDuCompte();
     await supabase.auth.signOut();
     setProfile(null);
     setSchool(null);
