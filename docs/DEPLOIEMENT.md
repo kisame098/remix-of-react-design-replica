@@ -191,11 +191,13 @@ Seule la consultation fonctionne sans réseau ; rien ne s'enregistre. Un seul é
 
 ## 5 bis. Notifications push (élèves)
 
-L'élève est prévenu sur son téléphone, application fermée, quand : une note est saisie, un bulletin est publié, un paiement est enregistré. (Les rappels d'échéance viendront dans un second temps.)
+L'élève est prévenu sur son téléphone, application fermée, quand : une note est saisie, un bulletin est publié, un paiement est enregistré, ou une **absence, un retard ou un renvoi** est noté. (Les rappels d'échéance viendront dans un second temps.)
 
 **Ce que voit l'élève.** Profil → carte *Notifications* → « Activer ». Le navigateur demande alors son autorisation — jamais avant, toujours après un clic. Sur iPhone, le site doit d'abord être ajouté à l'écran d'accueil (iOS 16.4 minimum).
 
 **Ce qui est envoyé.** Jamais de valeur de note ni de montant : « Nouvelle note en Mathématiques », « Bulletin (1er trimestre) disponible ». Un téléphone posé sur une table ne doit rien révéler. La notification arrive en **quelques secondes** (une note : ~20 s ; bulletin ou paiement : ~10 s). Plusieurs notes saisies à quelques secondes d'écart pour le même élève donnent **une seule** notification.
+
+**Présences.** Personne n'est prévenu pendant que le professeur fait l'appel : il coche, se corrige, hésite. La notification part quand il valide (« Saisie complète »), 45 secondes plus tard. Si un statut change après la validation, la famille est prévenue à son tour. Si le professeur corrige **avant** l'envoi, la notification est simplement retirée ; s'il corrige **après**, une notification de correction part (« la présence est finalement rétablie »), pour ne pas laisser une famille sur une fausse absence. Le nom de l'élève n'apparaît jamais dans le texte.
 
 **Un appareil, plusieurs comptes.** Un parent qui garde trois enfants sur son téléphone reçoit les trois, à condition que chaque compte active ses notifications (une fois, depuis son profil). Se déconnecter retire uniquement les notifications du compte qui sort ; si le réseau manque à ce moment, l'appareil se désabonne lui-même, par précaution.
 

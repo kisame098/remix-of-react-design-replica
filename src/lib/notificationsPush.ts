@@ -59,9 +59,9 @@ export const cleVersOctets = (base64: string): Uint8Array => {
 /** Texte affiché selon l'état — exporté pour être vérifié sans monter le composant. */
 export const TEXTES_NOTIFICATIONS: Record<EtatNotifications | 'inconnu', string> = {
   actives:
-    'Vous recevez une alerte quand une note est saisie, qu\'un bulletin est publié ou qu\'un paiement est enregistré.',
+    'Vous recevez une alerte quand une note est saisie, qu\'un bulletin est publié, qu\'un paiement est enregistré, ou qu\'une absence, un retard ou un renvoi est noté.',
   inactives:
-    'Soyez prévenu dès qu\'une note est saisie, qu\'un bulletin est publié ou qu\'un paiement est enregistré, même quand l\'application est fermée.',
+    'Soyez prévenu dès qu\'une note est saisie, qu\'un bulletin est publié, qu\'un paiement est enregistré, ou qu\'une absence, un retard ou un renvoi est noté, même quand l\'application est fermée.',
   refusees:
     'Les notifications sont bloquées pour SenClass. Autorisez-les dans les réglages de votre navigateur, puis revenez ici.',
   'a-installer-ios':

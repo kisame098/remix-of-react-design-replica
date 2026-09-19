@@ -11,8 +11,8 @@
 --                            parent qui garde plusieurs enfants sur son
 --                            téléphone reçoit les notifications de chacun.
 --   • notification_queue   : file d'attente, remplie par des déclencheurs.
---   • 3 déclencheurs       : grades / elementary_grades / published_bulletins /
---                            payments. AUCUN ne peut bloquer l'écriture : un
+--   • déclencheurs         : grades / elementary_grades / published_bulletins /
+--                            payments / student_attendances / attendance_sessions. AUCUN ne peut bloquer l'écriture : un
 --                            bug de notification ne doit jamais empêcher un
 --                            professeur d'enregistrer ses notes ni un caissier
 --                            d'encaisser (bloc EXCEPTION dans chacun).
@@ -153,7 +153,7 @@ grant execute on function public.supprimer_abonnement_push(text)                
 create table if not exists public.notification_queue (
   id            uuid primary key default gen_random_uuid(),
   auth_user_id  uuid not null references auth.users(id) on delete cascade,
-  kind          text not null check (kind in ('grade', 'bulletin', 'payment')),
+  kind          text not null check (kind in ('grade', 'bulletin', 'payment', 'attendance')),
   -- Jamais de valeur de note ni de montant ici : le texte affiché sur un écran
   -- verrouillé ne doit rien révéler de sensible.
   payload       jsonb not null default '{}'::jsonb,
@@ -166,6 +166,11 @@ create table if not exists public.notification_queue (
 
 create index if not exists notification_queue_a_envoyer_idx
   on public.notification_queue (send_after) where sent_at is null;
+
+-- Base déjà installée avant l'ajout des présences : on élargit la contrainte.
+alter table public.notification_queue drop constraint if exists notification_queue_kind_check;
+alter table public.notification_queue add constraint notification_queue_kind_check
+  check (kind in ('grade', 'bulletin', 'payment', 'attendance'));
 
 -- RLS sans aucune politique : ni les élèves ni les professeurs n'y touchent,
 -- seule la fonction (clé de service) lit et écrit.
@@ -348,6 +353,119 @@ drop trigger if exists notifier_paiement_recu on public.payments;
 create trigger notifier_paiement_recu
   after insert on public.payments
   for each row execute function public.notifier_paiement_recu();
+
+
+-- ─── 4 bis. Présences : absence, retard, renvoi ──────────────────────────────
+-- Personne n'est prévenu pendant que le professeur fait l'appel : il coche,
+-- se corrige, hésite. La notification part quand il valide (« Saisie
+-- complète ») — ou, si l'appel est déjà validé, dès qu'un statut change.
+--
+--   • absent / en retard / renvoyé  → mis en file (45 secondes de recul) ;
+--   • le professeur corrige avant l'envoi → la notification est retirée ;
+--   • le professeur corrige APRÈS l'envoi → une notification de correction
+--     part, pour ne pas laisser une famille sur une fausse absence.
+create or replace function public.reconcilier_presence(
+  p_inscription uuid, p_session uuid, p_statut text
+) returns void
+language plpgsql security definer set search_path = public as $$
+declare
+  v_matiere text; v_date date; v_heure text;
+begin
+  select subject_name, date, start_time into v_matiere, v_date, v_heure
+    from public.attendance_sessions where id = p_session;
+
+  -- Ce qui attendait encore d'être envoyé pour cette séance n'a plus lieu d'être.
+  delete from public.notification_queue q
+   using public.comptes_eleve_abonnes(p_inscription) c
+   where q.auth_user_id = c.auth_user_id
+     and q.kind = 'attendance'
+     and q.sent_at is null and q.claimed_at is null
+     and q.payload->>'session' = p_session::text;
+
+  if p_statut in ('absent', 'late', 'expelled') then
+    insert into public.notification_queue (auth_user_id, kind, payload, send_after)
+    select c.auth_user_id, 'attendance',
+           jsonb_build_object('statut', p_statut, 'matiere', nullif(v_matiere, ''),
+                              'date', v_date, 'heure', v_heure, 'session', p_session),
+           now() + interval '45 seconds'
+      from public.comptes_eleve_abonnes(p_inscription) c;
+
+  elsif p_statut = 'present' then
+    -- Déjà notifié d'une absence pour cette séance ? Alors on corrige.
+    insert into public.notification_queue (auth_user_id, kind, payload, send_after)
+    select c.auth_user_id, 'attendance',
+           jsonb_build_object('statut', 'corrige', 'matiere', nullif(v_matiere, ''),
+                              'date', v_date, 'heure', v_heure, 'session', p_session),
+           now() + interval '45 seconds'
+      from public.comptes_eleve_abonnes(p_inscription) c
+     where (
+       select n.payload->>'statut'
+         from public.notification_queue n
+        where n.auth_user_id = c.auth_user_id and n.kind = 'attendance'
+          and n.sent_at is not null and n.payload->>'session' = p_session::text
+        order by n.sent_at desc, n.created_at desc limit 1
+     ) in ('absent', 'late', 'expelled');
+  end if;
+end $$;
+revoke all on function public.reconcilier_presence(uuid, uuid, text) from public, anon, authenticated;
+
+-- Un statut change APRÈS la validation de l'appel.
+create or replace function public.notifier_presence_eleve()
+returns trigger language plpgsql security definer set search_path = public as $$
+declare
+  v_valide boolean;
+begin
+  begin
+    if TG_OP = 'UPDATE' and OLD.status is not distinct from NEW.status then return NEW; end if;
+    -- Les lignes « présent » créées à l'ouverture de l'appel ne disent rien.
+    if TG_OP = 'INSERT' and NEW.status = 'present' then return NEW; end if;
+
+    select coalesce(student_attendance_complete, false) into v_valide
+      from public.attendance_sessions where id = NEW.session_id;
+    if v_valide then
+      perform public.reconcilier_presence(NEW.student_enrollment_id, NEW.session_id, NEW.status);
+    end if;
+  exception when others then
+    -- Un appel qui ne s'enregistre pas est bien pire qu'une notification manquée.
+    raise warning 'notifier_presence_eleve : %', sqlerrm;
+  end;
+  return NEW;
+end $$;
+
+-- L'appel vient d'être validé : on prévient les absents, retardataires, renvoyés.
+create or replace function public.notifier_presences_validees()
+returns trigger language plpgsql security definer set search_path = public as $$
+declare
+  r record;
+begin
+  begin
+    if coalesce(OLD.student_attendance_complete, false) = false
+       and coalesce(NEW.student_attendance_complete, false) = true then
+      for r in
+        select student_enrollment_id, status from public.student_attendances
+         where session_id = NEW.id and status in ('absent', 'late', 'expelled')
+      loop
+        perform public.reconcilier_presence(r.student_enrollment_id, NEW.id, r.status);
+      end loop;
+    end if;
+  exception when others then
+    raise warning 'notifier_presences_validees : %', sqlerrm;
+  end;
+  return NEW;
+end $$;
+
+revoke all on function public.notifier_presence_eleve()      from public, anon, authenticated;
+revoke all on function public.notifier_presences_validees()  from public, anon, authenticated;
+
+drop trigger if exists notifier_presence_eleve on public.student_attendances;
+create trigger notifier_presence_eleve
+  after insert or update on public.student_attendances
+  for each row execute function public.notifier_presence_eleve();
+
+drop trigger if exists notifier_presences_validees on public.attendance_sessions;
+create trigger notifier_presences_validees
+  after update of student_attendance_complete on public.attendance_sessions
+  for each row execute function public.notifier_presences_validees();
 
 
 -- ─── 5. Planification ────────────────────────────────────────────────────────

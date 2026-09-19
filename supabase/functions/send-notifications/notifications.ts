@@ -9,7 +9,7 @@
 // téléphone posé sur une table ne doit rien révéler des résultats d'un enfant.
 // ═══════════════════════════════════════════════════════════════════════════
 
-export type GenreNotification = 'grade' | 'bulletin' | 'payment';
+export type GenreNotification = 'grade' | 'bulletin' | 'payment' | 'attendance';
 
 /** Une ligne de `notification_queue`, réduite à ce dont la composition a besoin. */
 export interface LigneFile {
@@ -103,12 +103,89 @@ const composerPaiements = (lignes: LigneFile[]): NotificationAEnvoyer => ({
   tag: 'paiements',
 });
 
+// ─── Présences ────────────────────────────────────────────────────────────────
+
+type StatutPresence = 'absent' | 'late' | 'expelled' | 'corrige';
+
+const estStatutPresence = (v: unknown): v is StatutPresence =>
+  v === 'absent' || v === 'late' || v === 'expelled' || v === 'corrige';
+
+/** « 2026-10-09 » → « 09/10 » ; toute autre forme → `null`. */
+const jourCourt = (iso: unknown): string | null => {
+  if (typeof iso !== 'string') return null;
+  const m = /^\d{4}-(\d{2})-(\d{2})$/.exec(iso);
+  return m ? `${m[2]}/${m[1]}` : null;
+};
+
+const LIBELLES_UN: Record<Exclude<StatutPresence, 'corrige'>, string> = {
+  absent:   'Absence',
+  late:     'Retard',
+  expelled: 'Renvoi du cours',
+};
+
+const TITRES_UN: Record<StatutPresence, string> = {
+  absent: 'Absence enregistrée', late: 'Retard enregistré',
+  expelled: 'Renvoi enregistré', corrige: 'Présence corrigée',
+};
+
+/** « en Mathématiques (08:00), le 09/10 » — la date n'est dite que si ce n'est pas aujourd'hui. */
+const precisionCours = (l: LigneFile, aujourdhui: string): string => {
+  const matiere = typeof l.payload.matiere === 'string' && l.payload.matiere.trim()
+    ? ` en ${l.payload.matiere.trim()}` : ' à un cours';
+  const heure = typeof l.payload.heure === 'string' && /^\d{1,2}:\d{2}$/.test(l.payload.heure)
+    ? ` (${l.payload.heure})` : '';
+  const jour = l.payload.date !== aujourdhui ? jourCourt(l.payload.date) : null;
+  return `${matiere}${heure}${jour ? `, le ${jour}` : ''}`;
+};
+
+const pluriel = (n: number, un: string, plusieurs: string) => `${n} ${n > 1 ? plusieurs : un}`;
+
+/**
+ * Le nom de l'élève n'apparaît jamais : le texte s'affiche sur un écran
+ * verrouillé, et ce compte est parfois lu par un parent, parfois par l'enfant.
+ * `aujourdhui` (AAAA-MM-JJ, UTC = Dakar) sert à ne dire la date que si elle
+ * n'est pas celle du jour.
+ */
+const composerPresences = (lignes: LigneFile[], aujourdhui: string): NotificationAEnvoyer | null => {
+  const evenements = lignes.filter(l => estStatutPresence(l.payload.statut));
+  if (evenements.length === 0) return null;   // rien de lisible : mieux vaut se taire
+  const commun = { url: '/portail/presences', tag: 'presences' };
+
+  if (evenements.length === 1) {
+    const statut = evenements[0].payload.statut as StatutPresence;
+    return {
+      ...commun,
+      title: TITRES_UN[statut],
+      body: statut === 'corrige'
+        ? `Correction : la présence${precisionCours(evenements[0], aujourdhui)} est finalement rétablie.`
+        : `${LIBELLES_UN[statut]}${precisionCours(evenements[0], aujourdhui)}.`,
+    };
+  }
+
+  const compte = (st: StatutPresence) => evenements.filter(l => l.payload.statut === st).length;
+  const morceaux = [
+    compte('absent') && pluriel(compte('absent'), 'absence', 'absences'),
+    compte('late') && pluriel(compte('late'), 'retard', 'retards'),
+    compte('expelled') && pluriel(compte('expelled'), 'renvoi', 'renvois'),
+    compte('corrige') && pluriel(compte('corrige'), 'correction', 'corrections'),
+  ].filter((m): m is string => typeof m === 'string');
+  const matieres = uniques(evenements.map(l => l.payload.matiere));
+
+  return {
+    ...commun,
+    title: 'Présences enregistrées',
+    body: `Présences : ${enumeration(morceaux, 4)}${matieres.length ? ` (${enumeration(matieres)})` : ''}.`,
+  };
+};
+
 /**
  * Regroupe les lignes d'UN compte en au plus une notification par genre :
  * quarante notes saisies d'un coup donnent « Nouvelles notes en … », pas
  * quarante sonneries.
  */
-export const composerNotifications = (lignes: LigneFile[]): NotificationAEnvoyer[] => {
+export const composerNotifications = (
+  lignes: LigneFile[], maintenant: Date = new Date(),
+): NotificationAEnvoyer[] => {
   const parGenre = new Map<GenreNotification, LigneFile[]>();
   for (const l of lignes) parGenre.set(l.kind, [...(parGenre.get(l.kind) ?? []), l]);
 
@@ -116,5 +193,8 @@ export const composerNotifications = (lignes: LigneFile[]): NotificationAEnvoyer
   const notes = parGenre.get('grade');    if (notes?.length)    resultat.push(composerNotes(notes));
   const buls  = parGenre.get('bulletin'); if (buls?.length)     resultat.push(composerBulletins(buls));
   const pays  = parGenre.get('payment');  if (pays?.length)     resultat.push(composerPaiements(pays));
+  const pres  = parGenre.get('attendance');
+  const presences = pres?.length ? composerPresences(pres, maintenant.toISOString().slice(0, 10)) : null;
+  if (presences) resultat.push(presences);
   return resultat;
 };

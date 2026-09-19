@@ -73,6 +73,9 @@ describe('carte Notifications', () => {
     expect(TEXTES_NOTIFICATIONS.inactives).toMatch(/note/);
     expect(TEXTES_NOTIFICATIONS.inactives).toMatch(/bulletin/);
     expect(TEXTES_NOTIFICATIONS.inactives).toMatch(/paiement/);
+    expect(TEXTES_NOTIFICATIONS.inactives).toMatch(/absence/);
+    expect(TEXTES_NOTIFICATIONS.inactives).toMatch(/retard/);
+    expect(TEXTES_NOTIFICATIONS.inactives).toMatch(/renvoi/);
     // Les rappels d'échéance arrivent dans une seconde tranche : ne pas les annoncer d'avance.
     expect(TEXTES_NOTIFICATIONS.inactives).not.toMatch(/échéance/i);
   });
