@@ -189,6 +189,40 @@ Seule la consultation fonctionne sans réseau ; rien ne s'enregistre. Un seul é
 
 ---
 
+## 5 bis. Notifications push (élèves)
+
+L'élève est prévenu sur son téléphone, application fermée, quand : une note est saisie, un bulletin est publié, un paiement est enregistré. (Les rappels d'échéance viendront dans un second temps.)
+
+**Ce que voit l'élève.** Profil → carte *Notifications* → « Activer ». Le navigateur demande alors son autorisation — jamais avant, toujours après un clic. Sur iPhone, le site doit d'abord être ajouté à l'écran d'accueil (iOS 16.4 minimum).
+
+**Ce qui est envoyé.** Jamais de valeur de note ni de montant : « Nouvelle note en Mathématiques », « Bulletin (1er trimestre) disponible ». Un téléphone posé sur une table ne doit rien révéler. Quarante notes saisies d'un coup, ou vingt minutes de saisie, donnent **une seule** notification, cinq minutes après la dernière saisie.
+
+**Un appareil, plusieurs comptes.** Un parent qui garde trois enfants sur son téléphone reçoit les trois, à condition que chaque compte active ses notifications (une fois, depuis son profil). Se déconnecter retire uniquement les notifications du compte qui sort ; si le réseau manque à ce moment, l'appareil se désabonne lui-même, par précaution.
+
+### Mise en route
+
+**Rien à configurer à la main.** Ni secret à copier, ni clé à générer :
+
+1. Exécuter `docs/sql/notifications_push.sql` dans le SQL Editor. Il crée les tables, les déclencheurs et la tâche planifiée, et **génère lui-même** le secret qui relie la tâche à la fonction, dans le coffre chiffré de Supabase (Vault).
+2. Déployer la fonction `send-notifications` (`supabase/functions/send-notifications/`) avec la vérification JWT **désactivée** : elle est appelée par la base, sans jeton utilisateur, et protégée par ce secret. Sans lui, elle refuse tout (401).
+3. Publier l'application.
+
+Au premier appel, la fonction **fabrique elle-même ses clés VAPID** : la publique est lue par l'application, la privée va directement dans le coffre. Personne ne la saisit, ne la copie ni ne la voit. Les clés ne sont écrites qu'une seule fois et jamais écrasées : les remplacer invaliderait tous les abonnements.
+
+Il n'y a **aucun secret à poser** dans « Edge Functions → Secrets ».
+
+### Vérifier
+
+- Supabase → Edge Functions → `send-notifications` → Logs : une ligne par minute où quelque chose était à envoyer.
+- `select * from cron.job_run_details order by start_time desc limit 5;` : la tâche tourne sans erreur.
+- `select kind, sent_at, attempts from notification_queue order by created_at desc limit 20;` : les lignes passent à `sent_at` renseigné.
+
+### Si une notification n'arrive pas
+
+- Le compte a-t-il **activé** les notifications, depuis son profil ? Sans abonnement, rien n'est mis en file — c'est voulu.
+- Le navigateur a-t-il bloqué l'autorisation ? La carte l'indique et explique comment la rétablir.
+- Une ligne de `notification_queue` avec `attempts = 3` et `sent_at` vide : trois échecs, la fonction abandonne. Voir ses logs.
+
 ## 6. Avant chaque mise en ligne
 
 ```bash

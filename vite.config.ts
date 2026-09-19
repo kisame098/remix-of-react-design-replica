@@ -63,6 +63,10 @@ export default defineConfig(({ mode }) => ({
         // plus hors connexion.
         maximumFileSizeToCacheInBytes: 4 * 1024 * 1024,
         cleanupOutdatedCaches: true,
+        // Réception des notifications push (public/push-sw.js). Ajouté au
+        // service worker généré plutôt que de le remplacer par un fichier écrit
+        // à la main : la mise en cache hors connexion reste celle de Workbox.
+        importScripts: ["push-sw.js"],
         // Seules les polices sont mises en cache à la volée.
         //
         // Les données Supabase ne le sont JAMAIS, volontairement : le cache
