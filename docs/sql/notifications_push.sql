@@ -1,8 +1,10 @@
 -- ═══════════════════════════════════════════════════════════════════════════
 -- NOTIFICATIONS PUSH — élèves : nouvelle note, bulletin publié, paiement reçu
 --
--- À exécuter UNE FOIS dans Supabase → SQL Editor, APRÈS avoir créé le secret
--- du planificateur (voir l'étape 0 ci-dessous).
+-- À exécuter UNE FOIS dans Supabase → SQL Editor. Aucun secret à fournir :
+-- celui du planificateur est généré ici, dans le coffre chiffré (Vault), et les
+-- clés VAPID sont fabriquées par la fonction send-notifications à son premier
+-- appel, la privée allant elle aussi dans le coffre. Personne ne les voit.
 --
 -- Ce que ça met en place :
 --   • push_subscriptions   : un abonnement par couple (appareil, compte). Un
@@ -22,18 +24,69 @@
 -- ═══════════════════════════════════════════════════════════════════════════
 
 
--- ─── ÉTAPE 0 — le secret partagé avec la fonction (à faire AVANT le reste) ──
--- Générez une valeur : `openssl rand -hex 32`, puis exécutez SEUL, une fois :
---
---     select vault.create_secret('<la valeur générée>', 'senclass_cron_secret');
---
--- La MÊME valeur doit être enregistrée comme secret CRON_SECRET de la fonction
--- send-notifications (Edge Functions → Secrets).
-
-
 -- ─── 1. Extensions ───────────────────────────────────────────────────────────
 create extension if not exists pg_net  with schema extensions;
 create extension if not exists pg_cron with schema extensions;
+
+
+-- ─── 1 bis. Secrets, dans le coffre chiffré (Vault) ──────────────────────────
+-- Rien de secret n'est stocké en clair dans une table. Le coffre chiffre au
+-- repos ; la lecture passe par des fonctions réservées à la clé de service.
+
+-- Secret partagé entre la tâche planifiée et la fonction. Généré ICI, une seule
+-- fois (deux UUID v4 : ~240 bits d'aléa) ; il ne s'affiche nulle part.
+select vault.create_secret(
+  replace(gen_random_uuid()::text || gen_random_uuid()::text, '-', ''),
+  'senclass_cron_secret'
+)
+where not exists (select 1 from vault.secrets where name = 'senclass_cron_secret');
+
+-- Seule la clé PUBLIQUE VAPID vit dans une table : elle est publique par nature,
+-- l'application la lit pour s'abonner.
+create table if not exists public.push_config (
+  cle      text primary key,
+  valeur   text not null,
+  cree_le  timestamptz not null default now()
+);
+alter table public.push_config enable row level security;
+revoke all on public.push_config from anon, authenticated;
+
+create or replace function public.cle_publique_push()
+returns text
+language sql stable security definer set search_path = public as $$
+  select valeur from public.push_config where cle = 'vapid_public';
+$$;
+revoke all on function public.cle_publique_push() from public, anon;
+grant execute on function public.cle_publique_push() to authenticated;
+
+-- Lecture d'un secret du coffre : réservée à la fonction (clé de service).
+create or replace function public.push_secret_lire(p_nom text)
+returns text
+language sql security definer set search_path = public, vault as $$
+  select decrypted_secret from vault.decrypted_secrets
+   where name = p_nom and p_nom in ('senclass_cron_secret', 'senclass_vapid_privee')
+   limit 1;
+$$;
+revoke all on function public.push_secret_lire(text) from public, anon, authenticated;
+grant execute on function public.push_secret_lire(text) to service_role;
+
+-- Enregistre la paire de clés fabriquée par la fonction — UNE SEULE FOIS : si
+-- elle existe déjà on ne l'écrase jamais (ce serait invalider tous les
+-- abonnements). Renvoie false quand une autre exécution a été plus rapide.
+create or replace function public.push_initialiser_cles(p_publique text, p_privee text)
+returns boolean
+language plpgsql security definer set search_path = public, vault as $$
+begin
+  perform pg_advisory_xact_lock(hashtext('senclass_push_init'));
+  if exists (select 1 from public.push_config where cle = 'vapid_public') then
+    return false;
+  end if;
+  perform vault.create_secret(p_privee, 'senclass_vapid_privee');
+  insert into public.push_config (cle, valeur) values ('vapid_public', p_publique);
+  return true;
+end $$;
+revoke all on function public.push_initialiser_cles(text, text) from public, anon, authenticated;
+grant execute on function public.push_initialiser_cles(text, text) to service_role;
 
 
 -- ─── 2. Abonnements ──────────────────────────────────────────────────────────
@@ -318,7 +371,10 @@ select cron.schedule(
   where exists (
     select 1 from public.notification_queue
      where sent_at is null and attempts < 3 and send_after <= now()
-  );
+  )
+  -- Tant que les clés VAPID n'existent pas, on appelle la fonction : c'est
+  -- elle qui les fabrique. Ensuite cette condition ne se déclenche plus.
+  or not exists (select 1 from public.push_config where cle = 'vapid_public');
   $$
 );
 

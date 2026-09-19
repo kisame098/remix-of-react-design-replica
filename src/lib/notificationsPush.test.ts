@@ -6,7 +6,7 @@ vi.mock('@/integrations/supabase/client', () => ({
 }));
 
 import {
-  CLE_PUBLIQUE_VAPID, cleVersOctets, etatNotifications, retirerAbonnementDuCompte,
+  activerNotifications, cleVersOctets, etatNotifications, lireClePublique, retirerAbonnementDuCompte,
   type EnvironnementNotifications,
 } from './notificationsPush';
 
@@ -60,16 +60,115 @@ describe('etatNotifications', () => {
 });
 
 describe('clé VAPID', () => {
-  it('est une clé publique P-256 non compressée : 65 octets commençant par 0x04', () => {
-    const octets = cleVersOctets(CLE_PUBLIQUE_VAPID);
-    expect(octets).toHaveLength(65);
-    expect(octets[0]).toBe(4);
-  });
-
   it('cleVersOctets décode le base64 « URL-safe » avec ou sans remplissage', () => {
     expect(Array.from(cleVersOctets('AQID'))).toEqual([1, 2, 3]);
     expect(Array.from(cleVersOctets('AQI'))).toEqual([1, 2]);
     expect(Array.from(cleVersOctets('-_8'))).toEqual([251, 255]);
+  });
+
+  it('la clé publique se lit sur le serveur', async () => {
+    rpcMock.mockResolvedValue({ data: 'CLE-PUBLIQUE', error: null });
+    await expect(lireClePublique()).resolves.toBe('CLE-PUBLIQUE');
+    expect(rpcMock).toHaveBeenCalledWith('cle_publique_push', {});
+  });
+
+  it.each([
+    ['pas encore fabriquée', { data: null, error: null }],
+    ['chaîne vide', { data: '', error: null }],
+    ['erreur serveur', { data: null, error: { message: 'boum' } }],
+    ['type inattendu', { data: { x: 1 }, error: null }],
+  ])('%s : aucune clé, jamais de valeur inventée', async (_nom, reponse) => {
+    rpcMock.mockResolvedValue(reponse);
+    await expect(lireClePublique()).resolves.toBeNull();
+  });
+});
+
+describe('activation : activerNotifications', () => {
+  // Une clé P-256 publique factice de la bonne taille : 65 octets, base64url.
+  const CLE = 'BAYNVUsMc_VgP4ylu1T3Rbt52yDasJlS-iIdrWuaNpjA_DXDYPqNUE2fJm1e4PWSlnACA_R1GObwgPoDHL1JoqU';
+  const unsubscribe = vi.fn().mockResolvedValue(true);
+  const nouvelAbonnement = {
+    endpoint: 'https://push.test/nouveau', unsubscribe,
+    toJSON: () => ({ keys: { p256dh: 'PK', auth: 'AU' } }),
+  };
+  const subscribe = vi.fn();
+  const getSubscription = vi.fn();
+  const requestPermission = vi.fn();
+
+  beforeEach(() => {
+    rpcMock.mockReset(); subscribe.mockReset(); getSubscription.mockReset();
+    requestPermission.mockReset(); unsubscribe.mockClear();
+    requestPermission.mockResolvedValue('granted');
+    getSubscription.mockResolvedValue(null);
+    subscribe.mockResolvedValue(nouvelAbonnement);
+    Object.defineProperty(window, 'Notification', { configurable: true, value: { requestPermission } });
+    Object.defineProperty(navigator, 'serviceWorker', {
+      configurable: true, value: { ready: Promise.resolve({ pushManager: { getSubscription, subscribe } }) },
+    });
+  });
+  afterEach(() => {
+    Reflect.deleteProperty(navigator, 'serviceWorker');
+    Reflect.deleteProperty(window, 'Notification');
+  });
+
+  const serveur = (surcharge: { cle?: unknown; enregistrement?: unknown } = {}) =>
+    rpcMock.mockImplementation((nom: string) => Promise.resolve(
+      nom === 'cle_publique_push'
+        ? { data: 'cle' in surcharge ? surcharge.cle : CLE, error: null }
+        : { data: null, error: 'enregistrement' in surcharge ? surcharge.enregistrement : null },
+    ));
+
+  it('parcours complet : s\'abonne avec la clé du serveur, puis l\'enregistre', async () => {
+    serveur();
+    await expect(activerNotifications()).resolves.toBe('ok');
+
+    const { applicationServerKey, userVisibleOnly } = subscribe.mock.calls[0][0];
+    expect(userVisibleOnly).toBe(true);
+    expect(applicationServerKey).toHaveLength(65);
+    expect(rpcMock).toHaveBeenCalledWith('enregistrer_abonnement_push', expect.objectContaining({
+      p_endpoint: 'https://push.test/nouveau', p_p256dh: 'PK', p_auth: 'AU',
+    }));
+  });
+
+  it('permission refusée : ne touche à rien', async () => {
+    requestPermission.mockResolvedValue('denied');
+    await expect(activerNotifications()).resolves.toBe('refusees');
+    expect(subscribe).not.toHaveBeenCalled();
+    expect(rpcMock).not.toHaveBeenCalled();
+  });
+
+  it('demande fermée sans réponse : indisponible, pas « refusée »', async () => {
+    requestPermission.mockResolvedValue('default');
+    await expect(activerNotifications()).resolves.toBe('indisponible');
+  });
+
+  it('clé pas encore fabriquée par le serveur : ne s\'abonne pas', async () => {
+    // Sans cela, l'appareil s'abonnerait avec une mauvaise clé et ne recevrait jamais rien.
+    serveur({ cle: null });
+    await expect(activerNotifications()).resolves.toBe('indisponible');
+    expect(subscribe).not.toHaveBeenCalled();
+  });
+
+  it('le serveur refuse l\'enregistrement : retire l\'abonnement qu\'on vient de créer', async () => {
+    serveur({ enregistrement: { message: 'refusé' } });
+    await expect(activerNotifications()).resolves.toBe('indisponible');
+    expect(unsubscribe).toHaveBeenCalledTimes(1);
+  });
+
+  it('… mais jamais un abonnement déjà là : il sert peut-être à un autre compte de l\'appareil', async () => {
+    getSubscription.mockResolvedValue(nouvelAbonnement);
+    serveur({ enregistrement: { message: 'refusé' } });
+    await expect(activerNotifications()).resolves.toBe('indisponible');
+    expect(subscribe).not.toHaveBeenCalled();
+    expect(unsubscribe).not.toHaveBeenCalled();
+  });
+
+  it('réutilise l\'abonnement du navigateur déjà là (compte lié supplémentaire)', async () => {
+    getSubscription.mockResolvedValue(nouvelAbonnement);
+    serveur();
+    await expect(activerNotifications()).resolves.toBe('ok');
+    expect(subscribe).not.toHaveBeenCalled();
+    expect(rpcMock).toHaveBeenCalledWith('enregistrer_abonnement_push', expect.anything());
   });
 });
 

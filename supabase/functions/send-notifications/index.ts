@@ -2,20 +2,22 @@
 // send-notifications — envoie les notifications push en attente.
 //
 // Appelée chaque minute par pg_cron (voir docs/sql/notifications_push.sql),
-// seulement quand la file contient quelque chose. Elle n'est pas destinée aux
-// navigateurs : `verify_jwt` est désactivé (pg_net n'a pas de jeton
-// utilisateur) et l'accès est protégé par un secret partagé, `CRON_SECRET`.
+// seulement quand la file contient quelque chose — ou tant que les clés VAPID
+// n'existent pas encore. Elle n'est pas destinée aux navigateurs : `verify_jwt`
+// est désactivé (pg_net n'a pas de jeton utilisateur) et l'accès est protégé
+// par un secret partagé.
 //
-// Secrets à définir (Edge Functions → Secrets) :
-//   CRON_SECRET         même valeur que le secret Vault `senclass_cron_secret`
-//   VAPID_PUBLIC_KEY    clé publique  (la même que dans src/lib/notificationsPush.ts)
-//   VAPID_PRIVATE_KEY   clé privée
+// AUCUN secret à configurer à la main. Tout vit dans le coffre chiffré de
+// Supabase (Vault) :
+//   • le secret du planificateur, généré par le SQL ;
+//   • la clé privée VAPID, fabriquée ici au premier appel.
 // SUPABASE_URL et SUPABASE_SERVICE_ROLE_KEY sont fournis par la plateforme.
 // ═══════════════════════════════════════════════════════════════════════════
 
 import { createClient } from 'npm:@supabase/supabase-js@2';
 import webpush from 'npm:web-push@3.6.7';
 import { composerNotifications, type LigneFile } from './notifications.ts';
+import { genererPaireVapid } from './vapid.ts';
 
 interface AbonnementPush { endpoint: string; p256dh: string; auth: string }
 
@@ -33,15 +35,9 @@ const egaux = (a: string, b: string): boolean => {
 };
 
 Deno.serve(async (req) => {
-  // Échoue FERMÉ : sans secret configuré, personne n'entre.
-  const secret = Deno.env.get('CRON_SECRET');
+  // Sans en-tête, inutile d'aller plus loin — et rien n'est lu en base.
   const fourni = req.headers.get('x-cron-secret');
-  if (!secret || !fourni || !egaux(secret, fourni)) return json({ erreur: 'Non autorisé' }, 401);
-
-  const clePublique = Deno.env.get('VAPID_PUBLIC_KEY');
-  const clePrivee = Deno.env.get('VAPID_PRIVATE_KEY');
-  if (!clePublique || !clePrivee) return json({ erreur: 'Clés VAPID manquantes' }, 500);
-  webpush.setVapidDetails('mailto:contact@senclass.com', clePublique, clePrivee);
+  if (!fourni) return json({ erreur: 'Non autorisé' }, 401);
 
   const admin = createClient(
     Deno.env.get('SUPABASE_URL')!,
@@ -49,9 +45,39 @@ Deno.serve(async (req) => {
     { auth: { persistSession: false } },
   );
 
+  // Échoue FERMÉ : secret absent ou illisible, personne n'entre.
+  const { data: secret, error: erreurSecret } = await admin.rpc('push_secret_lire', { p_nom: 'senclass_cron_secret' });
+  if (erreurSecret) return json({ erreur: 'Indisponible' }, 500);
+  if (!secret || !egaux(String(secret), fourni)) return json({ erreur: 'Non autorisé' }, 401);
+
+  // ── Clés VAPID : lues dans le coffre, fabriquées au tout premier appel ──────
+  const lireCles = async () => {
+    const [pub, priv] = await Promise.all([
+      admin.from('push_config').select('valeur').eq('cle', 'vapid_public').maybeSingle(),
+      admin.rpc('push_secret_lire', { p_nom: 'senclass_vapid_privee' }),
+    ]);
+    return { publique: pub.data?.valeur as string | undefined, privee: priv.data as string | null };
+  };
+
+  let { publique, privee } = await lireCles();
+  let initialisees = false;
+  if (!publique || !privee) {
+    const paire = await genererPaireVapid();
+    // Le SQL n'écrit qu'une fois et renvoie false si une autre exécution a été
+    // plus rapide : on relit alors la paire de la gagnante, jamais la nôtre.
+    const { data: creees, error } = await admin.rpc('push_initialiser_cles', {
+      p_publique: paire.publique, p_privee: paire.privee,
+    });
+    if (error) return json({ erreur: 'Initialisation impossible' }, 500);
+    initialisees = creees === true;
+    ({ publique, privee } = await lireCles());
+  }
+  if (!publique || !privee) return json({ erreur: 'Clés VAPID indisponibles' }, 500);
+  webpush.setVapidDetails('mailto:contact@senclass.com', publique, privee);
+
   const { data: lignes, error } = await admin.rpc('notifications_reclamer', { p_limite: 500 });
   if (error) return json({ erreur: error.message }, 500);
-  if (!lignes?.length) return json({ envoyees: 0 });
+  if (!lignes?.length) return json({ envoyees: 0, initialisees });
 
   // Une série par compte.
   const parCompte = new Map<string, (LigneFile & { id: string })[]>();
@@ -105,5 +131,5 @@ Deno.serve(async (req) => {
     await admin.from('notification_queue').update({ sent_at: new Date().toISOString() }).in('id', traitees);
   }
 
-  return json({ envoyees, echecs, lignes: lignes.length });
+  return json({ envoyees, echecs, lignes: lignes.length, initialisees });
 });

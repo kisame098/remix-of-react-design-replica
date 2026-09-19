@@ -12,14 +12,6 @@ import { supabase } from '@/integrations/supabase/client';
 // qu'ils partagent.
 // ═══════════════════════════════════════════════════════════════════════════
 
-/**
- * Clé publique VAPID. Publique par nature : elle ne sert qu'à dire au service
- * de push « seul ce serveur a le droit de m'écrire ». La clé privée
- * correspondante est un secret de la fonction send-notifications.
- */
-export const CLE_PUBLIQUE_VAPID =
-  'BAYNVUsMc_VgP4ylu1T3Rbt52yDasJlS-iIdrWuaNpjA_DXDYPqNUE2fJm1e4PWSlnACA_R1GObwgPoDHL1JoqU';
-
 /** Le service worker n'est prêt que s'il est enregistré : on n'attend pas indéfiniment. */
 const DELAI_SERVICE_WORKER_MS = 6_000;
 
@@ -122,6 +114,17 @@ export const abonneSurCetAppareil = async (endpoint: string): Promise<boolean> =
 };
 
 /**
+ * Clé publique VAPID, lue sur le serveur : c'est lui qui la fabrique, et elle
+ * change si on le réinitialise. Publique par nature — elle dit seulement au
+ * service de push « seul ce serveur a le droit de m'écrire » ; la privée ne
+ * quitte jamais la fonction.
+ */
+export const lireClePublique = async (): Promise<string | null> => {
+  const { data, error } = await rpc('cle_publique_push', {});
+  return !error && typeof data === 'string' && data ? data : null;
+};
+
+/**
  * Active les notifications pour le compte connecté sur cet appareil.
  * À appeler depuis un geste de l'utilisateur (un clic) : les navigateurs
  * refusent d'afficher la demande de permission autrement.
@@ -131,13 +134,20 @@ export const activerNotifications = async (): Promise<'ok' | 'refusees' | 'indis
   if (permission !== 'granted') return permission === 'denied' ? 'refusees' : 'indisponible';
 
   let abonnement: PushSubscription | null = null;
+  let cree = false;
   try {
+    const cle = await lireClePublique();
+    if (!cle) return 'indisponible';
+
     const reg = await enregistrementServiceWorker();
-    abonnement = await reg.pushManager.getSubscription()
-      ?? await reg.pushManager.subscribe({
+    abonnement = await reg.pushManager.getSubscription();
+    if (!abonnement) {
+      abonnement = await reg.pushManager.subscribe({
         userVisibleOnly: true,
-        applicationServerKey: cleVersOctets(CLE_PUBLIQUE_VAPID) as BufferSource,
+        applicationServerKey: cleVersOctets(cle) as BufferSource,
       });
+      cree = true;
+    }
 
     const json = abonnement.toJSON();
     const { error } = await rpc('enregistrer_abonnement_push', {
@@ -150,7 +160,9 @@ export const activerNotifications = async (): Promise<'ok' | 'refusees' | 'indis
     return 'ok';
   } catch {
     // Le serveur n'a pas enregistré l'abonnement : ne pas laisser l'appareil
-    // croire qu'il est abonné, l'utilisateur pourra réessayer.
+    // croire qu'il est abonné. On ne défait que ce qu'on vient de créer — un
+    // abonnement déjà là sert peut-être à un autre compte de cet appareil.
+    if (cree) await abonnement?.unsubscribe().catch(() => undefined);
     return 'indisponible';
   }
 };

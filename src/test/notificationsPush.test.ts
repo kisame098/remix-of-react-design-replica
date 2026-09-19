@@ -96,14 +96,71 @@ describe('SQL — docs/sql/notifications_push.sql', () => {
     expect(sql).toMatch(/vault\.decrypted_secrets/);
     expect(sql).not.toMatch(/'x-cron-secret',\s*'[0-9a-f]{16,}'/i);
   });
+
+  it('le secret est GÉNÉRÉ par la base : personne ne le saisit, personne ne le voit', () => {
+    expect(sql).toMatch(/vault\.create_secret\(\s*replace\(gen_random_uuid\(\)/);
+    expect(sql).toMatch(/where not exists \(select 1 from vault\.secrets where name = 'senclass_cron_secret'\)/);
+  });
+
+  it('aucun secret n\'est stocké en clair : la table de réglages ne porte que la clé PUBLIQUE', () => {
+    const cles = [...sql.matchAll(/insert into public\.push_config[^;]*values \('([a-z_]+)'/gi)].map(m => m[1]);
+    expect(cles).toEqual(['vapid_public']);
+    expect(sql).toMatch(/vault\.create_secret\(p_privee, 'senclass_vapid_privee'\)/);
+    expect(sql).toMatch(/alter table public\.push_config enable row level security/i);
+    expect(sql).toMatch(/revoke all on public\.push_config from anon, authenticated/i);
+  });
+
+  it('la lecture du coffre est réservée à la clé de service, et limitée à deux noms', () => {
+    expect(sql).toMatch(/revoke all on function public\.push_secret_lire\(text\) from public, anon, authenticated/i);
+    expect(sql).toMatch(/grant execute on function public\.push_secret_lire\(text\) to service_role/i);
+    expect(sql).toMatch(/p_nom in \('senclass_cron_secret', 'senclass_vapid_privee'\)/);
+  });
+
+  it('les clés VAPID ne s\'écrasent JAMAIS : réécrire invaliderait tous les abonnements', () => {
+    expect(sql).toMatch(/pg_advisory_xact_lock/);
+    expect(sql).toMatch(/if exists \(select 1 from public\.push_config where cle = 'vapid_public'\) then\s+return false/);
+    expect(sql).toMatch(/revoke all on function public\.push_initialiser_cles\(text, text\) from public, anon, authenticated/i);
+    expect(sql).toMatch(/grant execute on function public\.push_initialiser_cles\(text, text\) to service_role/i);
+  });
+
+  it('seuls les comptes connectés lisent la clé publique', () => {
+    expect(sql).toMatch(/revoke all on function public\.cle_publique_push\(\) from public, anon/i);
+    expect(sql).toMatch(/grant execute on function public\.cle_publique_push\(\) to authenticated/i);
+  });
+
+  it('tant que les clés n\'existent pas, la tâche appelle la fonction pour les fabriquer', () => {
+    expect(sql).toMatch(/or not exists \(select 1 from public\.push_config where cle = 'vapid_public'\)/);
+  });
 });
 
 describe('fonction — supabase/functions/send-notifications', () => {
   const fonction = lire('supabase/functions/send-notifications/index.ts');
 
-  it('exige le secret et échoue FERMÉ quand il n\'est pas configuré', () => {
-    expect(fonction).toMatch(/if \(!secret \|\| !fourni \|\| !egaux\(secret, fourni\)\)/);
-    expect(fonction).toMatch(/401/);
+  it('refuse toute requête sans secret, sans même lire la base', () => {
+    const idxRefus = fonction.indexOf("if (!fourni) return json({ erreur: 'Non autorisé' }, 401)");
+    const idxBase = fonction.indexOf('createClient(');
+    expect(idxRefus).toBeGreaterThan(-1);
+    expect(idxBase).toBeGreaterThan(idxRefus);
+  });
+
+  it('échoue FERMÉ : secret absent, illisible ou faux, personne n\'entre', () => {
+    expect(fonction).toMatch(/if \(erreurSecret\) return json\(\{ erreur: 'Indisponible' \}, 500\)/);
+    expect(fonction).toMatch(/if \(!secret \|\| !egaux\(String\(secret\), fourni\)\) return json\(\{ erreur: 'Non autorisé' \}, 401\)/);
+  });
+
+  it('aucun secret à configurer à la main : rien ne se lit dans l\'environnement', () => {
+    const lus = [...fonction.matchAll(/Deno\.env\.get\('([A-Z_]+)'\)/g)].map(m => m[1]);
+    expect(lus.sort()).toEqual(['SUPABASE_SERVICE_ROLE_KEY', 'SUPABASE_URL']);
+  });
+
+  it('ne renvoie ni ne journalise jamais la clé privée', () => {
+    expect(fonction).not.toMatch(/console\.(log|info|warn|error)/);
+    expect(fonction).not.toMatch(/json\(\{[^}]*(privee|secret)\b[^}]*\}\)/);
+  });
+
+  it('fabrique ses clés elle-même au premier appel', () => {
+    expect(fonction).toMatch(/genererPaireVapid\(\)/);
+    expect(fonction).toMatch(/push_initialiser_cles/);
   });
 
   it('compare le secret en temps constant', () => {
@@ -167,6 +224,12 @@ describe('branchement dans l\'application', () => {
     expect(lib.match(/requestPermission\(/g)).toHaveLength(1);
     expect(hook).not.toMatch(/requestPermission/);
     expect(hook).not.toMatch(/useEffect\([^)]*activer\(/);
+  });
+
+  it('l\'application lit la clé publique sur le serveur, elle n\'en embarque aucune', () => {
+    const lib = lire('src/lib/notificationsPush.ts');
+    expect(lib).toMatch(/rpc\('cle_publique_push'/);
+    expect(lib).not.toMatch(/'B[A-Za-z0-9_-]{86}'/);
   });
 
   it('la clé privée VAPID n\'est nulle part dans le dépôt', () => {

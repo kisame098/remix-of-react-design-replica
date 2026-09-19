@@ -199,18 +199,17 @@ L'élève est prévenu sur son téléphone, application fermée, quand : une not
 
 **Un appareil, plusieurs comptes.** Un parent qui garde trois enfants sur son téléphone reçoit les trois, à condition que chaque compte active ses notifications (une fois, depuis son profil). Se déconnecter retire uniquement les notifications du compte qui sort ; si le réseau manque à ce moment, l'appareil se désabonne lui-même, par précaution.
 
-### Mise en route (une seule fois)
+### Mise en route
 
-L'ordre compte : l'application n'affiche le bouton qu'une fois ce paramétrage fait.
+**Rien à configurer à la main.** Ni secret à copier, ni clé à générer :
 
-1. **Secret partagé.** Dans un terminal : `openssl rand -hex 32`. Puis, dans Supabase → SQL Editor, exécuter **seul** :
-   `select vault.create_secret('<la valeur>', 'senclass_cron_secret');`
-2. **Secrets de la fonction.** Supabase → Edge Functions → Secrets, trois valeurs :
-   - `CRON_SECRET` — la même valeur qu'à l'étape 1 ;
-   - `VAPID_PUBLIC_KEY` et `VAPID_PRIVATE_KEY` — dans `~/.senclass/vapid.json` sur le poste où elles ont été générées. **La clé privée ne va nulle part ailleurs** : ni dans le dépôt, ni dans une conversation, ni dans Cloudflare.
-3. **Déployer la fonction** `send-notifications` (`supabase/functions/send-notifications/`), avec la vérification JWT **désactivée** : elle est appelée par la base, sans jeton utilisateur, et protégée par `CRON_SECRET`. Sans ce secret, elle refuse tout (401).
-4. **Exécuter** `docs/sql/notifications_push.sql` dans le SQL Editor. Il crée les tables, les déclencheurs et la tâche planifiée. Les déclencheurs ne peuvent pas bloquer une écriture : un bug de notification n'empêchera jamais un professeur d'enregistrer ses notes ni un caissier d'encaisser.
-5. **Publier** l'application.
+1. Exécuter `docs/sql/notifications_push.sql` dans le SQL Editor. Il crée les tables, les déclencheurs et la tâche planifiée, et **génère lui-même** le secret qui relie la tâche à la fonction, dans le coffre chiffré de Supabase (Vault).
+2. Déployer la fonction `send-notifications` (`supabase/functions/send-notifications/`) avec la vérification JWT **désactivée** : elle est appelée par la base, sans jeton utilisateur, et protégée par ce secret. Sans lui, elle refuse tout (401).
+3. Publier l'application.
+
+Au premier appel, la fonction **fabrique elle-même ses clés VAPID** : la publique est lue par l'application, la privée va directement dans le coffre. Personne ne la saisit, ne la copie ni ne la voit. Les clés ne sont écrites qu'une seule fois et jamais écrasées : les remplacer invaliderait tous les abonnements.
+
+Il n'y a **aucun secret à poser** dans « Edge Functions → Secrets ».
 
 ### Vérifier
 
