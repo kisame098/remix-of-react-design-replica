@@ -16,7 +16,7 @@
 --                            bug de notification ne doit jamais empêcher un
 --                            professeur d'enregistrer ses notes ni un caissier
 --                            d'encaisser (bloc EXCEPTION dans chacun).
---   • une tâche planifiée  : chaque minute, s'il y a quelque chose à envoyer,
+--   • une tâche planifiée  : toutes les 10 secondes, s'il y a quelque chose à envoyer,
 --                            elle appelle la fonction send-notifications.
 --
 -- Rien n'est mis en file pour un élève sans abonnement : la table ne grossit
@@ -173,10 +173,11 @@ alter table public.notification_queue enable row level security;
 revoke all on public.notification_queue from anon, authenticated;
 
 -- Réserve un lot de notifications prêtes. Une série (même compte, même type)
--- n'est prête que lorsque plus aucune ligne n'attend encore : un professeur qui
--- saisit ses notes pendant vingt minutes n'envoie qu'UNE notification groupée,
--- cinq minutes après sa dernière saisie. Au-delà de 30 minutes d'attente, on
--- envoie quand même.
+-- n'est prête que lorsque plus aucune ligne n'attend encore : plusieurs notes
+-- saisies à quelques secondes d'écart pour le même élève n'envoient qu'UNE
+-- notification groupée, 20 secondes après la dernière. Le délai est court
+-- exprès : une notification qui arrive minutes après coup perd son intérêt.
+-- Au-delà de 30 minutes d'attente, on envoie quand même.
 create or replace function public.notifications_reclamer(p_limite integer default 500)
 returns setof public.notification_queue
 language sql security definer set search_path = public as $$
@@ -253,7 +254,7 @@ begin
       insert into public.notification_queue (auth_user_id, kind, payload, send_after)
       select c.auth_user_id, 'grade',
              jsonb_build_object('matiere', coalesce(v_matiere, 'une matière')),
-             now() + interval '5 minutes'
+             now() + interval '20 seconds'
         from public.comptes_eleve_abonnes(NEW.student_enrollment_id) c;
     end if;
   exception when others then
@@ -275,7 +276,7 @@ begin
       insert into public.notification_queue (auth_user_id, kind, payload, send_after)
       select c.auth_user_id, 'grade',
              jsonb_build_object('matiere', coalesce(v_discipline, 'une matière')),
-             now() + interval '5 minutes'
+             now() + interval '20 seconds'
         from public.comptes_eleve_abonnes(NEW.student_enrollment_id) c;
     end if;
   exception when others then
@@ -296,7 +297,7 @@ begin
     insert into public.notification_queue (auth_user_id, kind, payload, send_after)
     select c.auth_user_id, 'bulletin',
            jsonb_build_object('periode', coalesce(v_periode, 'la période')),
-           now() + interval '30 seconds'
+           now() + interval '10 seconds'
       from public.comptes_eleve_abonnes(NEW.student_enrollment_id) c;
   exception when others then
     raise warning 'notifier_bulletin_publie : %', sqlerrm;
@@ -314,7 +315,7 @@ begin
       insert into public.notification_queue (auth_user_id, kind, payload, send_after)
       select c.auth_user_id, 'payment',
              jsonb_build_object('type', NEW.type, 'mois', NEW.month_key),
-             now() + interval '30 seconds'
+             now() + interval '10 seconds'
         from public.comptes_eleve_abonnes(NEW.student_enrollment_id) c;
     end if;
   exception when others then
@@ -350,13 +351,14 @@ create trigger notifier_paiement_recu
 
 
 -- ─── 5. Planification ────────────────────────────────────────────────────────
--- Chaque minute : on n'appelle la fonction que s'il y a quelque chose à envoyer.
+-- Toutes les 10 secondes : on n'appelle la fonction que s'il y a quelque chose
+-- à envoyer, donc une file vide ne coûte presque rien.
 select cron.unschedule('senclass-notifications')
  where exists (select 1 from cron.job where jobname = 'senclass-notifications');
 
 select cron.schedule(
   'senclass-notifications',
-  '* * * * *',
+  '10 seconds',
   $$
   select net.http_post(
     url     := 'https://gofwbpmmarwckwvcfbmp.supabase.co/functions/v1/send-notifications',
