@@ -4,6 +4,8 @@ import React, {
 } from 'react';
 import { useSchoolYear } from './SchoolYearContext';
 import { useAuth } from '@/contexts/AuthContext';
+import { useEnLigne } from '@/hooks/useEnLigne';
+import { useInstantaneHorsLigne } from '@/hooks/useInstantaneHorsLigne';
 import { supabase } from '@/integrations/supabase/client';
 import { createStudentAccount, createTeacherAccount } from '@/lib/accountUtils';
 import { fetchAllRows } from '@/lib/fetchAllRows';
@@ -608,6 +610,12 @@ interface SchoolContextType {
   // Loading grades
   gradesLoading: boolean;
 
+  /**
+   * Date ISO des données réinstallées depuis l'appareil, hors connexion.
+   * `null` quand elles viennent du réseau.
+   */
+  instantaneLe: string | null;
+
   // Données Supabase — notes, matières, périodes
   gradePeriods: GradePeriod[];
   /** Classes concernées par chaque période — par défaut toutes, personnalisable (ex: examen interne réservé à certaines classes). */
@@ -797,6 +805,7 @@ const buildStudentUniqueIdPreview = (existingCount: number): string => {
 export const SchoolProvider = ({ children }: { children: ReactNode }) => {
   const { currentYear } = useSchoolYear();
   const { school, accountRole, isSchoolAccessBlocked } = useAuth();
+  const enLigne = useEnLigne();
 
   // schoolId provient exclusivement de school.id, chargé via get_my_school_id()
   // dans AuthContext (fonction SECURITY DEFINER qui bypasse le bug RLS circulaire
@@ -843,6 +852,9 @@ export const SchoolProvider = ({ children }: { children: ReactNode }) => {
   // à une année scolaire — la table `classes` n'a pas de colonne academic_year_id).
   useEffect(() => {
     if (!schoolId) { setClasses([]); return; }
+    // Hors connexion, la requête n'aboutirait pas et le voyant de chargement
+    // resterait allumé pour toujours : l'instantané prend le relais.
+    if (!enLigne) { setClassesLoading(false); return; }
     setClassesLoading(true);
     supabase
       .from('classes')
@@ -861,7 +873,7 @@ export const SchoolProvider = ({ children }: { children: ReactNode }) => {
         }
         setClassesLoading(false);
       });
-  }, [schoolId]);
+  }, [schoolId, enLigne]);
 
   // ── Chargement élèves depuis Supabase ──────────────────────────────────────
   // Table `student_profiles` : données permanentes de l'élève.
@@ -874,6 +886,7 @@ export const SchoolProvider = ({ children }: { children: ReactNode }) => {
       setStudentEnrollments([]);
       return;
     }
+    if (!enLigne) { setStudentsLoading(false); return; }
     setStudentsLoading(true);
 
     Promise.all([
@@ -907,7 +920,7 @@ export const SchoolProvider = ({ children }: { children: ReactNode }) => {
 
       setStudentsLoading(false);
     });
-  }, [schoolId]);
+  }, [schoolId, enLigne]);
 
   // ── Vue combinée : élèves de l'année courante ──────────────────────────────
   // Filtre les inscriptions dont academicYearLabel correspond à currentYear.id
@@ -954,6 +967,7 @@ export const SchoolProvider = ({ children }: { children: ReactNode }) => {
       setTeacherEnrollmentRecords([]);
       return;
     }
+    if (!enLigne) { setTeachersLoading(false); return; }
     setTeachersLoading(true);
     Promise.all([
       fetchAllRows('teacher_profiles', q => q
@@ -994,7 +1008,7 @@ export const SchoolProvider = ({ children }: { children: ReactNode }) => {
       }
       setTeachersLoading(false);
     });
-  }, [schoolId]);
+  }, [schoolId, enLigne]);
 
   // ── Vue combinée : enseignants de l'année courante ─────────────────────────
   // Filtre les enrollments dont academicYearLabel === currentYear.id ("2024-2025").
@@ -1041,6 +1055,8 @@ export const SchoolProvider = ({ children }: { children: ReactNode }) => {
       setSubjectSettings([]);
       return;
     }
+
+    if (!enLigne) { setGradesLoading(false); return; }
 
     let cancelled = false;
     setGradesLoading(true);
@@ -1193,7 +1209,7 @@ export const SchoolProvider = ({ children }: { children: ReactNode }) => {
     })();
 
     return () => { cancelled = true; };
-  }, [schoolId, currentYear?.id]);
+  }, [schoolId, currentYear?.id, enLigne]);
 
   // ── Chargement filières (modèles + assignation/choix de l'année courante) ──
   useEffect(() => {
@@ -1207,6 +1223,7 @@ export const SchoolProvider = ({ children }: { children: ReactNode }) => {
       setNiveauDefaultSubjects([]);
       return;
     }
+    if (!enLigne) return;
 
     let cancelled = false;
 
@@ -1339,7 +1356,7 @@ export const SchoolProvider = ({ children }: { children: ReactNode }) => {
     })();
 
     return () => { cancelled = true; };
-  }, [schoolId, currentYear?.id, accountRole, isSchoolAccessBlocked]);
+  }, [schoolId, currentYear?.id, accountRole, isSchoolAccessBlocked, enLigne]);
 
   // ── Chargement élémentaire (CI-CM2) — catalogue de barèmes + lignes matérialisées ──
   useEffect(() => {
@@ -1350,6 +1367,7 @@ export const SchoolProvider = ({ children }: { children: ReactNode }) => {
       setElementaryLineSettings([]);
       return;
     }
+    if (!enLigne) return;
 
     let cancelled = false;
 
@@ -1408,7 +1426,64 @@ export const SchoolProvider = ({ children }: { children: ReactNode }) => {
     })();
 
     return () => { cancelled = true; };
-  }, [schoolId, accountRole, isSchoolAccessBlocked]);
+  }, [schoolId, accountRole, isSchoolAccessBlocked, enLigne]);
+
+  // ── Instantané hors connexion ──────────────────────────────────────────────
+  // Les écrans de l'école lisent ce contexte, jamais Supabase directement :
+  // garder ces tranches suffit à rendre tout le tableau de bord consultable
+  // sans réseau. Rien ne s'y enregistre hors connexion — la consultation seule
+  // est possible.
+  const tranchesHorsLigne = useMemo(() => ({
+    classes, studentRecords, studentEnrollments,
+    teacherRecords, teacherEnrollmentRecords,
+    gradePeriods, periodClasses, subjects, gradesState, subjectSettings,
+    filieres, filiereMandatorySubjects, filiereFacultativeSubjects,
+    filiereChoiceGroups, classFiliereAssignments, filiereStudentChoices,
+    niveauDefaultSubjects,
+    elementaryDefaultLines, elementaryClassLines, elementaryGrades, elementaryLineSettings,
+  }), [
+    classes, studentRecords, studentEnrollments,
+    teacherRecords, teacherEnrollmentRecords,
+    gradePeriods, periodClasses, subjects, gradesState, subjectSettings,
+    filieres, filiereMandatorySubjects, filiereFacultativeSubjects,
+    filiereChoiceGroups, classFiliereAssignments, filiereStudentChoices,
+    niveauDefaultSubjects,
+    elementaryDefaultLines, elementaryClassLines, elementaryGrades, elementaryLineSettings,
+  ]);
+
+  const appliquerInstantane = useCallback((t: typeof tranchesHorsLigne) => {
+    setClasses(t.classes);
+    setStudentRecords(t.studentRecords);
+    setStudentEnrollments(t.studentEnrollments);
+    setTeacherRecords(t.teacherRecords);
+    setTeacherEnrollmentRecords(t.teacherEnrollmentRecords);
+    setGradePeriods(t.gradePeriods);
+    setPeriodClasses(t.periodClasses);
+    setSubjects(t.subjects);
+    setGradesState(t.gradesState);
+    setSubjectSettings(t.subjectSettings);
+    setFilieres(t.filieres);
+    setFiliereMandatorySubjects(t.filiereMandatorySubjects);
+    setFiliereFacultativeSubjects(t.filiereFacultativeSubjects);
+    setFiliereChoiceGroups(t.filiereChoiceGroups);
+    setClassFiliereAssignments(t.classFiliereAssignments);
+    setFiliereStudentChoices(t.filiereStudentChoices);
+    setNiveauDefaultSubjects(t.niveauDefaultSubjects);
+    setElementaryDefaultLines(t.elementaryDefaultLines);
+    setElementaryClassLines(t.elementaryClassLines);
+    setElementaryGrades(t.elementaryGrades);
+    setElementaryLineSettings(t.elementaryLineSettings);
+  }, []);
+
+  // `pret` : on n'enregistre qu'une fois tout chargé, sinon l'état vide du
+  // démarrage remplacerait un bon instantané par un tableau de bord désert.
+  const instantaneLe = useInstantaneHorsLigne(
+    'ecole-instantane',
+    tranchesHorsLigne,
+    appliquerInstantane,
+    !!schoolId && !classesLoading && !studentsLoading && !teachersLoading && !gradesLoading,
+  );
+
 
   // ─────────────────────────────────────────────────────────────────────────
   // CLASSES — fonctions Supabase
@@ -3034,6 +3109,7 @@ export const SchoolProvider = ({ children }: { children: ReactNode }) => {
   return (
     <SchoolContext.Provider value={{
       classesLoading, studentsLoading, teachersLoading, gradesLoading,
+      instantaneLe,
       classes,
       studentRecords, studentEnrollments,
       teacherRecords, teacherEnrollmentRecords,
