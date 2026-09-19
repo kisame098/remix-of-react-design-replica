@@ -11,6 +11,34 @@ import { join } from 'node:path';
 const RACINE = process.cwd();
 const lire = (chemin: string) => readFileSync(join(RACINE, chemin), 'utf8');
 
+/**
+ * Arguments de chaque appel `nom( … )`, en respectant les parenthèses et les
+ * apostrophes imbriquées — une expression régulière n'y suffit pas.
+ */
+const extraireAppels = (source: string, nom: string): string[][] => {
+  const appels: string[][] = [];
+  let depuis = 0;
+  for (;;) {
+    const debut = source.indexOf(`${nom}(`, depuis);
+    if (debut === -1) return appels;
+    let profondeur = 0, dansTexte = false, courant = '';
+    const args: string[] = [];
+    let i = debut + nom.length;
+    for (; i < source.length; i++) {
+      const c = source[i];
+      if (c === "'") dansTexte = !dansTexte;
+      if (!dansTexte) {
+        if (c === '(') { profondeur++; if (profondeur === 1) continue; }
+        if (c === ')') { profondeur--; if (profondeur === 0) { args.push(courant.trim()); break; } }
+        if (c === ',' && profondeur === 1) { args.push(courant.trim()); courant = ''; continue; }
+      }
+      courant += c;
+    }
+    appels.push(args);
+    depuis = i;
+  }
+};
+
 describe('SQL — docs/sql/notifications_push.sql', () => {
   const sql = lire('docs/sql/notifications_push.sql');
 
@@ -44,6 +72,7 @@ describe('SQL — docs/sql/notifications_push.sql', () => {
     for (const nom of [
       'notifier_nouvelle_note', 'notifier_nouvelle_note_elementaire',
       'notifier_bulletin_publie', 'notifier_paiement_recu',
+      'notifier_presence_eleve', 'notifier_presences_validees',
     ]) {
       const debut = sql.indexOf(`create or replace function public.${nom}()`);
       expect(debut, nom).toBeGreaterThan(-1);
@@ -54,25 +83,40 @@ describe('SQL — docs/sql/notifications_push.sql', () => {
     }
   });
 
-  it('la file ne reçoit jamais de valeur de note ni de montant', () => {
-    const charges = [...sql.matchAll(/jsonb_build_object\(([^)]*(?:\([^)]*\))?[^)]*)\)/g)].map(m => m[1]);
-    const cles = charges.flatMap(c => [...c.matchAll(/'([a-z_]+)'\s*,/g)].map(m => m[1]));
-    // Garde contre un test creux : les quatre charges doivent bien être lues.
-    expect(cles.sort()).toEqual(['matiere', 'matiere', 'mois', 'periode', 'type']);
-    for (const cle of cles) {
-      expect(['matiere', 'periode', 'type', 'mois'], `clé « ${cle} »`).toContain(cle);
+  it('la file ne reçoit jamais de valeur de note, de montant, de nom ni de justification', () => {
+    // Avant la planification : au-delà, les jsonb_build_object sont des en-têtes HTTP.
+    const appels = extraireAppels(sql.slice(0, sql.indexOf('-- ─── 5. Planification')), 'jsonb_build_object');
+    // Garde contre un test creux — et contre une charge ajoutée sans contrôle :
+    // notes ×2, bulletin, paiement, présence (envoi et correction).
+    expect(appels).toHaveLength(6);
+
+    const AUTORISEES = ['date', 'heure', 'matiere', 'mois', 'periode', 'session', 'statut', 'type'];
+    const cles = new Set<string>();
+    for (const args of appels) {
+      args.forEach((arg, i) => {
+        if (i % 2 === 0) {
+          const cle = arg.replace(/'/g, '');
+          expect(AUTORISEES, `clé « ${cle} »`).toContain(cle);
+          cles.add(cle);
+        } else {
+          // La VALEUR ne doit venir d'aucune colonne sensible.
+          expect(arg, `valeur « ${arg} »`).not.toMatch(
+            /NEW\.(amount|note|devoir|composition|points|justification|is_justified)|first_name|last_name|full_name|display_name/i);
+        }
+      });
     }
-    expect(sql).not.toMatch(/jsonb_build_object\([^)]*(NEW\.(amount|note|devoir|composition|points))/i);
+    expect([...cles].sort()).toEqual(AUTORISEES);
   });
 
   it('la notification arrive en quelques secondes, pas en minutes', () => {
     // Une note annoncée cinq minutes après coup a perdu son intérêt : le délai
     // ne sert qu'à regrouper des saisies quasi simultanées.
     const delais = [...sql.matchAll(/send_after\)\s*select[\s\S]*?now\(\) \+ interval '(\d+) (second|minute)s?'/g)];
-    expect(delais.length).toBe(4);
+    expect(delais.length).toBe(6);   // notes ×2, bulletin, paiement, présence ×2
     for (const [, valeur, unite] of delais) {
       const secondes = Number(valeur) * (unite === 'minute' ? 60 : 1);
-      expect(secondes).toBeLessThanOrEqual(30);
+      // 45 s au plus : le recul des présences, qui laisse corriger une erreur d'appel.
+      expect(secondes).toBeLessThanOrEqual(45);
     }
   });
 
@@ -89,6 +133,32 @@ describe('SQL — docs/sql/notifications_push.sql', () => {
 
   it('un bulletin republié ne renotifie pas : déclencheur à l\'insertion seulement', () => {
     expect(sql).toMatch(/create trigger notifier_bulletin_publie\s+after insert on public\.published_bulletins/i);
+  });
+
+  it('présences : personne n\'est prévenu pendant l\'appel, seulement une fois validé', () => {
+    // Le professeur coche, se corrige, hésite : rien ne part avant « Saisie complète ».
+    expect(sql).toMatch(/if v_valide then\s+perform public\.reconcilier_presence/);
+    expect(sql).toMatch(/coalesce\(OLD\.student_attendance_complete, false\) = false\s+and coalesce\(NEW\.student_attendance_complete, false\) = true/);
+    expect(sql).toMatch(/after update of student_attendance_complete on public\.attendance_sessions/);
+  });
+
+  it('présences : seuls absent, retard et renvoi notifient — jamais « présent »', () => {
+    expect(sql).toMatch(/if p_statut in \('absent', 'late', 'expelled'\) then/);
+    expect(sql).toMatch(/if TG_OP = 'INSERT' and NEW\.status = 'present' then return NEW/);
+  });
+
+  it('présences : une erreur d\'appel corrigée avant l\'envoi est retirée de la file', () => {
+    expect(sql).toMatch(/delete from public\.notification_queue q[\s\S]{0,400}q\.sent_at is null and q\.claimed_at is null/);
+  });
+
+  it('présences : corrigée APRÈS l\'envoi, la famille reçoit une correction', () => {
+    expect(sql).toMatch(/jsonb_build_object\('statut', 'corrige'/);
+    expect(sql).toMatch(/n\.sent_at is not null and n\.payload->>'session' = p_session::text/);
+  });
+
+  it('présences : la contrainte de la file accepte le nouveau genre, y compris sur une base existante', () => {
+    expect(sql).toMatch(/drop constraint if exists notification_queue_kind_check/);
+    expect(sql.match(/kind in \('grade', 'bulletin', 'payment', 'attendance'\)/g)).toHaveLength(2);
   });
 
   it('une annulation de paiement ne notifie pas', () => {

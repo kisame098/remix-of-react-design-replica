@@ -94,14 +94,85 @@ describe('paiements', () => {
   });
 });
 
+describe('présences : absence, retard, renvoi', () => {
+  const AUJOURDHUI = new Date('2026-10-09T10:00:00Z');
+  const pres = (statut: string, extra: Record<string, unknown> = {}) =>
+    ligne('attendance', { statut, matiere: 'Mathématiques', heure: '08:00', date: '2026-10-09', session: 's1', ...extra });
+
+  it('absence : nomme le cours et l\'heure, sans date quand c\'est aujourd\'hui', () => {
+    const [notif] = composerNotifications([pres('absent')], AUJOURDHUI);
+    expect(notif.title).toBe('Absence enregistrée');
+    expect(notif.body).toBe('Absence en Mathématiques (08:00).');
+    expect(notif.url).toBe('/portail/presences');
+    expect(notif.tag).toBe('presences');
+  });
+
+  it('retard et renvoi ont leur propre libellé', () => {
+    expect(composerNotifications([pres('late')], AUJOURDHUI)[0].body).toBe('Retard en Mathématiques (08:00).');
+    const [renvoi] = composerNotifications([pres('expelled')], AUJOURDHUI);
+    expect(renvoi.title).toBe('Renvoi enregistré');
+    expect(renvoi.body).toBe('Renvoi du cours en Mathématiques (08:00).');
+  });
+
+  it('une saisie faite un autre jour dit la date, pour que personne ne se trompe de séance', () => {
+    const [notif] = composerNotifications([pres('absent', { date: '2026-10-08' })], AUJOURDHUI);
+    expect(notif.body).toBe('Absence en Mathématiques (08:00), le 08/10.');
+  });
+
+  it('cours sans matière ni heure : reste lisible', () => {
+    const [notif] = composerNotifications([pres('absent', { matiere: null, heure: null })], AUJOURDHUI);
+    expect(notif.body).toBe('Absence à un cours.');
+  });
+
+  it('correction : dit que la présence est rétablie', () => {
+    const [notif] = composerNotifications([pres('corrige')], AUJOURDHUI);
+    expect(notif.title).toBe('Présence corrigée');
+    expect(notif.body).toBe('Correction : la présence en Mathématiques (08:00) est finalement rétablie.');
+  });
+
+  it('plusieurs cours le même jour : UNE notification, avec le décompte', () => {
+    const [notif] = composerNotifications([
+      pres('absent'), pres('absent', { matiere: 'Français' }), pres('late', { matiere: 'SVT' }),
+    ], AUJOURDHUI);
+    expect(notif.title).toBe('Présences enregistrées');
+    expect(notif.body).toBe('Présences : 2 absences et 1 retard (Mathématiques, Français et SVT).');
+  });
+
+  it('une absence et sa correction dans la même série : les deux sont annoncées', () => {
+    const [notif] = composerNotifications([pres('absent'), pres('corrige', { matiere: 'SVT' })], AUJOURDHUI);
+    expect(notif.body).toBe('Présences : 1 absence et 1 correction (Mathématiques et SVT).');
+  });
+
+  it('un statut inconnu est ignoré plutôt que d\'inventer un texte', () => {
+    const [notif] = composerNotifications([pres('present'), pres('absent')], AUJOURDHUI);
+    expect(notif.body).toBe('Absence en Mathématiques (08:00).');
+  });
+
+  it('une série sans aucun statut lisible ne produit AUCUNE notification', () => {
+    expect(composerNotifications([pres('present'), pres('n-importe-quoi')], AUJOURDHUI)).toEqual([]);
+    expect(composerNotifications([ligne('attendance', {})], AUJOURDHUI)).toEqual([]);
+  });
+
+  it('le nom de l\'élève n\'apparaît jamais, même glissé dans la charge', () => {
+    const notifs = composerNotifications([pres('absent', { nom: 'Awa Diop', eleve: 'Awa Diop', justification: 'malade' })], AUJOURDHUI);
+    expect(`${notifs[0].title} ${notifs[0].body}`).not.toMatch(/Awa|Diop|malade/);
+  });
+
+  it('une date mal formée ne fait pas planter le texte', () => {
+    const [notif] = composerNotifications([pres('absent', { date: 'hier' })], AUJOURDHUI);
+    expect(notif.body).toBe('Absence en Mathématiques (08:00).');
+  });
+});
+
 describe('regroupement par genre', () => {
-  it('trois genres mêlés : trois notifications, dans un ordre stable', () => {
+  it('quatre genres mêlés : quatre notifications, dans un ordre stable', () => {
     const notifs = composerNotifications([
+      ligne('attendance', { statut: 'absent', matiere: 'SVT' }),
       ligne('payment', { type: 'inscription' }),
       ligne('bulletin', { periode: 'S1' }),
       ligne('grade', { matiere: 'Maths' }),
     ]);
-    expect(notifs.map(x => x.tag)).toEqual(['notes', 'bulletin', 'paiements']);
+    expect(notifs.map(x => x.tag)).toEqual(['notes', 'bulletin', 'paiements', 'presences']);
   });
 
   it('aucune ligne : aucune notification', () => {
