@@ -65,6 +65,23 @@ describe('SQL — docs/sql/notifications_push.sql', () => {
     expect(sql).not.toMatch(/jsonb_build_object\([^)]*(NEW\.(amount|note|devoir|composition|points))/i);
   });
 
+  it('la notification arrive en quelques secondes, pas en minutes', () => {
+    // Une note annoncée cinq minutes après coup a perdu son intérêt : le délai
+    // ne sert qu'à regrouper des saisies quasi simultanées.
+    const delais = [...sql.matchAll(/send_after\)\s*select[\s\S]*?now\(\) \+ interval '(\d+) (second|minute)s?'/g)];
+    expect(delais.length).toBe(4);
+    for (const [, valeur, unite] of delais) {
+      const secondes = Number(valeur) * (unite === 'minute' ? 60 : 1);
+      expect(secondes).toBeLessThanOrEqual(30);
+    }
+  });
+
+  it('la tâche planifiée passe toutes les quelques secondes, pas une fois par minute', () => {
+    expect(sql).toMatch(/'senclass-notifications',\s*'(\d+) seconds'/);
+    const [, secondes] = /'senclass-notifications',\s*'(\d+) seconds'/.exec(sql)!;
+    expect(Number(secondes)).toBeLessThanOrEqual(15);
+  });
+
   it('une note ne notifie que lorsqu\'une valeur APPARAÎT, pas à chaque correction', () => {
     expect(sql).toMatch(/OLD\.devoir1 is null and NEW\.devoir1 is not null/);
     expect(sql).toMatch(/OLD\.points_obtenus is null/);

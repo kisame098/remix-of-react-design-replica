@@ -1,7 +1,7 @@
 // ═══════════════════════════════════════════════════════════════════════════
 // send-notifications — envoie les notifications push en attente.
 //
-// Appelée chaque minute par pg_cron (voir docs/sql/notifications_push.sql),
+// Appelée toutes les 10 secondes par pg_cron (voir docs/sql/notifications_push.sql),
 // seulement quand la file contient quelque chose — ou tant que les clés VAPID
 // n'existent pas encore. Elle n'est pas destinée aux navigateurs : `verify_jwt`
 // est désactivé (pg_net n'a pas de jeton utilisateur) et l'accès est protégé

@@ -195,7 +195,7 @@ L'élève est prévenu sur son téléphone, application fermée, quand : une not
 
 **Ce que voit l'élève.** Profil → carte *Notifications* → « Activer ». Le navigateur demande alors son autorisation — jamais avant, toujours après un clic. Sur iPhone, le site doit d'abord être ajouté à l'écran d'accueil (iOS 16.4 minimum).
 
-**Ce qui est envoyé.** Jamais de valeur de note ni de montant : « Nouvelle note en Mathématiques », « Bulletin (1er trimestre) disponible ». Un téléphone posé sur une table ne doit rien révéler. Quarante notes saisies d'un coup, ou vingt minutes de saisie, donnent **une seule** notification, cinq minutes après la dernière saisie.
+**Ce qui est envoyé.** Jamais de valeur de note ni de montant : « Nouvelle note en Mathématiques », « Bulletin (1er trimestre) disponible ». Un téléphone posé sur une table ne doit rien révéler. La notification arrive en **quelques secondes** (une note : ~20 s ; bulletin ou paiement : ~10 s). Plusieurs notes saisies à quelques secondes d'écart pour le même élève donnent **une seule** notification.
 
 **Un appareil, plusieurs comptes.** Un parent qui garde trois enfants sur son téléphone reçoit les trois, à condition que chaque compte active ses notifications (une fois, depuis son profil). Se déconnecter retire uniquement les notifications du compte qui sort ; si le réseau manque à ce moment, l'appareil se désabonne lui-même, par précaution.
 
@@ -213,7 +213,7 @@ Il n'y a **aucun secret à poser** dans « Edge Functions → Secrets ».
 
 ### Vérifier
 
-- Supabase → Edge Functions → `send-notifications` → Logs : une ligne par minute où quelque chose était à envoyer.
+- Supabase → Edge Functions → `send-notifications` → Logs : un appel dès que quelque chose est à envoyer (la tâche passe toutes les 10 secondes).
 - `select * from cron.job_run_details order by start_time desc limit 5;` : la tâche tourne sans erreur.
 - `select kind, sent_at, attempts from notification_queue order by created_at desc limit 20;` : les lignes passent à `sent_at` renseigné.
 
