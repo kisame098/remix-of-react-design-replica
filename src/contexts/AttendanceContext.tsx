@@ -14,6 +14,8 @@ import { isDateInSchoolYear } from '@/lib/schoolYearBounds';
 import { getSessionEntryStatus as computeSessionEntryStatus, type SessionEntryStatus } from '@/lib/attendanceStatus';
 import { useAuth } from '@/contexts/AuthContext';
 import { useSchoolYear } from '@/contexts/SchoolYearContext';
+import { useEnLigne } from '@/hooks/useEnLigne';
+import { useInstantaneHorsLigne } from '@/hooks/useInstantaneHorsLigne';
 
 // ─── Mappers DB → Types ───────────────────────────────────────────────────────
 
@@ -69,6 +71,9 @@ interface AttendanceContextType {
   lockedMonths:       string[];
   attendanceLoading:  boolean;
 
+  /** Date ISO des données réinstallées depuis l'appareil, hors connexion. */
+  instantaneLe: string | null;
+
   // Sessions
   ensureSession: (event: ScheduleEvent, date: string) => Promise<string>;
 
@@ -104,6 +109,7 @@ const AttendanceContext = createContext<AttendanceContextType | undefined>(undef
 export const AttendanceProvider = ({ children }: { children: ReactNode }) => {
   const { school } = useAuth();
   const { currentYear } = useSchoolYear();
+  const enLigne = useEnLigne();
   const schoolId: string | null = school?.id ?? null;
 
   const [sessions,          setSessions]          = useState<AttendanceSession[]>([]);
@@ -129,6 +135,10 @@ export const AttendanceProvider = ({ children }: { children: ReactNode }) => {
       loadedStudentSessions.current = new Set();
       return;
     }
+
+    // Hors connexion, la requête n'aboutirait pas et le voyant resterait
+    // allumé : l'instantané enregistré prend le relais.
+    if (!enLigne) { setAttendanceLoading(false); return; }
 
     let cancelled = false;
     setAttendanceLoading(true);
@@ -181,7 +191,7 @@ export const AttendanceProvider = ({ children }: { children: ReactNode }) => {
     })();
 
     return () => { cancelled = true; };
-  }, [schoolId, currentYear?.id]);
+  }, [schoolId, currentYear?.id, enLigne]);
 
   // ── Sessions ──────────────────────────────────────────────────────────────
 
@@ -661,6 +671,23 @@ export const AttendanceProvider = ({ children }: { children: ReactNode }) => {
 
   // ─────────────────────────────────────────────────────────────────────────
 
+  // ── Instantané hors connexion ──────────────────────────────────────────────
+  // Les écrans lisent ce contexte, jamais Supabase : garder ces tranches rend
+  // l'écran consultable sans réseau. On n'enregistre qu'une fois le chargement
+  // terminé, sinon l'état vide du démarrage effacerait l'instantané.
+  const tranchesHorsLigne = useMemo(() => ({ sessions, studentAtts, teacherAtts, lockedMonths }), [sessions, studentAtts, teacherAtts, lockedMonths]);
+
+  const appliquerInstantane = useCallback((t: typeof tranchesHorsLigne) => {
+    setSessions(t.sessions);
+    setStudentAtts(t.studentAtts);
+    setTeacherAtts(t.teacherAtts);
+    setLockedMonths(t.lockedMonths);
+  }, []);
+
+  const instantaneLe = useInstantaneHorsLigne(
+    'presences-instantane', tranchesHorsLigne, appliquerInstantane, !!schoolId && !!currentYear && !attendanceLoading,
+  );
+
   return (
     <AttendanceContext.Provider value={{
       sessions,
@@ -668,6 +695,7 @@ export const AttendanceProvider = ({ children }: { children: ReactNode }) => {
       teacherAttendances: teacherAtts,
       lockedMonths,
       attendanceLoading,
+      instantaneLe,
       ensureSession,
       ensureStudentAttendances,
       updateStudentAttendance,

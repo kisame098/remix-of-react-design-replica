@@ -181,7 +181,9 @@ Le technique fait entrer le site dans la course. Ce qui fait passer devant EduSe
 
 **Comment c'est rangé, et pourquoi.** Les données sont enregistrées sur l'appareil **par compte** (`src/lib/cacheHorsLigne.ts`), et **effacées à la déconnexion**. Le portail permet plusieurs comptes sur un même téléphone — une mère et ses enfants : sans ce cloisonnement, un élève verrait hors connexion les données d'un autre. C'est aussi pourquoi rien ne passe par le cache du service worker, qui est rangé par adresse et non par utilisateur.
 
-Trois écrans du portail ne sont pas encore disponibles hors connexion : le choix des matières optionnelles (c'est une action, elle exige le réseau), le détail d'une matière, et les notes de l'élémentaire. Le tableau de bord des écoles s'ouvre hors connexion mais ses écrans restent à convertir.
+**Côté écoles.** Le tableau de bord est consultable de la même manière : élèves, professeurs, classes, notes, paiements, présences, emploi du temps et salaires. Les écrans de l'école ne parlent pas à Supabase — ils lisent les contextes — donc c'est un instantané de chaque contexte qui est gardé (`src/hooks/useInstantaneHorsLigne.ts`), et un seul bandeau en haut du tableau de bord annonce la date. Cet instantané n'est réinstallé **que** hors connexion : avec du réseau, rien ne change, un directeur ne doit jamais voir réapparaître un élève supprimé.
+
+Seule la consultation fonctionne sans réseau ; rien ne s'enregistre. Un seul écran du portail reste hors de portée : le choix des matières optionnelles, qui est une action et exige donc la connexion.
 
 **Mises à jour :** le bandeau « Nouvelle version disponible » propose la mise à jour, il ne l'impose jamais. Recharger d'office ferait perdre un encaissement en cours de saisie.
 

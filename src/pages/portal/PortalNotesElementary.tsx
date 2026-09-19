@@ -1,6 +1,8 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
+import { useDonneesHorsLigne } from '@/hooks/useDonneesHorsLigne';
+import { BandeauDonneesEnregistrees } from '@/components/BandeauDonneesEnregistrees';
 import { cn } from '@/lib/utils';
 import { Loader2, CalendarDays, FileDown, ChevronRight } from 'lucide-react';
 import { generateElementaryBulletinsPdf, type ElementaryBulletinPdfData } from '@/lib/elementaryBulletinPdf';
@@ -45,68 +47,57 @@ const REGISTRE_ORDER: ElementaryRegistre[] = ['COMPETENCE', 'RESSOURCES'];
 
 export default function PortalNotesElementary() {
   const { schoolAccount } = useAuth();
+  const eId = schoolAccount?.studentEnrollmentId ?? null;
+  const sId = schoolAccount?.schoolId ?? null;
 
-  const [periods, setPeriods]   = useState<Period[]>([]);
-  const [rows, setRows]         = useState<DisciplineRow[]>([]);
   const [selId, setSelId]       = useState<string | null>(null);
-  const [loading, setLoading]   = useState(true);
-
-  // Bulletins publiés par l'administration — instantanés figés. La RLS ne
-  // laisse jamais un élève lire ceux des autres.
-  const [bulletins, setBulletins] = useState<{ periodId: string; data: ElementaryBulletinPdfData }[]>([]);
   const [downloading, setDownloading] = useState(false);
 
-  useEffect(() => {
-    const eId = schoolAccount?.studentEnrollmentId;
-    const sId = schoolAccount?.schoolId;
-    if (!eId || !sId) { setLoading(false); return; }
+  const { donnees, chargement: loading, enregistreLe } = useDonneesHorsLigne<{
+    periods: Period[];
+    rows: DisciplineRow[];
+    // Bulletins publiés par l'administration — instantanés figés. La RLS ne
+    // laisse jamais un élève lire ceux des autres.
+    bulletins: { periodId: string; data: ElementaryBulletinPdfData }[];
+  }>(
+    'portail-notes-elementaire',
+    async () => {
+      const [pR, lR, gR, xR, pcR, seR, bR] = await Promise.all([
+        supabase.from('grade_periods').select('id,name,ordering').eq('school_id', sId!).order('ordering'),
+        // RLS : l'élève ne voit que les disciplines de SA classe.
+        sb.from('elementary_class_lines').select('id,name,domaine,registre,point_max,period_id,ordering').order('ordering'),
+        sb.from('elementary_grades').select('line_id,points_obtenus').eq('student_enrollment_id', eId),
+        sb.from('elementary_student_line_settings').select('line_id,active').eq('student_enrollment_id', eId),
+        // Quelles périodes concernent SA classe : une école peut faire
+        // travailler le CI sur 2 trimestres et le CM2 sur 3.
+        supabase.from('grade_period_classes').select('period_id,class_id').eq('school_id', sId!),
+        supabase.from('student_enrollments').select('class_id').eq('id', eId!).maybeSingle(),
+        supabase.from('published_bulletins').select('period_id,data')
+          .eq('student_enrollment_id', eId!),
+      ]);
 
-    (async () => {
-      setLoading(true);
-      try {
-        const [pR, lR, gR, xR, pcR, seR, bR] = await Promise.all([
-          supabase.from('grade_periods').select('id,name,ordering').eq('school_id', sId).order('ordering'),
-          // RLS : l'élève ne voit que les disciplines de SA classe.
-          sb.from('elementary_class_lines').select('id,name,domaine,registre,point_max,period_id,ordering').order('ordering'),
-          sb.from('elementary_grades').select('line_id,points_obtenus').eq('student_enrollment_id', eId),
-          sb.from('elementary_student_line_settings').select('line_id,active').eq('student_enrollment_id', eId),
-          // Quelles périodes concernent SA classe : une école peut faire
-          // travailler le CI sur 2 trimestres et le CM2 sur 3.
-          supabase.from('grade_period_classes').select('period_id,class_id').eq('school_id', sId),
-          supabase.from('student_enrollments').select('class_id').eq('id', eId).maybeSingle(),
-          supabase.from('published_bulletins').select('period_id,data')
-            .eq('student_enrollment_id', eId),
-        ]);
+      // Ne garder que les périodes où sa classe est inscrite : lui montrer les
+      // autres n'afficherait que des écrans vides.
+      const periods = periodesDeLEleve(
+        (pR.data ?? []).map(p => ({ id: p.id, name: p.name, ordering: p.ordering })),
+        (pcR.data ?? []).map(l => ({ periodId: l.period_id, classId: l.class_id })),
+        seR.data?.class_id ?? null,
+      );
 
-        if (pR.data) {
-          // Ne garder que les périodes où sa classe est inscrite : lui montrer
-          // les autres n'afficherait que des écrans vides.
-          const siennes = periodesDeLEleve(
-            pR.data.map(p => ({ id: p.id, name: p.name, ordering: p.ordering })),
-            (pcR.data ?? []).map(l => ({ periodId: l.period_id, classId: l.class_id })),
-            seR.data?.class_id ?? null,
-          );
-          setPeriods(siennes);
-          setSelId(periodeParDefaut(siennes)?.id ?? null);
-        }
+      const pointsByLine = new Map<string, number>(
+        (gR.data ?? [])
+          .filter((g: { points_obtenus: number | null }) => g.points_obtenus != null)
+          .map((g: { line_id: string; points_obtenus: number }) => [g.line_id, Number(g.points_obtenus)]),
+      );
+      const exemptedLines = new Set<string>(
+        (xR.data ?? [])
+          .filter((s: { active: boolean }) => s.active === false)
+          .map((s: { line_id: string }) => s.line_id),
+      );
 
-        const pointsByLine = new Map<string, number>(
-          (gR.data ?? [])
-            .filter((g: { points_obtenus: number | null }) => g.points_obtenus != null)
-            .map((g: { line_id: string; points_obtenus: number }) => [g.line_id, Number(g.points_obtenus)]),
-        );
-        const exemptedLines = new Set<string>(
-          (xR.data ?? [])
-            .filter((s: { active: boolean }) => s.active === false)
-            .map((s: { line_id: string }) => s.line_id),
-        );
-
-        setBulletins((bR.data ?? []).map(row => ({
-          periodId: row.period_id,
-          data: row.data as unknown as ElementaryBulletinPdfData,
-        })));
-
-        setRows((lR.data ?? []).map((l: Record<string, unknown>) => ({
+      return {
+        periods,
+        rows: (lR.data ?? []).map((l: Record<string, unknown>) => ({
           id:       l.id as string,
           name:     l.name as string,
           domaine:  l.domaine as ElementaryDomaine,
@@ -115,11 +106,28 @@ export default function PortalNotesElementary() {
           periodId: l.period_id as string,
           points:   pointsByLine.get(l.id as string),
           exempted: exemptedLines.has(l.id as string),
-        })));
-      } catch { /**/ }
-      finally { setLoading(false); }
-    })();
-  }, [schoolAccount?.studentEnrollmentId, schoolAccount?.schoolId]);
+        })) as DisciplineRow[],
+        bulletins: (bR.data ?? []).map(row => ({
+          periodId: row.period_id,
+          data: row.data as unknown as ElementaryBulletinPdfData,
+        })),
+      };
+    },
+    [eId, sId],
+    !!eId && !!sId,
+  );
+
+  const periods   = useMemo(() => donnees?.periods ?? [], [donnees]);
+  const rows      = useMemo(() => donnees?.rows ?? [], [donnees]);
+  const bulletins = useMemo(() => donnees?.bulletins ?? [], [donnees]);
+
+  // La période affichée suit les données, mais un choix déjà fait par l'élève
+  // est conservé : un rafraîchissement au retour du réseau ne doit pas le
+  // ramener de force sur le trimestre en cours.
+  useEffect(() => {
+    setSelId(prev =>
+      prev && periods.some(p => p.id === prev) ? prev : periodeParDefaut(periods)?.id ?? null);
+  }, [periods]);
 
   const telechargerBulletin = async (bulletin: { data: ElementaryBulletinPdfData }) => {
     setDownloading(true);
@@ -159,6 +167,10 @@ export default function PortalNotesElementary() {
 
   return (
     <div className="min-h-screen bg-[#f0f4f8] pb-10">
+
+      <div className="px-4 pt-4">
+        <BandeauDonneesEnregistrees enregistreLe={enregistreLe} />
+      </div>
 
       {/* ── Moyenne générale ─────────────────────────────────────── */}
       <div className="px-4 pt-5">

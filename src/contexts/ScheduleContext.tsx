@@ -1,10 +1,12 @@
-import React, { createContext, useContext, useState, useCallback, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useCallback, useEffect, ReactNode, useMemo} from 'react';
 import { ScheduleEvent, ScheduleConflict } from '@/types/schedule';
 import { findScheduleConflicts, validateTimeRange } from '@/lib/scheduleConflicts';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { useSchoolYear } from '@/contexts/SchoolYearContext';
 import { fetchAllRows } from '@/lib/fetchAllRows';
+import { useEnLigne } from '@/hooks/useEnLigne';
+import { useInstantaneHorsLigne } from '@/hooks/useInstantaneHorsLigne';
 
 // ─── Helpers horaires ──────────────────────────────────────────────────────────
 // Réexporté : la détection de conflits vit dans src/lib/scheduleConflicts.ts
@@ -36,6 +38,9 @@ interface ScheduleContextType {
   events: ScheduleEvent[];
   scheduleLoading: boolean;
 
+  /** Date ISO des données réinstallées depuis l'appareil, hors connexion. */
+  instantaneLe: string | null;
+
   addEvent:    (event: Omit<ScheduleEvent, 'id'>) => Promise<{ success: boolean; conflicts: ScheduleConflict[]; event?: ScheduleEvent }>;
   updateEvent: (eventId: string, updates: Omit<ScheduleEvent, 'id'>) => Promise<{ success: boolean; conflicts: ScheduleConflict[] }>;
   deleteEvent: (eventId: string) => Promise<void>;
@@ -52,6 +57,7 @@ const ScheduleContext = createContext<ScheduleContextType | undefined>(undefined
 export const ScheduleProvider = ({ children }: { children: ReactNode }) => {
   const { school } = useAuth();
   const { currentYear } = useSchoolYear();
+  const enLigne = useEnLigne();
 
   const schoolId: string | null = school?.id ?? null;
 
@@ -65,6 +71,10 @@ export const ScheduleProvider = ({ children }: { children: ReactNode }) => {
       setEvents([]);
       return;
     }
+
+    // Hors connexion, la requête n'aboutirait pas et le voyant resterait
+    // allumé : l'instantané enregistré prend le relais.
+    if (!enLigne) { setScheduleLoading(false); return; }
 
     let cancelled = false;
     setScheduleLoading(true);
@@ -84,7 +94,7 @@ export const ScheduleProvider = ({ children }: { children: ReactNode }) => {
       });
 
     return () => { cancelled = true; };
-  }, [schoolId, currentYear?.id]);
+  }, [schoolId, currentYear?.id, enLigne]);
 
   // ── Détection de conflits (V2 — logique groupe-aware) ────────────────────
   const checkOverlap = useCallback(
@@ -203,9 +213,24 @@ export const ScheduleProvider = ({ children }: { children: ReactNode }) => {
     [events]
   );
 
+  // ── Instantané hors connexion ──────────────────────────────────────────────
+  // Les écrans lisent ce contexte, jamais Supabase : garder ces tranches rend
+  // l'écran consultable sans réseau. On n'enregistre qu'une fois le chargement
+  // terminé, sinon l'état vide du démarrage effacerait l'instantané.
+  const tranchesHorsLigne = useMemo(() => ({ events }), [events]);
+
+  const appliquerInstantane = useCallback((t: typeof tranchesHorsLigne) => {
+    setEvents(t.events);
+  }, []);
+
+  const instantaneLe = useInstantaneHorsLigne(
+    'emploi-instantane', tranchesHorsLigne, appliquerInstantane, !!schoolId && !!currentYear && !scheduleLoading,
+  );
+
   return (
     <ScheduleContext.Provider value={{
       events,
+      instantaneLe,
       scheduleLoading,
       addEvent,
       updateEvent,

@@ -27,13 +27,12 @@ const ecrans = readdirSync(join(RACINE, DOSSIER))
 const AVEC_CACHE = [
   'PortalAccueil.tsx', 'PortalNotes.tsx', 'PortalEmploi.tsx',
   'PortalPresences.tsx', 'PortalPaiements.tsx',
+  'PortalSubjectDetail.tsx', 'PortalNotesElementary.tsx',
 ];
 
 /** Écrans qui interrogent encore la base sans cache, avec leur raison. */
 const SANS_CACHE = new Map([
   ['PortalFiliereChoice.tsx', 'écran d\'action : choisir ses matières exige le réseau'],
-  ['PortalSubjectDetail.tsx', 'détail d\'une matière — à convertir'],
-  ['PortalNotesElementary.tsx', 'notes élémentaires — à convertir'],
 ]);
 
 describe('écrans du portail', () => {
@@ -80,5 +79,45 @@ describe('identité et cloisonnement', () => {
     // Le cache d'un service worker est rangé par adresse, pas par utilisateur.
     const motifs = [...lire('vite.config.ts').matchAll(/urlPattern:\s*([^,\n]+)/g)].map(m => m[1]);
     for (const m of motifs) expect(m, m).not.toMatch(/supabase/i);
+  });
+});
+
+// ════════════════════════════════════════════════════════════════════════════
+// Côté école : les écrans du tableau de bord lisent les contextes, jamais
+// Supabase directement. C'est donc l'instantané des contextes qui rend
+// l'application consultable sans réseau.
+// ════════════════════════════════════════════════════════════════════════════
+
+/** Contexte → voyant de chargement qu'il faut éteindre hors connexion. */
+const CONTEXTES = [
+  ['SchoolContext.tsx',     'setClassesLoading'],
+  ['PaymentContext.tsx',    'setPaymentLoading'],
+  ['AttendanceContext.tsx', 'setAttendanceLoading'],
+  ['ScheduleContext.tsx',   'setScheduleLoading'],
+  ['PayrollContext.tsx',    'setPayrollLoading'],
+] as const;
+
+describe('tableau de bord des écoles', () => {
+  it.each(CONTEXTES)('%s garde un instantané de ses données', (fichier) => {
+    expect(lire(join('src/contexts', fichier))).toContain('useInstantaneHorsLigne');
+  });
+
+  it.each(CONTEXTES)('%s éteint son voyant de chargement hors connexion', (fichier, voyant) => {
+    // Sans cette garde, la requête n'aboutit jamais et l'école reste devant
+    // une roue qui tourne à l'infini.
+    const code = lire(join('src/contexts', fichier));
+    expect(code).toMatch(new RegExp(`if \\(!enLigne\\) \\{ ${voyant}\\(false\\); return; \\}`));
+  });
+
+  it('l\'instantané n\'est jamais réinstallé tant qu\'il y a du réseau', () => {
+    // Sinon un élève supprimé réapparaîtrait sous les yeux du directeur.
+    expect(lire('src/hooks/useInstantaneHorsLigne.ts'))
+      .toMatch(/if \(!utilisateurId \|\| enLigne \|\| dejaReinstalle/);
+  });
+
+  it('le tableau de bord annonce la date des données affichées', () => {
+    const mise = lire('src/components/DashboardLayout.tsx');
+    expect(mise).toContain('BandeauDonneesEnregistrees');
+    expect(mise).toContain('instantaneLe');
   });
 });
