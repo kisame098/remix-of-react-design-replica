@@ -1,7 +1,9 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
+import { useDonneesHorsLigne } from '@/hooks/useDonneesHorsLigne';
+import { BandeauDonneesEnregistrees } from '@/components/BandeauDonneesEnregistrees';
 import { cn } from '@/lib/utils';
 import {
   GraduationCap, Loader2, Clock, BookOpen, CalendarDays,
@@ -20,40 +22,39 @@ import TeacherAccueil from './teacher/TeacherAccueil';
 export default function PortalAccueil() {
   const { schoolAccount, accountRole } = useAuth();
 
-  const [periods,     setPeriods]     = useState<GradePeriod[]>([]);
-  const [grades,      setGrades]      = useState<SubjectGrade[]>([]);
-  const [schedule,    setSchedule]    = useState<SlotEvent[]>([]);
-  const [attendances, setAttendances] = useState<Attendance[]>([]);
-  const [loading,     setLoading]     = useState(true);
+  // ── Chargement, avec ou sans réseau ─────────────────────────────────────
+  // Chaque chargement réussi est enregistré sur l'appareil, pour ce compte :
+  // l'élève retrouve son accueil sans connexion, daté à l'écran.
+  // Voir src/hooks/useDonneesHorsLigne.ts et src/lib/cacheHorsLigne.ts.
+  const eleveId = schoolAccount?.studentEnrollmentId ?? '';
+  const ecoleId = schoolAccount?.schoolId ?? '';
 
-  useEffect(() => {
-    if (accountRole !== 'student' || !schoolAccount?.studentEnrollmentId) {
-      setLoading(false);
-      return;
-    }
-    const eId = schoolAccount.studentEnrollmentId;
-    const sId = schoolAccount.schoolId;
+  const { donnees, chargement: loading, enregistreLe } = useDonneesHorsLigne<{
+    periods: GradePeriod[];
+    grades: SubjectGrade[];
+    schedule: SlotEvent[];
+    attendances: Attendance[];
+  }>(
+    'portail-accueil',
+    async () => {
+      const [pR, gR, schR, aR] = await Promise.all([
+        supabase.from('grade_periods').select('id,name,ordering').eq('school_id', ecoleId).order('ordering'),
+        supabase.from('grades')
+          .select('id,subject_id,devoir1,devoir2,devoir3,devoir4,devoir5,composition,note,subjects(id,name,coefficient,period_id)')
+          .eq('student_enrollment_id', eleveId),
+        supabase.from('schedule_events')
+          .select('id,day_index,start_time,end_time,subject_name,teacher_name,color')
+          .eq('school_id', ecoleId),
+        supabase.from('student_attendances')
+          .select('id,status,attendance_sessions(date,subject_name,start_time,end_time)')
+          .eq('student_enrollment_id', eleveId),
+      ]);
 
-    (async () => {
-      setLoading(true);
-      try {
-        const [pR, gR, schR, aR] = await Promise.all([
-          supabase.from('grade_periods').select('id,name,ordering').eq('school_id', sId).order('ordering'),
-          supabase.from('grades')
-            .select('id,subject_id,devoir1,devoir2,devoir3,devoir4,devoir5,composition,note,subjects(id,name,coefficient,period_id)')
-            .eq('student_enrollment_id', eId),
-          supabase.from('schedule_events')
-            .select('id,day_index,start_time,end_time,subject_name,teacher_name,color')
-            .eq('school_id', sId),
-          supabase.from('student_attendances')
-            .select('id,status,attendance_sessions(date,subject_name,start_time,end_time)')
-            .eq('student_enrollment_id', eId),
-        ]);
+      return {
+        periods: (pR.data ?? []).map(p => ({ id: p.id, name: p.name, ordering: p.ordering })),
 
-        if (pR.data) setPeriods(pR.data.map(p => ({ id: p.id, name: p.name, ordering: p.ordering })));
-
-        if (gR.data) setGrades(gR.data.filter(g => g.subjects).map(g => {
-          const s = g.subjects as { id:string; name:string; coefficient:number; period_id:string };
+        grades: (gR.data ?? []).filter(g => g.subjects).map(g => {
+          const s = g.subjects as { id: string; name: string; coefficient: number; period_id: string };
           return {
             id: g.id, subjectId: g.subject_id, subjectName: s.name,
             coefficient: s.coefficient ?? 1, periodId: s.period_id,
@@ -65,22 +66,30 @@ export default function PortalAccueil() {
             composition: g.composition,
             note:        g.note,
           };
-        }));
+        }),
 
-        if (schR.data) setSchedule(schR.data.map(e => ({
+        schedule: (schR.data ?? []).map(e => ({
           id: e.id, dayIndex: e.day_index, startTime: e.start_time, endTime: e.end_time,
           subjectName: e.subject_name, teacherName: e.teacher_name ?? '', color: e.color ?? '#3b82f6',
-        })));
+        })),
 
-        if (aR.data) setAttendances(aR.data.filter(a => a.attendance_sessions).map(a => {
-          const sess = a.attendance_sessions as { date:string; subject_name:string; start_time:string; end_time:string };
-          return { id: a.id, status: a.status, isJustified: false, justification: null,
-            date: sess.date, subjectName: sess.subject_name, startTime: sess.start_time, endTime: sess.end_time };
-        }));
-      } catch { /**/ }
-      finally { setLoading(false); }
-    })();
-  }, [schoolAccount?.studentEnrollmentId, schoolAccount?.schoolId, accountRole]);
+        attendances: (aR.data ?? []).filter(a => a.attendance_sessions).map(a => {
+          const sess = a.attendance_sessions as { date: string; subject_name: string; start_time: string; end_time: string };
+          return {
+            id: a.id, status: a.status, isJustified: false, justification: null,
+            date: sess.date, subjectName: sess.subject_name, startTime: sess.start_time, endTime: sess.end_time,
+          };
+        }),
+      };
+    },
+    [eleveId, ecoleId],
+    accountRole === 'student' && !!eleveId,
+  );
+
+  const periods     = donnees?.periods     ?? [];
+  const grades      = donnees?.grades      ?? [];
+  const schedule    = donnees?.schedule    ?? [];
+  const attendances = donnees?.attendances ?? [];
 
   // ── Computed ──────────────────────────────────────────────────────────────
 
@@ -126,6 +135,8 @@ export default function PortalAccueil() {
 
   return (
     <div className="px-4 pt-5 pb-6 space-y-5">
+
+      <BandeauDonneesEnregistrees enregistreLe={enregistreLe} />
 
       {/* ── Identity hero card ─────────────────────────────────────────── */}
       <div className="rounded-2xl overflow-hidden shadow-sm border border-blue-100">

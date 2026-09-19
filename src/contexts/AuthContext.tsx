@@ -5,6 +5,7 @@ import type { Profile, School } from '@/lib/supabase';
 import type { Json } from '@/integrations/supabase/types';
 import { getSubscriptionGate } from '@/lib/subscription';
 import { confirmationRequise, adresseRetourConfirmation } from '@/lib/confirmationEmail';
+import { enregistrer, lire, effacerUtilisateur } from '@/lib/cacheHorsLigne';
 
 // platform_admins n'est pas encore dans les types générés (table ajoutée
 // après la dernière génération) — cast localisé, comme ailleurs dans l'app
@@ -74,6 +75,16 @@ export interface SignUpParams {
   schoolName: string;
 }
 
+/** Ce qu'on garde sur l'appareil pour reconnaître le compte hors connexion. */
+interface IdentiteMemorisee {
+  profile: unknown;
+  school: unknown;
+  accountRole: AccountRole | null;
+  staffPermissions: string[];
+  schoolAccount: SchoolAccount | null;
+  isPlatformAdmin: boolean;
+}
+
 const AuthContext = createContext<AuthContextType | null>(null);
 
 // ─── Provider ──────────────────────────────────────────────────────────────────
@@ -96,8 +107,38 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   useEffect(() => { userIdRef.current = user?.id ?? null; }, [user]);
   useEffect(() => { roleConnuRef.current = accountRole !== null || isPlatformAdmin; }, [accountRole, isPlatformAdmin]);
 
+  // Dès que l'identité est connue, on la garde sur l'appareil : c'est elle qui
+  // permettra d'ouvrir l'application hors connexion sans rester bloqué.
+  useEffect(() => {
+    if (!user?.id) return;
+    if (!accountRole && !isPlatformAdmin) return;   // rien d'utile à mémoriser
+    enregistrer(user.id, 'identite', {
+      profile, school, accountRole, staffPermissions, schoolAccount, isPlatformAdmin,
+    });
+  }, [user?.id, profile, school, accountRole, staffPermissions, schoolAccount, isPlatformAdmin]);
+
+  // ── Identité gardée sur l'appareil ──────────────────────────────────────────
+  // Le rôle d'un utilisateur se lit dans la base. Sans réseau, l'application
+  // ne saurait plus s'il est directeur, élève ou professeur, et resterait
+  // bloquée sur « hors connexion ». On garde donc la dernière identité connue,
+  // par compte, effacée à la déconnexion.
+  const appliquerIdentite = useCallback((i: IdentiteMemorisee) => {
+    setProfile(i.profile as Profile | null);
+    setSchool(i.school as School | null);
+    setAccountRole(i.accountRole);
+    setStaffPermissions(i.staffPermissions ?? []);
+    setSchoolAccount(i.schoolAccount);
+    setIsPlatformAdmin(!!i.isPlatformAdmin);
+  }, []);
+
   // ── Chargement profil + rôle ────────────────────────────────────────────────
   const loadUserData = useCallback(async (userId: string) => {
+    // Hors connexion : inutile d'attendre des requêtes qui échoueront.
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+      const memorisee = lire<IdentiteMemorisee>(userId, 'identite');
+      if (memorisee) appliquerIdentite(memorisee.donnees);
+      return;
+    }
     try {
       // 1. Profil utilisateur
       const { data: profileData } = await supabase
@@ -221,9 +262,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         setStaffPermissions([]);
       }
     } catch {
-      // Non-bloquant
+      // Réseau défaillant : on repart de la dernière identité connue, sinon
+      // l'utilisateur resterait devant « Chargement du profil… ».
+      const memorisee = lire<IdentiteMemorisee>(userId, 'identite');
+      if (memorisee) appliquerIdentite(memorisee.donnees);
     }
-  }, []);
+  }, [appliquerIdentite]);
 
   // ── Initialisation ──────────────────────────────────────────────────────────
   useEffect(() => {
@@ -324,6 +368,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   // ── Déconnexion ─────────────────────────────────────────────────────────────
   const signOut = useCallback(async () => {
+    // Avant de perdre l'identifiant : effacer les données gardées sur
+    // l'appareil pour ce compte (le téléphone peut être partagé).
+    effacerUtilisateur(userIdRef.current);
     await supabase.auth.signOut();
     setProfile(null);
     setSchool(null);

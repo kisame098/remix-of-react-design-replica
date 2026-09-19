@@ -3,6 +3,8 @@ import QRCode from 'qrcode';
 import { useAuth } from '@/contexts/AuthContext';
 import { useSchoolYear } from '@/contexts/SchoolYearContext';
 import { supabase } from '@/integrations/supabase/client';
+import { useDonneesHorsLigne } from '@/hooks/useDonneesHorsLigne';
+import { BandeauDonneesEnregistrees } from '@/components/BandeauDonneesEnregistrees';
 import { cn } from '@/lib/utils';
 import {
   CreditCard, Loader2, CheckCircle2, AlertCircle,
@@ -68,49 +70,51 @@ export default function PortalPaiements() {
   );
   const currentIdx = getCurrentMonthIndex(academicMonths);
 
-  const [payments,   setPayments]   = useState<Payment[]>([]);
-  const [services,   setServices]   = useState<AnnexSvc[]>([]);
-  const [enrs,       setEnrs]       = useState<ServiceEnr[]>([]);
-  const [tuition,    setTuition]    = useState<TuitionCfg | null>(null);
-  const [classId,    setClassId]    = useState<string | null>(null);
-  const [enrolledAt, setEnrolledAt] = useState<string | null>(null);
-  const [loading,    setLoading]    = useState(true);
+  // Paiements enregistrés sur l'appareil : consultables sans réseau.
+  // `payments` reste modifiable : la liste se rafraîchit après un règlement.
+  const eleveId = schoolAccount?.studentEnrollmentId ?? '';
+  const ecoleId = schoolAccount?.schoolId ?? '';
 
-  useEffect(() => {
-    if (accountRole !== 'student' || !schoolAccount?.studentEnrollmentId) {
-      setLoading(false); return;
-    }
-    const eId = schoolAccount.studentEnrollmentId;
-    const sId = schoolAccount.schoolId;
+  const { donnees, chargement: loading, enregistreLe } = useDonneesHorsLigne<{
+    payments: Payment[];
+    services: AnnexSvc[];
+    enrs: ServiceEnr[];
+    tuition: TuitionCfg | null;
+    classId: string | null;
+    enrolledAt: string | null;
+  }>(
+    'portail-paiements',
+    async () => {
+      const [payR, srvR, enrR, tcR, seR] = await Promise.all([
+        supabase.from('payments')
+          .select('id,type,service_id,month_key,amount,paid_at,method,reference,note,received_by,status,cancelled_at,cancelled_by')
+          .eq('student_enrollment_id', eleveId)
+          .order('paid_at', { ascending: false }),
 
-    (async () => {
-      setLoading(true);
-      try {
-        const [payR, srvR, enrR, tcR, seR] = await Promise.all([
-          supabase.from('payments')
-            .select('id,type,service_id,month_key,amount,paid_at,method,reference,note,received_by,status,cancelled_at,cancelled_by')
-            .eq('student_enrollment_id', eId)
-            .order('paid_at', { ascending: false }),
+        supabase.from('annex_services')
+          .select('id,name,amount,frequency')
+          .eq('school_id', ecoleId),
 
-          supabase.from('annex_services')
-            .select('id,name,amount,frequency')
-            .eq('school_id', sId),
+        supabase.from('service_enrollments')
+          .select('id,service_id,start_month_index,end_month_index')
+          .eq('student_enrollment_id', eleveId),
 
-          supabase.from('service_enrollments')
-            .select('id,service_id,start_month_index,end_month_index')
-            .eq('student_enrollment_id', eId),
+        supabase.from('tuition_configs')
+          .select('id,class_id,inscription_fee,monthly_fee,academic_year_label')
+          .eq('school_id', ecoleId),
 
-          supabase.from('tuition_configs')
-            .select('id,class_id,inscription_fee,monthly_fee,academic_year_label')
-            .eq('school_id', sId),
+        supabase.from('student_enrollments')
+          .select('class_id, enrolled_at')
+          .eq('id', eleveId)
+          .single(),
+      ]);
 
-          supabase.from('student_enrollments')
-            .select('class_id, enrolled_at')
-            .eq('id', eId)
-            .single(),
-        ]);
+      const classeId = seR.data?.class_id ?? null;
+      // Le tarif qui correspond à la classe de l'élève.
+      const cfg = classeId ? (tcR.data ?? []).find(c => c.class_id === classeId) ?? (tcR.data ?? [])[0] : null;
 
-        if (payR.data) setPayments(payR.data.map(p => ({
+      return {
+        payments: (payR.data ?? []).map(p => ({
           id: p.id, type: p.type,
           serviceId: p.service_id ?? null,
           monthKey:  p.month_key  ?? null,
@@ -123,38 +127,44 @@ export default function PortalPaiements() {
           status:      (p.status as 'confirmed' | 'cancelled') ?? 'confirmed',
           cancelledAt: p.cancelled_at ?? null,
           cancelledBy: p.cancelled_by ?? null,
-        })));
+        })),
 
-        if (srvR.data) setServices(srvR.data.map(s => ({
+        services: (srvR.data ?? []).map(s => ({
           id: s.id, name: s.name,
           amount:    s.amount ?? 0,
           frequency: s.frequency,
-        })));
+        })),
 
-        if (enrR.data) setEnrs(enrR.data.map(e => ({
+        enrs: (enrR.data ?? []).map(e => ({
           id:              e.id,
           serviceId:       e.service_id,
           startMonthIndex: e.start_month_index,
           endMonthIndex:   e.end_month_index ?? null,
-        })));
+        })),
 
-        if (seR.data?.class_id) setClassId(seR.data.class_id);
-        if (seR.data?.enrolled_at) setEnrolledAt(seR.data.enrolled_at);
+        tuition: cfg ? {
+          classId:        cfg.class_id,
+          inscriptionFee: cfg.inscription_fee ?? 0,
+          monthlyFee:     cfg.monthly_fee ?? 0,
+          yearLabel:      cfg.academic_year_label,
+        } : null,
 
-        // Trouver le config qui correspond à la classe de l'élève
-        if (tcR.data && seR.data?.class_id) {
-          const cfg = tcR.data.find(c => c.class_id === seR.data?.class_id) ?? tcR.data[0];
-          if (cfg) setTuition({
-            classId:        cfg.class_id,
-            inscriptionFee: cfg.inscription_fee ?? 0,
-            monthlyFee:     cfg.monthly_fee ?? 0,
-            yearLabel:      cfg.academic_year_label,
-          });
-        }
-      } catch { /**/ }
-      finally { setLoading(false); }
-    })();
-  }, [schoolAccount?.studentEnrollmentId, schoolAccount?.schoolId, accountRole]);
+        classId: classeId,
+        enrolledAt: seR.data?.enrolled_at ?? null,
+      };
+    },
+    [eleveId, ecoleId],
+    accountRole === 'student' && !!eleveId,
+  );
+
+  const services   = donnees?.services   ?? [];
+  const enrs       = donnees?.enrs       ?? [];
+  const tuition    = donnees?.tuition    ?? null;
+  const classId    = donnees?.classId    ?? null;
+  const enrolledAt = donnees?.enrolledAt ?? null;
+
+  const [payments, setPayments] = useState<Payment[]>([]);
+  useEffect(() => { if (donnees) setPayments(donnees.payments); }, [donnees]);
 
   // ── Derived ────────────────────────────────────────────────────────────────
 
@@ -274,6 +284,8 @@ export default function PortalPaiements() {
   return (
     <div className="min-h-screen bg-[#f0f4f8] pb-10">
       <div className="px-4 pt-5 space-y-4">
+
+        <BandeauDonneesEnregistrees enregistreLe={enregistreLe} />
 
         {/* ══ À RÉGLER ══════════════════════════════════════════ */}
         {itemsEchus.length > 0 && (

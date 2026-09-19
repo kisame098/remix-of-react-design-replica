@@ -1,6 +1,8 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
+import { useDonneesHorsLigne } from '@/hooks/useDonneesHorsLigne';
+import { BandeauDonneesEnregistrees } from '@/components/BandeauDonneesEnregistrees';
 import { cn } from '@/lib/utils';
 import { CalendarDays, Loader2, Clock } from 'lucide-react';
 import {
@@ -14,36 +16,34 @@ import {
 export default function PortalEmploi() {
   const { schoolAccount, accountRole } = useAuth();
 
-  const [schedule, setSchedule] = useState<SlotEvent[]>([]);
-  const [selDay,   setSelDay]   = useState(TODAY_I >= 0 ? TODAY_I : 0);
-  const [loading,  setLoading]  = useState(true);
+  const [selDay, setSelDay] = useState(TODAY_I >= 0 ? TODAY_I : 0);
 
-  useEffect(() => {
-    if (!schoolAccount?.schoolId) { setLoading(false); return; }
-    const sId = schoolAccount.schoolId;
+  // Emploi du temps enregistré sur l'appareil : consultable sans réseau.
+  const ecoleId = schoolAccount?.schoolId ?? '';
+  const { donnees, chargement: loading, enregistreLe } = useDonneesHorsLigne<SlotEvent[]>(
+    'portail-emploi',
+    async () => {
+      const { data } = await supabase
+        .from('schedule_events')
+        .select('id,day_index,start_time,end_time,subject_name,teacher_name,class_name,color,group_id,group_name')
+        .eq('school_id', ecoleId);
 
-    (async () => {
-      setLoading(true);
-      try {
-        const { data } = await supabase
-          .from('schedule_events')
-          .select('id,day_index,start_time,end_time,subject_name,teacher_name,class_name,color,group_id,group_name')
-          .eq('school_id', sId);
+      return (data ?? []).map(e => ({
+        id: e.id, dayIndex: e.day_index, startTime: e.start_time, endTime: e.end_time,
+        subjectName: e.subject_name, teacherName: e.teacher_name ?? '', className: e.class_name ?? undefined,
+        color: e.color ?? '#3b82f6',
+        // 'all' = toute la classe : pas d'étiquette, le cours concerne tout
+        // le monde. Sinon on affiche le groupe pour que l'élève sache si le
+        // cours le concerne (ex: « Groupe A »).
+        groupId: e.group_id ?? 'all',
+        groupName: e.group_name ?? '',
+      }));
+    },
+    [ecoleId],
+    !!ecoleId,
+  );
 
-        if (data) setSchedule(data.map(e => ({
-          id: e.id, dayIndex: e.day_index, startTime: e.start_time, endTime: e.end_time,
-          subjectName: e.subject_name, teacherName: e.teacher_name ?? '', className: e.class_name ?? undefined,
-          color: e.color ?? '#3b82f6',
-          // 'all' = toute la classe : pas d'étiquette, le cours concerne tout
-          // le monde. Sinon on affiche le groupe pour que l'élève sache si le
-          // cours le concerne (ex: « Groupe A »).
-          groupId: e.group_id ?? 'all',
-          groupName: e.group_name ?? '',
-        })));
-      } catch { /**/ }
-      finally { setLoading(false); }
-    })();
-  }, [schoolAccount?.schoolId, accountRole]);
+  const schedule = donnees ?? [];
 
   const slots = useMemo(() =>
     schedule.filter(e => e.dayIndex === selDay).sort((a, b) => a.startTime.localeCompare(b.startTime)),
@@ -60,6 +60,8 @@ export default function PortalEmploi() {
 
   return (
     <div className="px-4 pt-5 pb-6 space-y-5">
+
+      <BandeauDonneesEnregistrees enregistreLe={enregistreLe} />
 
       {/* ── Page title ────────────────────────────────────────────────── */}
       <div>
