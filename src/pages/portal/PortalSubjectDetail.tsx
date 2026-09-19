@@ -1,7 +1,9 @@
-import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
+import { useDonneesHorsLigne } from '@/hooks/useDonneesHorsLigne';
+import { useEnLigne } from '@/hooks/useEnLigne';
+import { BandeauDonneesEnregistrees } from '@/components/BandeauDonneesEnregistrees';
 import { ArrowLeft, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -79,47 +81,50 @@ export default function PortalSubjectDetail() {
   const { subjectId }              = useParams<{ subjectId: string }>();
   const navigate                   = useNavigate();
   const { schoolAccount, accountRole } = useAuth();
+  const enLigne                    = useEnLigne();
 
-  const [subject,   setSubject]   = useState<SubjectInfo | null>(null);
-  const [gradeData, setGradeData] = useState<GradeData | null>(null);
-  const [loading,   setLoading]   = useState(true);
+  const eId = schoolAccount?.studentEnrollmentId ?? null;
 
-  useEffect(() => {
-    if (!subjectId || accountRole !== 'student' || !schoolAccount?.studentEnrollmentId) {
-      setLoading(false); return;
-    }
-    const eId = schoolAccount.studentEnrollmentId;
+  // Une entrée de cache PAR matière : ouvrir « Mathématiques » hors connexion
+  // ne doit pas afficher les notes d'histoire chargées en dernier.
+  const { donnees, chargement: loading, enregistreLe } = useDonneesHorsLigne<{
+    subject: SubjectInfo | null;
+    gradeData: GradeData | null;
+  }>(
+    `portail-matiere.${subjectId ?? ''}`,
+    async () => {
+      const [sRes, gRes] = await Promise.all([
+        supabase.from('subjects').select('name,coefficient').eq('id', subjectId!).single(),
+        supabase.from('grades')
+          .select('devoir1,devoir2,devoir3,devoir4,devoir5,composition,note')
+          .eq('subject_id', subjectId!)
+          .eq('student_enrollment_id', eId!)
+          .single(),
+      ]);
 
-    (async () => {
-      setLoading(true);
-      try {
-        const [sRes, gRes] = await Promise.all([
-          supabase.from('subjects').select('name,coefficient').eq('id', subjectId).single(),
-          supabase.from('grades')
-            .select('devoir1,devoir2,devoir3,devoir4,devoir5,composition,note')
-            .eq('subject_id', subjectId)
-            .eq('student_enrollment_id', eId)
-            .single(),
-        ]);
+      return {
+        subject: sRes.data
+          ? { name: sRes.data.name, coefficient: sRes.data.coefficient ?? 1 }
+          : null,
+        gradeData: gRes.data
+          ? {
+              devoir1:     gRes.data.devoir1,
+              devoir2:     gRes.data.devoir2,
+              devoir3:     gRes.data.devoir3,
+              devoir4:     gRes.data.devoir4,
+              devoir5:     gRes.data.devoir5,
+              composition: gRes.data.composition,
+              note:        gRes.data.note,
+            }
+          : null,
+      };
+    },
+    [subjectId, eId],
+    !!subjectId && !!eId && accountRole === 'student',
+  );
 
-        if (sRes.data) setSubject({
-          name:        sRes.data.name,
-          coefficient: sRes.data.coefficient ?? 1,
-        });
-
-        if (gRes.data) setGradeData({
-          devoir1:     gRes.data.devoir1,
-          devoir2:     gRes.data.devoir2,
-          devoir3:     gRes.data.devoir3,
-          devoir4:     gRes.data.devoir4,
-          devoir5:     gRes.data.devoir5,
-          composition: gRes.data.composition,
-          note:        gRes.data.note,
-        });
-      } catch { /**/ }
-      finally { setLoading(false); }
-    })();
-  }, [subjectId, schoolAccount?.studentEnrollmentId, accountRole]);
+  const subject   = donnees?.subject ?? null;
+  const gradeData = donnees?.gradeData ?? null;
 
   if (loading) return (
     <div className="min-h-screen bg-[#f0f4f8] flex items-center justify-center">
@@ -129,7 +134,11 @@ export default function PortalSubjectDetail() {
 
   if (!subject) return (
     <div className="min-h-screen bg-[#f0f4f8] flex items-center justify-center">
-      <p className="text-slate-400">Matière introuvable</p>
+      <p className="px-8 text-center text-slate-400">
+        {enLigne
+          ? 'Matière introuvable'
+          : "Cette matière n'a pas encore été ouverte avec une connexion : ses notes ne sont pas enregistrées sur cet appareil."}
+      </p>
     </div>
   );
 
@@ -175,6 +184,8 @@ export default function PortalSubjectDetail() {
       </div>
 
       <div className="max-w-lg md:max-w-3xl lg:max-w-4xl mx-auto px-4 py-5 space-y-4">
+
+        <BandeauDonneesEnregistrees enregistreLe={enregistreLe} />
 
         {/* ── Moyenne card ─────────────────────────────────── */}
         <div className="bg-white rounded-2xl p-5 shadow-sm border border-slate-100">

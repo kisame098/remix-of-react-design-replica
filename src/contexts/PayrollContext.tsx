@@ -1,6 +1,6 @@
 import React, {
   createContext, useContext, useState, useEffect,
-  useCallback, ReactNode,
+  useCallback, ReactNode, useMemo
 } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { fetchAllRows } from '@/lib/fetchAllRows';
@@ -9,6 +9,8 @@ import {
   PayrollEmployee, SalaryPayment, PayeeType, PayrollMonthKey,
 } from '@/types/payroll';
 import { getPaidAmountForPeriod as sumPaidForPeriod } from '@/lib/payroll';
+import { useEnLigne } from '@/hooks/useEnLigne';
+import { useInstantaneHorsLigne } from '@/hooks/useInstantaneHorsLigne';
 
 // Les tables payroll_employees/salary_payments sont ajoutées via une migration
 // collée manuellement par l'utilisateur (voir plan) — pas encore dans le
@@ -59,6 +61,9 @@ interface PayrollContextType {
   salaryPayments:   SalaryPayment[];
   payrollLoading:   boolean;
 
+  /** Date ISO des données réinstallées depuis l'appareil, hors connexion. */
+  instantaneLe: string | null;
+
   // Personnel non-enseignant (CRUD)
   addPayrollEmployee: (data: Omit<PayrollEmployee, 'id' | 'isActive' | 'createdAt' | 'updatedAt'>) => Promise<PayrollEmployee>;
   updatePayrollEmployee: (id: string, data: Partial<Pick<PayrollEmployee, 'firstName' | 'lastName' | 'phone' | 'roleTitle' | 'paymentType' | 'salaryAmount'>>) => Promise<void>;
@@ -78,6 +83,7 @@ const PayrollContext = createContext<PayrollContextType | null>(null);
 // ─── Provider ─────────────────────────────────────────────────────────────────
 export const PayrollProvider = ({ children }: { children: ReactNode }) => {
   const { school, profile } = useAuth();
+  const enLigne = useEnLigne();
   const schoolId: string | null = school?.id ?? null;
 
   const [payrollEmployees, setPayrollEmployees] = useState<PayrollEmployee[]>([]);
@@ -93,6 +99,9 @@ export const PayrollProvider = ({ children }: { children: ReactNode }) => {
       return;
     }
 
+    // Hors connexion, la requête n'aboutirait pas et le voyant resterait
+    // allumé : l'instantané enregistré prend le relais.
+    if (!enLigne) { setPayrollLoading(false); return; }
     setPayrollLoading(true);
 
     Promise.all([
@@ -108,7 +117,7 @@ export const PayrollProvider = ({ children }: { children: ReactNode }) => {
     }).finally(() => {
       setPayrollLoading(false);
     });
-  }, [schoolId]);
+  }, [schoolId, enLigne]);
 
   // ── Personnel non-enseignant ───────────────────────────────────────────────
   const addPayrollEmployee = useCallback(async (
@@ -236,8 +245,24 @@ export const PayrollProvider = ({ children }: { children: ReactNode }) => {
     sumPaidForPeriod(salaryPayments, payeeType, id, periodMonthKey),
   [salaryPayments]);
 
+  // ── Instantané hors connexion ──────────────────────────────────────────────
+  // Les écrans lisent ce contexte, jamais Supabase : garder ces tranches rend
+  // l'écran consultable sans réseau. On n'enregistre qu'une fois le chargement
+  // terminé, sinon l'état vide du démarrage effacerait l'instantané.
+  const tranchesHorsLigne = useMemo(() => ({ payrollEmployees, salaryPayments }), [payrollEmployees, salaryPayments]);
+
+  const appliquerInstantane = useCallback((t: typeof tranchesHorsLigne) => {
+    setPayrollEmployees(t.payrollEmployees);
+    setSalaryPayments(t.salaryPayments);
+  }, []);
+
+  const instantaneLe = useInstantaneHorsLigne(
+    'salaires-instantane', tranchesHorsLigne, appliquerInstantane, !!schoolId && !payrollLoading,
+  );
+
   const value: PayrollContextType = {
     payrollEmployees, salaryPayments, payrollLoading,
+    instantaneLe,
     addPayrollEmployee, updatePayrollEmployee, setPayrollEmployeeActive,
     recordSalaryPayment, cancelSalaryPayment,
     getPaymentsForEmployee, getPaidAmountForPeriod,

@@ -1,6 +1,6 @@
 import React, {
   createContext, useContext, useState, useEffect,
-  useCallback, useRef, ReactNode,
+  useCallback, useRef, ReactNode, useMemo
 } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { fetchAllRows } from '@/lib/fetchAllRows';
@@ -12,6 +12,8 @@ import {
 } from '@/types/payment';
 import * as queries from '@/lib/paymentQueries';
 import { findPreviousSchoolYear } from '@/lib/schoolYears';
+import { useEnLigne } from '@/hooks/useEnLigne';
+import { useInstantaneHorsLigne } from '@/hooks/useInstantaneHorsLigne';
 
 // ─── Mappers DB → TypeScript ──────────────────────────────────────────────────
 
@@ -78,6 +80,9 @@ interface PaymentContextType {
   serviceEnrollments: ServiceEnrollment[];
   paymentLoading:    boolean;
 
+  /** Date ISO des données réinstallées depuis l'appareil, hors connexion. */
+  instantaneLe: string | null;
+
   // Tuition config
   setTuitionConfig: (classId: string, inscriptionFee: number, monthlyFee: number) => Promise<void>;
   getTuitionConfig: (classId: string) => TuitionConfig | undefined;
@@ -118,6 +123,7 @@ const PaymentContext = createContext<PaymentContextType | null>(null);
 export const PaymentProvider = ({ children }: { children: ReactNode }) => {
   const { school, profile } = useAuth();
   const { currentYear, schoolYears } = useSchoolYear();
+  const enLigne = useEnLigne();
   const schoolId: string | null = school?.id ?? null;
 
   const yearLabel = currentYear?.id ?? null;   // SchoolYear.id IS the label ("2024-2025")
@@ -142,6 +148,9 @@ export const PaymentProvider = ({ children }: { children: ReactNode }) => {
     }
 
     if (loadingRef.current) return;
+    // Hors connexion, la requête n'aboutirait pas et le voyant resterait
+    // allumé : l'instantané enregistré prend le relais.
+    if (!enLigne) { setPaymentLoading(false); return; }
     loadingRef.current = true;
     setPaymentLoading(true);
 
@@ -178,7 +187,7 @@ export const PaymentProvider = ({ children }: { children: ReactNode }) => {
       setPaymentLoading(false);
       loadingRef.current = false;
     });
-  }, [schoolId, yearLabel]);
+  }, [schoolId, yearLabel, enLigne]);
 
   // ── Report des frais de scolarité d'une année sur l'autre ───────────────────
   // Une école garde presque toujours la même grille tarifaire d'une année à
@@ -523,8 +532,26 @@ export const PaymentProvider = ({ children }: { children: ReactNode }) => {
     queries.getTotalCollectedForYear(payments, yearLabel),
   [payments, yearLabel]);
 
+  // ── Instantané hors connexion ──────────────────────────────────────────────
+  // Les écrans lisent ce contexte, jamais Supabase : garder ces tranches rend
+  // l'écran consultable sans réseau. On n'enregistre qu'une fois le chargement
+  // terminé, sinon l'état vide du démarrage effacerait l'instantané.
+  const tranchesHorsLigne = useMemo(() => ({ tuitionConfigs, annexServices, payments, serviceEnrollments }), [tuitionConfigs, annexServices, payments, serviceEnrollments]);
+
+  const appliquerInstantane = useCallback((t: typeof tranchesHorsLigne) => {
+    setTuitionConfigs(t.tuitionConfigs);
+    setAnnexServices(t.annexServices);
+    setPayments(t.payments);
+    setServiceEnrollments(t.serviceEnrollments);
+  }, []);
+
+  const instantaneLe = useInstantaneHorsLigne(
+    'paiements-instantane', tranchesHorsLigne, appliquerInstantane, !!schoolId && !!yearLabel && !paymentLoading,
+  );
+
   const value: PaymentContextType = {
     tuitionConfigs, annexServices, payments, serviceEnrollments, paymentLoading,
+    instantaneLe,
     setTuitionConfig, getTuitionConfig,
     addAnnexService, updateAnnexService, deleteAnnexService, getServicesForClass,
     enrollInService, unenrollFromService, getStudentEnrollment,
