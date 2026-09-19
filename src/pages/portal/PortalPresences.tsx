@@ -1,6 +1,8 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
+import { useDonneesHorsLigne } from '@/hooks/useDonneesHorsLigne';
+import { BandeauDonneesEnregistrees } from '@/components/BandeauDonneesEnregistrees';
 import { cn } from '@/lib/utils';
 import { ClipboardList, Loader2, CheckCircle2, XCircle, AlertTriangle } from 'lucide-react';
 import { Attendance, fmtDateFull, fmtTime } from './portalHelpers';
@@ -24,44 +26,39 @@ const statusStyle = (status: string, justified: boolean) => {
 export default function PortalPresences() {
   const { schoolAccount, accountRole } = useAuth();
 
-  const [attendances, setAttendances] = useState<Attendance[]>([]);
-  const [filter,      setFilter]      = useState<Filter>('all');
-  const [loading,     setLoading]     = useState(true);
+  const [filter, setFilter] = useState<Filter>('all');
 
-  useEffect(() => {
-    if (accountRole !== 'student' || !schoolAccount?.studentEnrollmentId) {
-      setLoading(false);
-      return;
-    }
-    const eId = schoolAccount.studentEnrollmentId;
+  // Présences enregistrées sur l'appareil : consultables sans réseau.
+  const eleveId = schoolAccount?.studentEnrollmentId ?? '';
+  const { donnees, chargement: loading, enregistreLe } = useDonneesHorsLigne<Attendance[]>(
+    'portail-presences',
+    async () => {
+      const { data } = await supabase
+        .from('student_attendances')
+        .select('id,status,is_justified,justification,attendance_sessions(date,subject_name,start_time,end_time)')
+        .eq('student_enrollment_id', eleveId)
+        .order('recorded_at', { ascending: false });
 
-    (async () => {
-      setLoading(true);
-      try {
-        const { data } = await supabase
-          .from('student_attendances')
-          .select('id,status,is_justified,justification,attendance_sessions(date,subject_name,start_time,end_time)')
-          .eq('student_enrollment_id', eId)
-          .order('recorded_at', { ascending: false });
+      return (data ?? []).filter(a => a.attendance_sessions).map(a => {
+        const sess = a.attendance_sessions as {
+          date: string; subject_name: string; start_time: string; end_time: string;
+        };
+        return {
+          id: a.id, status: a.status,
+          isJustified:  a.is_justified  ?? false,
+          justification: a.justification ?? null,
+          date:        sess.date,
+          subjectName: sess.subject_name,
+          startTime:   sess.start_time,
+          endTime:     sess.end_time,
+        };
+      });
+    },
+    [eleveId],
+    accountRole === 'student' && !!eleveId,
+  );
 
-        if (data) setAttendances(data.filter(a => a.attendance_sessions).map(a => {
-          const sess = a.attendance_sessions as {
-            date: string; subject_name: string; start_time: string; end_time: string;
-          };
-          return {
-            id: a.id, status: a.status,
-            isJustified:  a.is_justified  ?? false,
-            justification: a.justification ?? null,
-            date:        sess.date,
-            subjectName: sess.subject_name,
-            startTime:   sess.start_time,
-            endTime:     sess.end_time,
-          };
-        }));
-      } catch { /**/ }
-      finally { setLoading(false); }
-    })();
-  }, [schoolAccount?.studentEnrollmentId, accountRole]);
+  const attendances = donnees ?? [];
 
   const total   = attendances.length;
   const present = attendances.filter(a => a.status === 'present').length;
@@ -87,6 +84,8 @@ export default function PortalPresences() {
 
   return (
     <div className="px-4 pt-5 pb-6 space-y-5">
+
+      <BandeauDonneesEnregistrees enregistreLe={enregistreLe} />
 
       {/* ── Page title ────────────────────────────────────────────────── */}
       <div>

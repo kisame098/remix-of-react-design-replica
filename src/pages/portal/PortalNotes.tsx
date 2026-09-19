@@ -2,6 +2,8 @@ import { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
+import { useDonneesHorsLigne } from '@/hooks/useDonneesHorsLigne';
+import { BandeauDonneesEnregistrees } from '@/components/BandeauDonneesEnregistrees';
 import { cn } from '@/lib/utils';
 import {
   Loader2, ChevronRight, CalendarDays, TrendingUp, Star, Trophy, ListChecks, FileDown,
@@ -126,48 +128,103 @@ export default function PortalNotes() {
   const { schoolAccount, accountRole } = useAuth();
   const navigate = useNavigate();
 
-  const [periods, setPeriods] = useState<GradePeriod[]>([]);
-  const [grades,  setGrades]  = useState<SubjectGrade[]>([]);
-  const [selId,   setSelId]   = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [selId, setSelId] = useState<string | null>(null);
   const [pendingFiliereChoice, setPendingFiliereChoice] = useState(false);
-  const [publishedBulletins, setPublishedBulletins] = useState<PublishedBulletin[]>([]);
   const [downloadingBulletin, setDownloadingBulletin] = useState(false);
-  // null = on ne sait pas encore ; l'élémentaire a un écran à part (barème de
-  // points, moyenne /10) — cet écran-ci est bâti pour devoirs + composition +
-  // coefficients, qui n'existent pas du tout en CI-CM2.
-  const [isElementary, setIsElementary] = useState<boolean | null>(null);
 
-  useEffect(() => {
-    if (accountRole !== 'student' || !schoolAccount?.studentEnrollmentId) { setIsElementary(false); return; }
-    (async () => {
+  // ── Notes disponibles hors connexion ────────────────────────────────────
+  // Niveau de la classe, périodes, notes et bulletins publiés sont enregistrés
+  // sur l'appareil, pour ce compte : l'élève consulte ses notes sans réseau,
+  // et peut même retélécharger un bulletin déjà publié.
+  const eleveId = schoolAccount?.studentEnrollmentId ?? '';
+  const ecoleId = schoolAccount?.schoolId ?? '';
+  const estEleve = accountRole === 'student' && !!eleveId;
+
+  const { donnees, chargement: loading, enregistreLe } = useDonneesHorsLigne<{
+    isElementary: boolean;
+    periods: GradePeriod[];
+    grades: SubjectGrade[];
+    publishedBulletins: PublishedBulletin[];
+  }>(
+    'portail-notes',
+    async () => {
       const { data: enr } = await supabase
         .from('student_enrollments').select('class_id')
-        .eq('id', schoolAccount.studentEnrollmentId).maybeSingle();
-      if (!enr?.class_id) { setIsElementary(false); return; }
-      // maybeSingle : une classe illisible ne doit pas jeter. La policy de
-      // `classes` ouvre désormais SA classe à l'élève — sans quoi le niveau
-      // restait inconnu et un CI-CM2 recevait l'écran collège, donc aucune note.
-      const { data: cls } = await supabase.from('classes').select('niveau').eq('id', enr.class_id).maybeSingle();
-      setIsElementary(!!cls?.niveau && (NIVEAUX_ELEMENTAIRE as readonly string[]).includes(cls.niveau));
-    })();
-  }, [schoolAccount?.studentEnrollmentId, accountRole]);
+        .eq('id', eleveId).maybeSingle();
+      const classeId = enr?.class_id ?? null;
 
-  // Bulletins publiés par l'administration — un élève ne voit et ne télécharge
-  // JAMAIS que le sien (filtré côté serveur par RLS sur student_enrollment_id,
-  // pas seulement côté client).
+      // maybeSingle : une classe illisible ne doit pas jeter. La policy de
+      // `classes` ouvre SA classe à l'élève — sans quoi le niveau restait
+      // inconnu et un CI-CM2 recevait l'écran collège, donc aucune note.
+      const cls = classeId
+        ? (await supabase.from('classes').select('niveau').eq('id', classeId).maybeSingle()).data
+        : null;
+
+      const [bulR, pR, gR, pcR] = await Promise.all([
+        // Un élève ne voit JAMAIS que son bulletin : filtré côté serveur par
+        // RLS sur student_enrollment_id, pas seulement ici.
+        supabase.from('published_bulletins').select('period_id, data').eq('student_enrollment_id', eleveId),
+        supabase.from('grade_periods').select('id,name,ordering').eq('school_id', ecoleId).order('ordering'),
+        supabase.from('grades')
+          .select('id,subject_id,devoir1,devoir2,devoir3,devoir4,devoir5,composition,note,subjects(id,name,coefficient,period_id)')
+          .eq('student_enrollment_id', eleveId),
+        // Quelles périodes concernent SA classe : le collège peut travailler
+        // en 3 trimestres pendant que le lycée en fait 2.
+        supabase.from('grade_period_classes').select('period_id,class_id').eq('school_id', ecoleId),
+      ]);
+
+      // Une période où sa classe n'est pas inscrite n'afficherait qu'un écran
+      // vide — il croirait ses notes disparues.
+      const periods = periodesDeLEleve(
+        (pR.data ?? []).map(p => ({ id: p.id, name: p.name, ordering: p.ordering })),
+        (pcR.data ?? []).map(l => ({ periodId: l.period_id, classId: l.class_id })),
+        classeId,
+      );
+
+      return {
+        isElementary: !!cls?.niveau && (NIVEAUX_ELEMENTAIRE as readonly string[]).includes(cls.niveau),
+        periods,
+        grades: (gR.data ?? []).filter(g => g.subjects).map(g => {
+          const s = g.subjects as { id: string; name: string; coefficient: number; period_id: string };
+          return {
+            id: g.id, subjectId: g.subject_id, subjectName: s.name,
+            coefficient: s.coefficient ?? 1, periodId: s.period_id,
+            devoir1:     g.devoir1,
+            devoir2:     g.devoir2,
+            devoir3:     g.devoir3,
+            devoir4:     g.devoir4,
+            devoir5:     g.devoir5,
+            composition: g.composition,
+            note:        g.note,
+          };
+        }),
+        publishedBulletins: (bulR.data ?? []).map(row => ({
+          periodId: row.period_id, data: row.data as unknown as BulletinPdfData,
+        })),
+      };
+    },
+    [eleveId, ecoleId],
+    estEleve,
+  );
+
+  // null = niveau encore inconnu (écran d'attente) ; false pour un professeur,
+  // qui a son propre écran.
+  const isElementary = donnees ? donnees.isElementary : (estEleve ? null : false);
+  const periods = donnees?.periods ?? [];
+  const grades  = donnees?.grades  ?? [];
+  const publishedBulletins = donnees?.publishedBulletins ?? [];
+
+  // Période affichée par défaut, sans écraser le choix de l'élève.
   useEffect(() => {
-    if (accountRole !== 'student' || !schoolAccount?.studentEnrollmentId) return;
-    (async () => {
-      const { data } = await supabase
-        .from('published_bulletins')
-        .select('period_id, data')
-        .eq('student_enrollment_id', schoolAccount.studentEnrollmentId);
-      if (data) {
-        setPublishedBulletins(data.map(row => ({ periodId: row.period_id, data: row.data as unknown as BulletinPdfData })));
-      }
-    })();
-  }, [schoolAccount?.studentEnrollmentId, accountRole]);
+    if (!donnees) return;
+    setSelId(actuel => actuel && donnees.periods.some(p => p.id === actuel)
+      ? actuel
+      : periodeParDefaut(donnees.periods)?.id ?? null);
+  }, [donnees]);
+
+
+
+
 
   const handleDownloadBulletin = async (bulletin: PublishedBulletin) => {
     setDownloadingBulletin(true);
@@ -229,57 +286,7 @@ export default function PortalNotes() {
     })();
   }, [schoolAccount?.studentEnrollmentId, accountRole]);
 
-  useEffect(() => {
-    if (accountRole !== 'student' || !schoolAccount?.studentEnrollmentId) {
-      setLoading(false); return;
-    }
-    const eId = schoolAccount.studentEnrollmentId;
-    const sId = schoolAccount.schoolId;
 
-    (async () => {
-      setLoading(true);
-      try {
-        const [pR, gR, pcR, seR] = await Promise.all([
-          supabase.from('grade_periods').select('id,name,ordering').eq('school_id', sId).order('ordering'),
-          supabase.from('grades')
-            .select('id,subject_id,devoir1,devoir2,devoir3,devoir4,devoir5,composition,note,subjects(id,name,coefficient,period_id)')
-            .eq('student_enrollment_id', eId),
-          // Quelles périodes concernent SA classe : le collège peut travailler
-          // en 3 trimestres pendant que le lycée en fait 2.
-          supabase.from('grade_period_classes').select('period_id,class_id').eq('school_id', sId),
-          supabase.from('student_enrollments').select('class_id').eq('id', eId).maybeSingle(),
-        ]);
-
-        if (pR.data) {
-          // Une période où sa classe n'est pas inscrite n'afficherait qu'un
-          // écran vide — il croirait ses notes disparues.
-          const siennes = periodesDeLEleve(
-            pR.data.map(p => ({ id: p.id, name: p.name, ordering: p.ordering })),
-            (pcR.data ?? []).map(l => ({ periodId: l.period_id, classId: l.class_id })),
-            seR.data?.class_id ?? null,
-          );
-          setPeriods(siennes);
-          setSelId(periodeParDefaut(siennes)?.id ?? null);
-        }
-
-        if (gR.data) setGrades(gR.data.filter(g => g.subjects).map(g => {
-          const s = g.subjects as { id: string; name: string; coefficient: number; period_id: string };
-          return {
-            id: g.id, subjectId: g.subject_id, subjectName: s.name,
-            coefficient: s.coefficient ?? 1, periodId: s.period_id,
-            devoir1:     g.devoir1,
-            devoir2:     g.devoir2,
-            devoir3:     g.devoir3,
-            devoir4:     g.devoir4,
-            devoir5:     g.devoir5,
-            composition: g.composition,
-            note:        g.note,
-          };
-        }));
-      } catch { /**/ }
-      finally { setLoading(false); }
-    })();
-  }, [schoolAccount?.studentEnrollmentId, schoolAccount?.schoolId, accountRole]);
 
   // ── Derived ──────────────────────────────────────────────────────────────
 
@@ -312,6 +319,10 @@ export default function PortalNotes() {
 
   return (
     <div className="min-h-screen bg-[#f0f4f8] pb-10">
+
+      <div className="px-4 pt-4">
+        <BandeauDonneesEnregistrees enregistreLe={enregistreLe} />
+      </div>
 
       {/* ══════════════════════════════════════════
           BANNIÈRE — choix de matières optionnelles en attente

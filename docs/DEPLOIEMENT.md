@@ -175,10 +175,13 @@ Le technique fait entrer le site dans la course. Ce qui fait passer devant EduSe
 
 **Hors connexion :**
 - l'application s'ouvre, sur n'importe quelle page ;
-- un bandeau prévient que rien ne sera enregistré ;
-- au retour du réseau, tout reprend seul.
+- l'élève ou le professeur **retrouve ses données** : accueil, notes, emploi du temps, présences et paiements, tels qu'au dernier chargement réussi ;
+- un bandeau indique **la date de ces données** et rappelle que rien ne s'enregistre sans réseau ;
+- au retour du réseau, tout se rafraîchit seul.
 
-Les données (notes, paiements) ne sont volontairement **pas** gardées hors connexion. Sur un téléphone partagé entre plusieurs comptes, le cache pourrait montrer à un élève les données d'un autre.
+**Comment c'est rangé, et pourquoi.** Les données sont enregistrées sur l'appareil **par compte** (`src/lib/cacheHorsLigne.ts`), et **effacées à la déconnexion**. Le portail permet plusieurs comptes sur un même téléphone — une mère et ses enfants : sans ce cloisonnement, un élève verrait hors connexion les données d'un autre. C'est aussi pourquoi rien ne passe par le cache du service worker, qui est rangé par adresse et non par utilisateur.
+
+Trois écrans du portail ne sont pas encore disponibles hors connexion : le choix des matières optionnelles (c'est une action, elle exige le réseau), le détail d'une matière, et les notes de l'élémentaire. Le tableau de bord des écoles s'ouvre hors connexion mais ses écrans restent à convertir.
 
 **Mises à jour :** le bandeau « Nouvelle version disponible » propose la mise à jour, il ne l'impose jamais. Recharger d'office ferait perdre un encaissement en cours de saisie.
 
