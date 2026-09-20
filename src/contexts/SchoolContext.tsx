@@ -9,7 +9,10 @@ import { useInstantaneHorsLigne } from '@/hooks/useInstantaneHorsLigne';
 import { supabase } from '@/integrations/supabase/client';
 import { createStudentAccount, createTeacherAccount } from '@/lib/accountUtils';
 import { fetchAllRows } from '@/lib/fetchAllRows';
-import { getUnresolvedChoiceGroups as resolveUnresolvedChoiceGroups } from '@/lib/academicProfile';
+import {
+  getUnresolvedChoiceGroups as resolveUnresolvedChoiceGroups, occurrencesDeLaMatiere,
+  lignesReglageManuel, appliquerReglageLocal,
+} from '@/lib/academicProfile';
 import {
   NIVEAUX_ELEMENTAIRE, ElementaryDomaine, ElementaryRegistre,
   ELEMENTARY_DEFAULT_LINES, ELEMENTARY_OPTIONAL_CATALOG,
@@ -2429,30 +2432,25 @@ export const SchoolProvider = ({ children }: { children: ReactNode }) => {
     studentEnrollmentId: string, subjectId: string, active: boolean, customCoef?: string
   ): Promise<void> => {
     if (!schoolId) throw new Error('Non connecté à une école');
+
+    // Une matière existe UNE FOIS PAR PÉRIODE : le réglage doit les atteindre
+    // TOUTES. Sinon l'EPS éteinte pour un élève au premier trimestre restait
+    // comptée dans ses bulletins suivants — et le profil, qui ne lisait que la
+    // première occurrence, ne le montrait même pas.
+    const occurrences = occurrencesDeLaMatiere(subjects, gradePeriods, subjectId);
+    const ids = occurrences.length > 0 ? occurrences.map(o => o.id) : [subjectId];
+    const maintenant = new Date().toISOString();
+
     const { error } = await supabase
       .from('student_subject_settings')
-      .upsert({
-        school_id: schoolId, subject_id: subjectId, student_enrollment_id: studentEnrollmentId,
-        active, custom_coefficient: customCoef && customCoef !== '' ? Number(customCoef) : null,
-        override_reason: 'manual', updated_at: new Date().toISOString(),
-      }, { onConflict: 'school_id,subject_id,student_enrollment_id' });
+      .upsert(
+        lignesReglageManuel({ schoolId, studentEnrollmentId, occurrenceIds: ids, active, customCoef, maintenant }),
+        { onConflict: 'school_id,subject_id,student_enrollment_id' },
+      );
     if (error) throw error;
 
-    setSubjectSettings(prev => {
-      const idx = prev.findIndex(ss => ss.subjectId === subjectId);
-      const entry: StudentSubjectSetting = { active, customCoef, overrideReason: 'manual' };
-      if (idx >= 0) {
-        return prev.map((ss, i) => i === idx
-          ? { ...ss, studentSettings: { ...ss.studentSettings, [studentEnrollmentId]: entry } }
-          : ss);
-      }
-      return [...prev, {
-        id: '', subjectId,
-        devoir1Active: true, devoir2Active: true, devoir3Active: true, devoir4Active: false, devoir5Active: false,
-        studentSettings: { [studentEnrollmentId]: entry },
-      }];
-    });
-  }, [schoolId]);
+    setSubjectSettings(prev => appliquerReglageLocal(prev, ids, studentEnrollmentId, active, customCoef));
+  }, [schoolId, subjects, gradePeriods]);
 
   // ─────────────────────────────────────────────────────────────────────────
   // FILIÈRES — fonctions Supabase
