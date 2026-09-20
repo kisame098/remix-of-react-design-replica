@@ -79,16 +79,23 @@ export const dateHeureDakar = (iso: string): string => {
   return p ? `${p.j}/${p.m}/${p.a} à ${p.h}:${p.min}` : '';
 };
 
-// ─── Dessin ───────────────────────────────────────────────────────────────────
+/** Le bleu nuit de SenClass, quand aucune teinte n'est fournie. */
+export const COULEUR_MONOGRAMME_PAR_DEFAUT = '#1F3A5F';
 
-export const COULEURS = {
-  encre: '#111827',
-  discret: '#6B7280',
-  trait: '#9CA3AF',
-  fond: '#F3F4F6',
-  marque: '#1F3A5F',
-  alerte: '#B91C1C',
-} as const;
+const MOIS_LONGS = [
+  'janvier', 'février', 'mars', 'avril', 'mai', 'juin',
+  'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre',
+];
+
+/** « 19 septembre 2026 à 14:32 » — heure de Dakar. */
+export const dateLongueDakar = (iso: string): string => {
+  const p = partiesDakar(iso);
+  if (!p) return '';
+  const mois = MOIS_LONGS[Number(p.m) - 1] ?? p.m;
+  return `${Number(p.j)}${p.j === '01' ? 'er' : ''} ${mois} ${p.a} à ${p.h}:${p.min}`;
+};
+
+// ─── Dessin ───────────────────────────────────────────────────────────────────
 
 /** Les deux premières lettres significatives du nom : « Collège Sainte Anne » → « CS ». */
 export const initialesEcole = (nom: string): string => {
@@ -104,6 +111,8 @@ export const initialesEcole = (nom: string): string => {
  */
 export const dessinerLogoEcole = (
   doc: jsPDF, ecole: InfosEcole, x: number, y: number, w: number, h: number,
+  /** Couleur du monogramme quand il n'y a pas de logo : la teinte du document. */
+  couleurMonogramme = COULEUR_MONOGRAMME_PAR_DEFAUT,
 ): void => {
   if (ecole.logo) {
     try {
@@ -118,12 +127,12 @@ export const dessinerLogoEcole = (
   const cx = x + w / 2;
   const cy = y + h / 2;
   const r = Math.min(w, h) / 2;
-  doc.setDrawColor(COULEURS.marque);
+  doc.setDrawColor(couleurMonogramme);
   doc.setLineWidth(0.5);
   doc.circle(cx, cy, r, 'S');
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(r * 1.5);
-  doc.setTextColor(COULEURS.marque);
+  doc.setTextColor(couleurMonogramme);
   doc.text(initialesEcole(ecole.nom), cx, cy + r * 0.28, { align: 'center' });
 };
 
@@ -133,41 +142,6 @@ export const lignesCoordonnees = (ecole: InfosEcole): string[] => {
   const contact = [ecole.telephone && `Tél. ${ecole.telephone}`, ecole.email].filter(Boolean).join('  ·  ');
   return [lieu, contact, ecole.ninea && `N° d'agrément / NINEA : ${ecole.ninea}`]
     .filter((l): l is string => typeof l === 'string' && l.length > 0);
-};
-
-/**
- * En-tête : logo à gauche, nom et coordonnées à côté, filet dessous.
- * Renvoie l'ordonnée où le contenu peut reprendre.
- */
-export const dessinerEnTeteEcole = (
-  doc: jsPDF, ecole: InfosEcole, x: number, y: number, largeur: number, tailleLogo = 22,
-): number => {
-  dessinerLogoEcole(doc, ecole, x, y, tailleLogo, tailleLogo);
-
-  const xTexte = x + tailleLogo + 5;
-  const largeurTexte = largeur - tailleLogo - 5;
-  let yy = y + 5.5;
-
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(13);
-  doc.setTextColor(COULEURS.marque);
-  const noms = doc.splitTextToSize(ecole.nom.toUpperCase(), largeurTexte) as string[];
-  noms.slice(0, 2).forEach(ligne => { doc.text(ligne, xTexte, yy); yy += 5.2; });
-
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(8.5);
-  doc.setTextColor(COULEURS.discret);
-  for (const ligne of lignesCoordonnees(ecole).slice(0, 3)) {
-    const morceaux = doc.splitTextToSize(ligne, largeurTexte) as string[];
-    doc.text(morceaux[0], xTexte, yy);
-    yy += 4;
-  }
-
-  const bas = Math.max(y + tailleLogo, yy) + 2;
-  doc.setDrawColor(COULEURS.marque);
-  doc.setLineWidth(0.6);
-  doc.line(x, bas, x + largeur, bas);
-  return bas + 4;
 };
 
 // ─── Sortie ───────────────────────────────────────────────────────────────────
