@@ -109,18 +109,32 @@ describe('fiche d\'inscription PDF', () => {
     expect(texte).not.toContain('FRAIS DE SCOLARIT');
   });
 
-  it('pièces à fournir, engagement et signatures', async () => {
+  it('engagement et signatures', async () => {
     const { texte } = await brut(donnees());
-    expect(texte).toContain('PIÈCES À FOURNIR'.replace('È', '\xC8').replace('À', '\xC0'));
     expect(texte).toContain('ENGAGEMENT');
     expect(texte).toContain('LU ET APPROUV');
   });
 
-  it('photo : l\'image est intégrée ; sans photo, un cadre vide', async () => {
-    expect((await brut(donnees())).texte).toContain('/Subtype /Image');
-    const sans = donnees(); sans.eleve = { ...sans.eleve, photo: null }; sans.ecole = { ...sans.ecole, logo: null };
-    const { texte } = await brut(sans);
-    expect(texte).toContain('PHOTO');
+  it('PAS de « pièces à fournir » : ce n\'est pas le rôle de cette fiche', async () => {
+    const { texte } = await brut(donnees());
+    expect(texte).not.toMatch(/PI.CES . FOURNIR/);
+    expect(texte).not.toContain('Extrait d\'acte de naissance');
+  });
+
+  it('photo : l\'image est intégrée quand il y en a une', async () => {
+    const avec = await brut(donnees());
+    // Le logo + le filigrane + la photo : plus d'images qu'avec la photo seule retirée.
+    const sans = donnees(); sans.eleve = { ...sans.eleve, photo: null };
+    const nb = (t: string) => (t.match(/\/Subtype \/Image/g) ?? []).length;
+    expect(nb(avec.texte)).toBeGreaterThan(nb((await brut(sans)).texte));
+  });
+
+  it('LA PHOTO EST FACULTATIVE : sans photo, ni cadre vide ni mention « Photo »', async () => {
+    const sans = donnees(); sans.eleve = { ...sans.eleve, photo: null };
+    const { texte, doc } = await brut(sans);
+    expect(texte).not.toContain('PHOTO');
+    expect(texte).toContain('ETU-2026-00042');            // la fiche reste complète
+    expect(doc.getNumberOfPages()).toBe(2);
   });
 
   it('une photo corrompue ne fait pas échouer la fiche', async () => {
@@ -160,6 +174,8 @@ describe.runIf(process.env.SORTIE_PDF)('exemplaires pour relecture visuelle', ()
     writeFileSync(join(dossier, 'fiche-inscription.pdf'), Buffer.from(doc.output('arraybuffer')));
     const vert = donnees({ couleur: '#1E9E5A' }); vert.ecole = { ...vert.ecole, nom: 'Groupe Scolaire Les Bâtisseurs', logo: logoDeTest(120, [30, 150, 90], [220, 60, 50]) };
     writeFileSync(join(dossier, 'fiche-verte.pdf'), Buffer.from((await genererFicheInscriptionPdf(vert)).output('arraybuffer')));
+    const sansPhoto = donnees({ couleur: '#1F5FA9' }); sansPhoto.eleve = { ...sansPhoto.eleve, photo: null };
+    writeFileSync(join(dossier, 'fiche-sans-photo.pdf'), Buffer.from((await genererFicheInscriptionPdf(sansPhoto)).output('arraybuffer')));
     const un = donnees(); un.tuteurs = un.tuteurs.slice(0, 1); un.compte = null;
     writeFileSync(join(dossier, 'fiche-sans-compte.pdf'), Buffer.from((await genererFicheInscriptionPdf(un)).output('arraybuffer')));
   });

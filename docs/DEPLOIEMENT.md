@@ -249,7 +249,7 @@ Mise en route : exécuter `docs/sql/recus.sql` dans le SQL Editor (une seule foi
 
 À chaque inscription ou réinscription, une fiche s'ouvre, prête à imprimer. Elle se réédite depuis le profil de l'élève (« Fiche d'inscription »). Même identité visuelle que le reçu. Deux pages dans un seul PDF :
 
-- **Page 1, exemplaire de l'école** (signée et archivée) : identité, classe, tuteurs, frais, pièces à fournir, engagement, signatures. Elle ne contient **aucun mot de passe** : un dossier d'archive se consulte, se photocopie, se perd.
+- **Page 1, exemplaire de l'école** (signée et archivée) : identité, classe, tuteurs, frais, engagement, signatures. La photo est facultative : sans photo, aucun cadre vide. Elle ne contient **aucun mot de passe** : un dossier d'archive se consulte, se photocopie, se perd.
 - **Page 2, exemplaire de la famille** : identifiant, mot de passe, QR code vers le site, et le mode d'emploi (se connecter, installer l'application, activer les notifications). Absente si les identifiants ne sont pas lisibles.
 
 Le compte de l'élève se crée en arrière-plan juste après l'inscription : la fiche patiente quelques secondes avant de conclure qu'il n'y a pas d'identifiants.
