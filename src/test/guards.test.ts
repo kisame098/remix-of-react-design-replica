@@ -41,6 +41,8 @@ describe('garde-fou : tout écran de facturation passe par les règles de factur
     ['src/types/payment.ts', 'définit les règles elles-mêmes'],
     ['src/pages/Settings.tsx', 'écran où l\'école COCHE les mois : doit tous les afficher'],
     ['src/pages/Caisse.tsx', 'affiche le libellé d\'un mois déjà encaissé — jamais une dette'],
+    ['src/components/payment/PaymentHistory.tsx',
+     'historique : écrit le libellé du mois d\'un paiement déjà encaissé — jamais une dette ni un solde'],
     ['src/hooks/useRecus.tsx',
      'écrit le nom du mois sur un REÇU d\'un paiement déjà encaissé — jamais une dette ni un solde'],
     ['src/components/payment/ServiceRoster.tsx',

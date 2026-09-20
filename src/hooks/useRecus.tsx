@@ -15,11 +15,13 @@ import { toast } from '@/hooks/use-toast';
 export interface OptionsRecu {
   /** `true` pour une réédition d'un reçu déjà remis (historique). */
   duplicata?: boolean;
+  /** Le paiement vient d'être annulé : le reçu s'ouvre marqué ANNULÉ, à remettre à la famille. */
+  annulation?: boolean;
   /** Formule du message si le numéro n'a pas pu être attribué. */
   apresEncaissement?: boolean;
 }
 
-interface RecuOuvert { paiements: Payment[]; recu: Receipt; duplicata: boolean }
+interface RecuOuvert { paiements: Payment[]; recu: Receipt; duplicata: boolean; annulation: boolean }
 
 /**
  * Émettre et montrer le reçu d'un encaissement.
@@ -78,7 +80,7 @@ export function useRecus(): { montrerRecu: (paiements: Payment[], options?: Opti
       const autres = payments.filter(p => p.receiptId === recuId && !ids.has(p.id));
       const tous = [...frais.map(p => ({ ...p, receiptId: recuId })), ...autres];
 
-      setOuvert({ paiements: tous, recu, duplicata: options.duplicata ?? false });
+      setOuvert({ paiements: tous, recu, duplicata: options.duplicata ?? false, annulation: options.annulation ?? false });
       return true;
     } catch {
       toast({
@@ -103,7 +105,9 @@ export function useRecus(): { montrerRecu: (paiements: Payment[], options?: Opti
         ouvert
         onFermer={() => setOuvert(null)}
         titre={`Reçu ${numero}`}
-        description={ouvert.duplicata ? 'Duplicata d\'un reçu déjà remis.' : 'Le paiement est enregistré : remettez ce reçu à la famille.'}
+        description={ouvert.annulation
+          ? 'Reçu annulé : il garde son numéro et fait foi de l\'annulation. Remettez-le à la famille.'
+          : ouvert.duplicata ? 'Duplicata d\'un reçu déjà remis.' : 'Le paiement est enregistré : remettez ce reçu à la famille.'}
         nomFichier={`Recu_${numero}_${nomDeFichier(eleve ? `${eleve.lastName}_${eleve.firstName}` : premier.studentUniqueId)}`}
         generer={async () => {
           const [{ genererRecuPdf }] = await Promise.all([import('@/lib/recuPdf')]);

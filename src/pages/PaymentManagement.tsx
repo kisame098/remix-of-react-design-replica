@@ -1,12 +1,13 @@
 import { useState } from 'react';
-import { LayoutDashboard, CreditCard, BarChart3, Settings2, Wallet, UsersRound, ScanLine } from 'lucide-react';
+import { LayoutDashboard, CreditCard, BarChart3, Settings2, Wallet, UsersRound, ScanLine, History } from 'lucide-react';
 import PaymentOverview from '@/components/payment/PaymentOverview';
 import PaymentEntry from '@/components/payment/PaymentEntry';
 import PaymentTracking from '@/components/payment/PaymentTracking';
 import PaymentConfig from '@/components/payment/PaymentConfig';
+import PaymentHistory from '@/components/payment/PaymentHistory';
 import ServiceRoster from '@/components/payment/ServiceRoster';
 
-type Tab = 'overview' | 'entry' | 'scan' | 'tracking' | 'roster' | 'config';
+type Tab = 'overview' | 'entry' | 'scan' | 'tracking' | 'history' | 'roster' | 'config';
 
 interface NavTab {
   id: Tab;
@@ -20,6 +21,7 @@ const TABS: NavTab[] = [
   { id: 'entry',     label: 'Paiement',         icon: CreditCard,      description: 'Encaisser un paiement'      },
   { id: 'scan',      label: 'Scanner',          icon: ScanLine,        description: 'Scan QR direct à la caisse' },
   { id: 'tracking',  label: 'Suivi',             icon: BarChart3,       description: 'Qui a payé / pas payé'      },
+  { id: 'history',   label: 'Historique',        icon: History,         description: 'Tous les paiements, annulation' },
   { id: 'roster',    label: 'Services',          icon: UsersRound,      description: 'Inscriptions aux services'  },
   { id: 'config',    label: 'Configuration',     icon: Settings2,       description: 'Tarifs & services annexes'  },
 ];
@@ -78,6 +80,7 @@ const PaymentManagement = () => {
           {activeTab === 'entry'     && <PaymentEntry />}
           {activeTab === 'scan'      && <PaymentEntry initialMode="scan" />}
           {activeTab === 'tracking'  && <PaymentTracking />}
+          {activeTab === 'history'   && <PaymentHistory />}
           {activeTab === 'roster'    && <ServiceRoster />}
           {activeTab === 'config'    && <div className="flex-1 overflow-y-auto"><PaymentConfig /></div>}
         </div>
