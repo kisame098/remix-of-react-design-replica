@@ -42,8 +42,11 @@ export function useFicheInscription(): {
   const { getTuitionConfig, hasPaidInscription } = usePayment();
   const { currentYear } = useSchoolYear();
   const [ouverte, setOuverte] = useState<FicheOuverte | null>(null);
+  // Vrai quand les identifiants n'ont pas pu être lus : la page 2 manque, et il faut le DIRE.
+  const [sansIdentifiants, setSansIdentifiants] = useState(false);
 
   const montrerFiche = useCallback((eleve: Student, options: { reinscription?: boolean } = {}) => {
+    setSansIdentifiants(false);
     setOuverte({ eleve, reinscription: options.reinscription ?? estReinscription(eleve) });
   }, []);
 
@@ -60,7 +63,9 @@ export function useFicheInscription(): {
         ouvert
         onFermer={() => setOuverte(null)}
         titre="Fiche d'inscription"
-        description={`${eleve.lastName.toUpperCase()} ${eleve.firstName} — ${eleve.studentId}. La page 2, avec les identifiants de connexion, est à remettre à la famille.`}
+        description={sansIdentifiants
+          ? `${eleve.lastName.toUpperCase()} ${eleve.firstName} — ${eleve.studentId}. ⚠ Les identifiants de connexion n'ont pas pu être lus : la page « Accès à l'espace élève » est absente. Fermez, puis rouvrez cette fiche depuis le profil de l'élève.`
+          : `${eleve.lastName.toUpperCase()} ${eleve.firstName} — ${eleve.studentId}. La page 2, avec les identifiants de connexion, est à remettre à la famille.`}
         nomFichier={`Fiche_inscription_${nomDeFichier(`${eleve.lastName}_${eleve.firstName}`)}`}
         generer={async () => {
           // Le compte se crée en arrière-plan juste après l'inscription : on lui
@@ -69,6 +74,7 @@ export function useFicheInscription(): {
             chargerIdentifiantsEleve(eleve.id),
             import('@/lib/ficheInscriptionPdf'),
           ]);
+          setSansIdentifiants(!compte);
           return genererFicheInscriptionPdf(construireFiche({
             ecole: infosEcole(school),
             anneeScolaire: annee,

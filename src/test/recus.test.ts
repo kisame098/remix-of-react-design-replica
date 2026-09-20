@@ -142,6 +142,31 @@ describe('fiche d\'inscription — confidentialité des identifiants', () => {
     expect(src).toMatch(/\.eq\('role', 'student'\)/);
   });
 
+  it('le mot de passe se DÉCHIFFRE par la fonction prévue : la colonne en clair est vidée par la base', () => {
+    // Un déclencheur (encrypt_school_account_password) chiffre le mot de passe et met
+    // password_plain à NULL. Le lire là donnait toujours « rien » : la fiche sortait
+    // sans page d'identifiants et sans message.
+    const src = lire('src/lib/identifiantsEleve.ts');
+    const code = src.replace(/\/\/.*$/gm, '');          // sans les commentaires
+    expect(code).toMatch(/rpc\('reveal_school_account_password'/);
+    expect(code).not.toMatch(/password_plain/);
+  });
+
+  it('si les identifiants sont illisibles, la fenêtre le DIT au lieu de supprimer la page en silence', () => {
+    const hook = lire('src/hooks/useFicheInscription.tsx');
+    expect(hook).toMatch(/setSansIdentifiants\(!compte\)/);
+    expect(hook).toContain("n'ont pas pu être lus");
+  });
+
+  it('la fiche n\'a ni « pièces à fournir » ni cadre photo obligatoire', () => {
+    const pdf = lire('src/lib/ficheInscriptionPdf.ts');
+    expect(pdf).not.toMatch(/PIECES_A_FOURNIR|PIÈCES À FOURNIR/);
+    // Le cadre photo n'est dessiné qu'à l'intérieur du « if (data.eleve.photo) ».
+    const bloc = entre(pdf, 'if (data.eleve.photo) {', '// ── Identité');
+    expect(bloc).toMatch(/roundedRect\(xPhoto/);
+    expect(pdf.match(/roundedRect\(xPhoto/g)).toHaveLength(1);
+  });
+
   it('le mot de passe n\'est jamais écrit dans un journal ni dans le stockage du navigateur', () => {
     for (const fichier of [
       'src/lib/ficheInscription.ts', 'src/lib/ficheInscriptionPdf.ts',

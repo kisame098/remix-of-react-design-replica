@@ -1,6 +1,6 @@
 import jsPDF from 'jspdf';
 import QRCode from 'qrcode';
-import { PIECES_A_FOURNIR, type FicheInscriptionData } from '@/lib/ficheInscription';
+import type { FicheInscriptionData } from '@/lib/ficheInscription';
 import { dateDakar } from '@/lib/documentsEcole';
 import { couleurDominanteDuLogo, paletteDepuis, type Palette } from '@/lib/couleurLogo';
 import {
@@ -172,20 +172,18 @@ const pageFiche = (e: Etat): void => {
   doc.setTextColor(GRIS);
   doc.text(`Inscrit le ${dateDakar(data.dateInscription)}`, M + 82, yTitre + 30.6);
 
-  // Photo : dans son cadre ; sans photo, le cadre vide sert à en coller une.
-  const xPhoto = L - M - 28;
-  doc.setDrawColor(c.accent);
-  doc.setLineWidth(0.5);
-  doc.roundedRect(xPhoto, yTitre, 28, 35.5, 1.5, 1.5, 'S');
-  let photoPosee = false;
+  // Photo : seulement s'il y en a une. Elle est facultative : sans photo, aucun
+  // cadre vide ni mention « Photo » — la fiche n'a pas l'air incomplète.
   if (data.eleve.photo) {
+    const xPhoto = L - M - 28;
     try {
       const { fileType } = doc.getImageProperties(data.eleve.photo);
       doc.addImage(data.eleve.photo, fileType, xPhoto + 0.6, yTitre + 0.6, 26.8, 34.3);
-      photoPosee = true;
-    } catch { /* photo illisible : cadre vide */ }
+      doc.setDrawColor(c.accent);
+      doc.setLineWidth(0.5);
+      doc.roundedRect(xPhoto, yTitre, 28, 35.5, 1.5, 1.5, 'S');
+    } catch { /* photo illisible : on fait comme s'il n'y en avait pas */ }
   }
-  if (!photoPosee) etiquette(doc, 'Photo', xPhoto + 14, yTitre + 18.4, GRIS, 'center');
 
   let y = yTitre + 41;
 
@@ -242,19 +240,6 @@ const pageFiche = (e: Etat): void => {
     doc.text(`${formaterMontant(data.frais.mensualite ?? 0)} FCFA`, M + 136, y + 6.4);
     y += 15;
   }
-
-  // ── Pièces à fournir ──
-  y = place(e, y, 24);
-  y = titreSection(e, 'PIÈCES À FOURNIR', y);
-  const colPiece = U / 3;
-  PIECES_A_FOURNIR.forEach((piece, i) => {
-    const x = M + (i % 3) * colPiece;
-    const yy = y + Math.floor(i / 3) * 6.4;
-    caseACocher(doc, c, x, yy, false);
-    doc.setFont('helvetica', 'normal'); doc.setFontSize(8.3); doc.setTextColor(ENCRE);
-    doc.text((doc.splitTextToSize(piece, colPiece - 7) as string[])[0], x + 5.4, yy + 2.9);
-  });
-  y += Math.ceil(PIECES_A_FOURNIR.length / 3) * 6.4 + 4;
 
   // ── Engagement et signatures ──
   y = place(e, y, 50);

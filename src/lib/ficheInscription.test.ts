@@ -1,10 +1,11 @@
 import { describe, it, expect, vi } from 'vitest';
 import {
-  construireFiche, dateIsoVersFr, libelleQualite, libelleSexe, PIECES_A_FOURNIR,
+  construireFiche, dateIsoVersFr, libelleQualite, libelleSexe,
 } from './ficheInscription';
 import { chargerIdentifiantsEleve } from './identifiantsEleve';
 
-vi.mock('@/integrations/supabase/client', () => ({ supabase: { from: vi.fn() } }));
+const sb = vi.hoisted(() => ({ from: vi.fn(), rpc: vi.fn() }));
+vi.mock('@/integrations/supabase/client', () => ({ supabase: sb }));
 
 const ecole = { nom: 'Collège Sainte Anne', ville: 'Dakar' };
 
@@ -100,13 +101,6 @@ describe('construireFiche', () => {
   });
 });
 
-describe('pièces à fournir', () => {
-  it('liste standard, sans doublon', () => {
-    expect(new Set(PIECES_A_FOURNIR).size).toBe(PIECES_A_FOURNIR.length);
-    expect(PIECES_A_FOURNIR.length).toBeGreaterThanOrEqual(5);
-  });
-});
-
 // ════════════════════════════════════════════════════════════════════════════
 // Le compte de l'élève se crée EN ARRIÈRE-PLAN après l'inscription : sa ligne
 // apparaît un instant plus tard. Sans nouvelle tentative, la fiche sortirait
@@ -136,5 +130,64 @@ describe('chargerIdentifiantsEleve', () => {
     const lire = vi.fn().mockResolvedValue(null);
     await expect(chargerIdentifiantsEleve('e1', { lire, delaiMs: 0, tentatives: 3 })).resolves.toBeNull();
     expect(lire).toHaveBeenCalledTimes(3);
+  });
+});
+
+// ════════════════════════════════════════════════════════════════════════════
+// LA LECTURE RÉELLE. Un déclencheur de la base chiffre le mot de passe et VIDE la
+// colonne `password_plain` : le lire là donne toujours « rien », et la fiche sort
+// sans page d'identifiants. Les tests ci-dessus injectent un faux lecteur : ils ne
+// pouvaient pas voir ce bug. Ceux-ci font tourner le vrai lecteur, contre un faux
+// client Supabase.
+// ════════════════════════════════════════════════════════════════════════════
+describe('chargerIdentifiantsEleve — lecture réelle en base', () => {
+  const requeteCompte = (resultat: { data: unknown; error: unknown }) => {
+    const select = vi.fn();
+    const chaine = { select, eq: vi.fn(), maybeSingle: vi.fn().mockResolvedValue(resultat) };
+    select.mockReturnValue(chaine);
+    chaine.eq.mockReturnValue(chaine);
+    sb.from.mockReturnValue(chaine);
+    return { select, eq: chaine.eq };
+  };
+
+  const essayer = () => chargerIdentifiantsEleve('insc-1', { tentatives: 1, delaiMs: 0 });
+
+  it('lit l\'identifiant, puis DÉCHIFFRE le mot de passe par la fonction prévue', async () => {
+    const { select, eq } = requeteCompte({ data: { id: 'compte-9', email: 'awa.diop.12345@senclass.com' }, error: null });
+    sb.rpc.mockResolvedValue({ data: 'Kx7mPq2Zab', error: null });
+
+    await expect(essayer()).resolves.toEqual({ identifiant: 'awa.diop.12345@senclass.com', motDePasse: 'Kx7mPq2Zab' });
+
+    expect(sb.from).toHaveBeenCalledWith('school_accounts');
+    expect(eq).toHaveBeenCalledWith('student_enrollment_id', 'insc-1');
+    expect(eq).toHaveBeenCalledWith('role', 'student');
+    expect(sb.rpc).toHaveBeenCalledWith('reveal_school_account_password', { p_account_id: 'compte-9' });
+    // Le mot de passe ne se lit JAMAIS dans la colonne : elle est vidée par la base.
+    expect(select).toHaveBeenCalledWith('id, email');
+    expect(select.mock.calls.flat().join(' ')).not.toContain('password_plain');
+  });
+
+  it('aucun compte trouvé : null, sans appeler le déchiffrement', async () => {
+    requeteCompte({ data: null, error: null });
+    sb.rpc.mockClear();
+    await expect(essayer()).resolves.toBeNull();
+    expect(sb.rpc).not.toHaveBeenCalled();
+  });
+
+  it('lecture du compte refusée (droits) : null', async () => {
+    requeteCompte({ data: null, error: { message: 'refusé' } });
+    await expect(essayer()).resolves.toBeNull();
+  });
+
+  it('déchiffrement refusé (pas admin de cette école) : null, jamais un mot de passe inventé', async () => {
+    requeteCompte({ data: { id: 'compte-9', email: 'a@senclass.com' }, error: null });
+    sb.rpc.mockResolvedValue({ data: null, error: { message: 'Non autorisé' } });
+    await expect(essayer()).resolves.toBeNull();
+  });
+
+  it('mot de passe vide : null', async () => {
+    requeteCompte({ data: { id: 'compte-9', email: 'a@senclass.com' }, error: null });
+    sb.rpc.mockResolvedValue({ data: '', error: null });
+    await expect(essayer()).resolves.toBeNull();
   });
 });

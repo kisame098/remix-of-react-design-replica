@@ -116,13 +116,3 @@ export const construireFiche = (e: EntreeFiche): FicheInscriptionData => {
       : null,
   };
 };
-
-/** Pièces habituellement demandées à l'inscription — cases à cocher à la main. */
-export const PIECES_A_FOURNIR = [
-  'Extrait d\'acte de naissance',
-  'Certificat de scolarité / bulletin',
-  '2 photos d\'identité',
-  'Carnet de vaccination',
-  'Pièce d\'identité du tuteur',
-  'Certificat de radiation (transfert)',
-] as const;
