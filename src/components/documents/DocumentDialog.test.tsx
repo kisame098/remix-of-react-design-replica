@@ -66,6 +66,28 @@ describe('DocumentDialog', () => {
     expect(screen.getByRole('button', { name: /Imprimer/ })).toBeDisabled();
   });
 
+  it('NOUVELLE VERSION installée pendant que la page restait ouverte : l\'explique, sans recharger d\'office', async () => {
+    const recharger = vi.fn();
+    Object.defineProperty(window, 'location', { configurable: true, value: { ...window.location, reload: recharger } });
+
+    monter(() => Promise.reject(new Error('Failed to fetch dynamically imported module: https://senclass.com/assets/recuPdf-old.js')));
+
+    const alerte = await screen.findByRole('alert');
+    expect(alerte).toHaveTextContent('nouvelle version');
+    expect(alerte).toHaveTextContent('Terminez et enregistrez');
+    // Rien ne se recharge tout seul : le travail en cours est préservé.
+    expect(recharger).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole('button', { name: /Recharger la page/ }));
+    expect(recharger).toHaveBeenCalledTimes(1);
+  });
+
+  it('une autre erreur reste un simple « réessayez », sans proposer de recharger', async () => {
+    monter(() => Promise.reject(new Error('boum')));
+    expect(await screen.findByRole('alert')).toHaveTextContent('Réessayez');
+    expect(screen.queryByRole('button', { name: /Recharger la page/ })).toBeNull();
+  });
+
   it('Fermer est toujours possible, même pendant la fabrication', () => {
     monter(() => new Promise(() => undefined));
     expect(screen.getByRole('button', { name: 'Fermer' })).toBeEnabled();
