@@ -229,7 +229,11 @@ Il n'y a **aucun secret à poser** dans « Edge Functions → Secrets ».
 
 ### Reçu de paiement
 
-Chaque encaissement produit un **reçu numéroté** (`REC-2026-00042`), en PDF A5, avec le logo et les coordonnées de l'école, le nom de l'élève, chaque ligne payée, le total **en chiffres et en lettres**, le mode de paiement, le nom du caissier et deux cases de signature. Il s'ouvre dès l'encaissement, prêt à imprimer ou à télécharger.
+Chaque encaissement produit un **reçu numéroté** (`REC-2026-00042`), en PDF A5. Il s'ouvre dès l'encaissement, prêt à imprimer ou à télécharger.
+
+**Design.** Bandeau aux **couleurs de l'école, tirées automatiquement de son logo** (un logo vert donne un reçu vert, un logo bordeaux un reçu bordeaux), nom de l'école en capitales à empattements, coordonnées, tampon « ACQUITTÉ », filigrane du logo, motif de sécurité guilloché, emplacement de cachet. Le total est écrit **en chiffres et en lettres**. La palette est calculée pour que le blanc reste lisible sur le bandeau quelle que soit la couleur du logo (contraste vérifié), et le reçu reste lisible sur une imprimante noir et blanc. Jusqu'à 7 lignes de paiement tiennent sur une seule page (mode compact au-delà de 4 lignes).
+
+Le reçu porte aussi le nom de l'élève, chaque ligne payée, le mode de paiement, le nom du caissier et les emplacements de signature.
 
 - **Un reçu par encaissement**, pas par ligne : inscription plus trois mois payés d'un coup donnent un seul reçu.
 - **Numéro séquentiel par école et par année**, attribué sous verrou : deux caissiers au même instant ne prennent jamais le même numéro. Un reçu ne se supprime ni ne se modifie.
@@ -243,7 +247,7 @@ Mise en route : exécuter `docs/sql/recus.sql` dans le SQL Editor (une seule foi
 
 ### Fiche d'inscription
 
-À chaque inscription ou réinscription, une fiche s'ouvre, prête à imprimer. Elle se réédite depuis le profil de l'élève (« Fiche d'inscription »). Deux pages dans un seul PDF :
+À chaque inscription ou réinscription, une fiche s'ouvre, prête à imprimer. Elle se réédite depuis le profil de l'élève (« Fiche d'inscription »). Même identité visuelle que le reçu. Deux pages dans un seul PDF :
 
 - **Page 1, exemplaire de l'école** (signée et archivée) : identité, classe, tuteurs, frais, pièces à fournir, engagement, signatures. Elle ne contient **aucun mot de passe** : un dossier d'archive se consulte, se photocopie, se perd.
 - **Page 2, exemplaire de la famille** : identifiant, mot de passe, QR code vers le site, et le mode d'emploi (se connecter, installer l'application, activer les notifications). Absente si les identifiants ne sont pas lisibles.

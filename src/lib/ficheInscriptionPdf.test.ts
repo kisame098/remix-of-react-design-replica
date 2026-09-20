@@ -13,7 +13,7 @@ import { logoDeTest, pngDataUrl } from '@/test/helpers/png';
 
 const photo = () => pngDataUrl(60, 76, (x, y) => [180 + (x % 20), 140 + (y % 30), 120, 255]);
 
-const donnees = (extra: Partial<FicheInscriptionData> = {}): FicheInscriptionData => ({
+const donnees = (extra: Partial<FicheInscriptionData> & { couleur?: string | null } = {}): FicheInscriptionData & { couleur?: string | null } => ({
   ...construireFiche({
     ecole: {
       nom: 'Collège Sainte Anne', ville: 'Dakar', pays: 'Sénégal', telephone: '77 123 45 67',
@@ -35,7 +35,7 @@ const donnees = (extra: Partial<FicheInscriptionData> = {}): FicheInscriptionDat
   ...extra,
 });
 
-const brut = async (d: FicheInscriptionData) => {
+const brut = async (d: FicheInscriptionData & { couleur?: string | null }) => {
   const doc = await genererFicheInscriptionPdf(d);
   return { doc, texte: Buffer.from(doc.output('arraybuffer')).toString('latin1') };
 };
@@ -113,14 +113,14 @@ describe('fiche d\'inscription PDF', () => {
     const { texte } = await brut(donnees());
     expect(texte).toContain('PIÈCES À FOURNIR'.replace('È', '\xC8').replace('À', '\xC0'));
     expect(texte).toContain('ENGAGEMENT');
-    expect(texte).toContain('Lu et approuv');
+    expect(texte).toContain('LU ET APPROUV');
   });
 
   it('photo : l\'image est intégrée ; sans photo, un cadre vide', async () => {
     expect((await brut(donnees())).texte).toContain('/Subtype /Image');
     const sans = donnees(); sans.eleve = { ...sans.eleve, photo: null }; sans.ecole = { ...sans.ecole, logo: null };
     const { texte } = await brut(sans);
-    expect(texte).toContain('Photo');
+    expect(texte).toContain('PHOTO');
   });
 
   it('une photo corrompue ne fait pas échouer la fiche', async () => {
@@ -156,8 +156,10 @@ describe('fiche d\'inscription PDF', () => {
 describe.runIf(process.env.SORTIE_PDF)('exemplaires pour relecture visuelle', () => {
   it('écrit la fiche', async () => {
     const dossier = process.env.SORTIE_PDF as string;
-    const doc = await genererFicheInscriptionPdf(donnees());
+    const doc = await genererFicheInscriptionPdf(donnees({ couleur: '#1F5FA9' }));
     writeFileSync(join(dossier, 'fiche-inscription.pdf'), Buffer.from(doc.output('arraybuffer')));
+    const vert = donnees({ couleur: '#1E9E5A' }); vert.ecole = { ...vert.ecole, nom: 'Groupe Scolaire Les Bâtisseurs', logo: logoDeTest(120, [30, 150, 90], [220, 60, 50]) };
+    writeFileSync(join(dossier, 'fiche-verte.pdf'), Buffer.from((await genererFicheInscriptionPdf(vert)).output('arraybuffer')));
     const un = donnees(); un.tuteurs = un.tuteurs.slice(0, 1); un.compte = null;
     writeFileSync(join(dossier, 'fiche-sans-compte.pdf'), Buffer.from((await genererFicheInscriptionPdf(un)).output('arraybuffer')));
   });

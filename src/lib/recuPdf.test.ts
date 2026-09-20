@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { RecuData } from './recu';
-import { genererRecuPdf } from './recuPdf';
+import { genererRecuPdf, LIGNES_MODE_NORMAL } from './recuPdf';
 import { logoDeTest } from '@/test/helpers/png';
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -11,7 +11,7 @@ import { logoDeTest } from '@/test/helpers/png';
 // polices d'un PDF ne savent pas dessiner.
 // ════════════════════════════════════════════════════════════════════════════
 
-const base = (extra: Partial<RecuData> = {}): RecuData => ({
+const base = (extra: Partial<RecuData> & { couleur?: string | null } = {}): RecuData & { couleur?: string | null } => ({
   ecole: {
     nom: 'Collège Sainte Anne', ville: 'Dakar', pays: 'Sénégal', telephone: '77 123 45 67',
     email: 'contact@sainteanne.sn', adresse: 'BP 1234, Point E', ninea: '00512345 2G3', logo: logoDeTest(),
@@ -64,7 +64,9 @@ describe('reçu PDF — contenu', () => {
     expect(texte).toContain("Frais d'inscription");
     expect(texte).toContain('50 000');
     expect(texte).toContain('25 000');
-    expect(texte).toContain('75 000 FCFA');
+    expect(texte).toContain('75 000');
+    expect(texte).toContain('FCFA');
+    expect(texte).toContain('TOTAL PAY');
   });
 
   it('écrit le total EN LETTRES', async () => {
@@ -79,9 +81,13 @@ describe('reçu PDF — contenu', () => {
     expect(texte).toContain('Fatou Sow');
   });
 
-  it('date et heure de Dakar', async () => {
+  it('date et heure de Dakar, écrites en toutes lettres', async () => {
     const { texte } = await brut(base({ date: '2026-09-19T14:32:00Z' }));
-    expect(texte).toContain('19/09/2026 à 14:32');
+    expect(texte).toContain('19 septembre 2026 \xE0 14:32');
+  });
+
+  it('le tampon ACQUITTÉ figure sur un reçu valable', async () => {
+    expect((await brut(base())).texte).toContain('ACQUITT');
   });
 
   it('les coordonnées de l\'école : adresse, téléphone, NINEA', async () => {
@@ -116,6 +122,7 @@ describe('reçu PDF — mentions', () => {
     const { texte } = await brut(base());
     expect(texte).not.toContain('ANNUL');
     expect(texte).not.toContain('DUPLICATA');
+    expect(texte).toContain('ACQUITT');
   });
 
   it('DUPLICATA sur une réédition', async () => {
@@ -125,9 +132,10 @@ describe('reçu PDF — mentions', () => {
   it('ANNULÉ : montant annulé affiché, jamais « 0 FCFA » ni de somme « arrêtée »', async () => {
     const { texte } = await brut(base({ annule: { le: '2026-09-20T08:00:00Z', par: 'Le directeur' }, total: 0 }));
     expect(texte).toContain('TOTAL ANNUL');
-    expect(texte).toContain('75 000 FCFA');
-    expect(texte).not.toContain('Arrêté la présente somme');
+    expect(texte).toContain('75 000');
+    expect(texte).not.toContain('Arr\xEAt\xE9 le pr\xE9sent re\xE7u');
     expect(texte).not.toContain('TOTAL PAY');
+    expect(texte).not.toContain('ACQUITT');            // un reçu annulé n'est jamais « acquitté »
   });
 
   it('ANNULÉ : tampon, mention « sans valeur », qui et quand', async () => {
@@ -156,6 +164,19 @@ describe('reçu PDF — robustesse', () => {
     expect(texte).not.toMatch(/[\u202F\u2192\u2713]/);
   });
 
+  it.each([1, 2, 3, 4, 5, 6, 7])('un encaissement de %i ligne(s) tient sur UNE page — celle qu\'on agrafe', async (n) => {
+    const lignes = Array.from({ length: n }, (_, i) => ({
+      designation: i === 0 ? "Frais d'inscription" : `Scolarité — Mois ${i}`, montant: 25000, annulee: false,
+    }));
+    const { doc, texte } = await brut(base({ lignes, total: 25000 * n }));
+    expect(doc.getNumberOfPages()).toBe(1);
+    expect(texte).toContain('ACQUITT');                  // tampon, total et signatures sont bien sur cette page
+  });
+
+  it('le mode compact ne s\'active qu\'au-delà de quatre lignes', () => {
+    expect(LIGNES_MODE_NORMAL).toBe(4);
+  });
+
   it('beaucoup de lignes : le tableau continue sur une seconde page, le total reste sur la dernière', async () => {
     const lignes = Array.from({ length: 30 }, (_, i) => ({
       designation: `Scolarité — Mois ${i + 1}`, montant: 1000, annulee: false,
@@ -163,8 +184,8 @@ describe('reçu PDF — robustesse', () => {
     const { doc, texte } = await brut(base({ lignes, total: 30000 }));
     expect(doc.getNumberOfPages()).toBeGreaterThanOrEqual(2);
     // Dans un PDF, les parenthèses du texte sont échappées : « (suite) » s'y lit « \(suite\) ».
-    expect(texte).toMatch(/suite\\\)/);
-    expect(texte).toContain('30 000 FCFA');
+    expect(texte).toContain('suite');
+    expect(texte).toContain('30 000');
   });
 
   it('un nom d\'école très long ne déborde pas de la page', async () => {
@@ -181,7 +202,7 @@ describe('reçu PDF — robustesse', () => {
   it('montant en millions : lettres correctes', async () => {
     const { texte } = await brut(base({ total: 1_500_000, lignes: [{ designation: 'Inscription', montant: 1_500_000, annulee: false }] }));
     expect(texte).toContain('Un million cinq cent mille francs CFA.');
-    expect(texte).toContain('1 500 000 FCFA');
+    expect(texte).toContain('1 500 000');
   });
 });
 
@@ -189,11 +210,28 @@ describe('reçu PDF — robustesse', () => {
 describe.runIf(process.env.SORTIE_PDF)('exemplaires pour relecture visuelle', () => {
   it('écrit quelques reçus', async () => {
     const dossier = process.env.SORTIE_PDF as string;
-    const cas: [string, RecuData][] = [
-      ['recu-ordinaire', base()],
-      ['recu-duplicata', base({ duplicata: true })],
-      ['recu-annule', base({ annule: { le: '2026-09-20T08:00:00Z', par: 'Le directeur' }, total: 0 })],
+    const cas: [string, RecuData & { couleur?: string | null }][] = [
+      ['recu-ordinaire', base({ couleur: '#1F5FA9' })],
+      ['recu-vert', base({ couleur: '#1E9E5A', ecole: { ...base().ecole, nom: 'Groupe Scolaire Les Bâtisseurs', logo: logoDeTest(120, [30, 150, 90], [220, 60, 50]) } })],
+      ['recu-rouge', base({ couleur: '#C0282D', ecole: { ...base().ecole, nom: 'Institut Cheikh Ahmadou Bamba', logo: logoDeTest(120, [190, 40, 45], [240, 200, 40]) } })],
+      ['recu-jaune', base({ couleur: '#F2C200', ecole: { ...base().ecole, nom: 'École Le Petit Prince', logo: logoDeTest(120, [242, 194, 0], [40, 40, 40]) } })],
+      ['recu-noir', base({ couleur: '#222222', ecole: { ...base().ecole, nom: 'Lycée Blaise Diagne', logo: logoDeTest(120, [40, 40, 40], [200, 200, 200]) } })],
+      ['recu-duplicata', base({ couleur: '#1F5FA9', duplicata: true })],
+      ['recu-annule', base({ couleur: '#1F5FA9', annule: { le: '2026-09-20T08:00:00Z', par: 'Le directeur' }, total: 0 })],
       ['recu-sans-logo', base({ ecole: { ...base().ecole, logo: null } })],
+      ['recu-sept-lignes', base({ couleur: '#1F5FA9', lignes: [
+        { designation: "Frais d'inscription", montant: 50000, annulee: false },
+        ...['Septembre', 'Octobre', 'Novembre', 'Décembre'].map(m => ({ designation: `Scolarité — ${m} 2026`, montant: 25000, annulee: false })),
+        { designation: 'Cantine — Septembre 2026', montant: 12500, annulee: false },
+        { designation: 'Transport — Septembre 2026', montant: 15000, annulee: false },
+      ], total: 177500, mode: 'Espèces, Wave', reference: 'WV-88213' })],
+      ['recu-plusieurs-lignes', base({ couleur: '#1F5FA9', lignes: [
+        { designation: "Frais d'inscription", montant: 50000, annulee: false },
+        { designation: 'Scolarité — Septembre 2026', montant: 25000, annulee: false },
+        { designation: 'Scolarité — Octobre 2026', montant: 25000, annulee: false },
+        { designation: 'Cantine — Septembre 2026', montant: 12500, annulee: false },
+        { designation: 'Transport — Septembre 2026', montant: 15000, annulee: false },
+      ], total: 127500, mode: 'Espèces, Wave', reference: 'WV-88213' })],
     ];
     for (const [nom, data] of cas) {
       const doc = await genererRecuPdf(data);

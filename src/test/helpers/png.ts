@@ -55,14 +55,21 @@ export const pngDataUrl = (
   return `data:image/png;base64,${Buffer.from(total).toString('base64')}`;
 };
 
-/** Un logo d'école plausible : disque bleu, anneau blanc, disque or au centre, fond transparent. */
-export const logoDeTest = (taille = 120): string =>
+/**
+ * Un logo d'école plausible : disque, anneau blanc, disque central, fond transparent.
+ * `principal` colore le corps du logo (bleu par défaut), `accent` le cœur (or).
+ */
+export const logoDeTest = (
+  taille = 120,
+  principal: [number, number, number] = [31, 95, 169],
+  accent: [number, number, number] = [230, 165, 30],
+): string =>
   pngDataUrl(taille, taille, (x, y) => {
     const c = taille / 2;
     const d = Math.hypot(x - c + 0.5, y - c + 0.5) / c;
     if (d > 1) return [0, 0, 0, 0];
-    if (d > 0.82) return [31, 58, 95, 255];
+    if (d > 0.82) return [...principal.map(v => Math.round(v * 0.7)), 255] as [number, number, number, number];
     if (d > 0.7) return [255, 255, 255, 255];
-    if (d > 0.32) return [31, 95, 169, 255];
-    return [230, 165, 30, 255];
+    if (d > 0.32) return [...principal, 255] as [number, number, number, number];
+    return [...accent, 255] as [number, number, number, number];
   });

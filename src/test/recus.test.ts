@@ -131,7 +131,7 @@ describe('fiche d\'inscription — confidentialité des identifiants', () => {
   });
 
   it('la page 1 (archivée par l\'école) ne dessine ni identifiant ni mot de passe', () => {
-    const page1 = entre(pdf, 'export async function genererFicheInscriptionPdf', '// ── Page 2');
+    const page1 = entre(pdf, 'const pageFiche', '// ─── Page 2');
     expect(page1).not.toMatch(/motDePasse|compte\.identifiant/);
   });
 
