@@ -1,12 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
 import type jsPDF from 'jspdf';
-import { Download, Loader2, Printer, TriangleAlert } from 'lucide-react';
+import { Download, Loader2, Printer, RefreshCw, TriangleAlert } from 'lucide-react';
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { toast } from '@/hooks/use-toast';
 import { imprimerPdf, telechargerPdf } from '@/lib/documentsEcole';
+import { estUneErreurDeChargement } from '@/lib/rechargementApresDeploiement';
 
 interface DocumentDialogProps {
   ouvert: boolean;
@@ -33,6 +34,8 @@ export const DocumentDialog = ({
   const [doc, setDoc] = useState<jsPDF | null>(null);
   const [apercu, setApercu] = useState<string | null>(null);
   const [erreur, setErreur] = useState(false);
+  // Une nouvelle version a été installée pendant que cette page restait ouverte.
+  const [nouvelleVersion, setNouvelleVersion] = useState(false);
   const genererRef = useRef(generer);
   genererRef.current = generer;
 
@@ -40,7 +43,7 @@ export const DocumentDialog = ({
     if (!ouvert) return;
     let annule = false;
     let url: string | null = null;
-    setDoc(null); setApercu(null); setErreur(false);
+    setDoc(null); setApercu(null); setErreur(false); setNouvelleVersion(false);
 
     genererRef.current()
       .then(pdf => {
@@ -49,7 +52,11 @@ export const DocumentDialog = ({
         setDoc(pdf);
         setApercu(url);
       })
-      .catch(() => { if (!annule) setErreur(true); });
+      .catch((e: unknown) => {
+        if (annule) return;
+        setErreur(true);
+        setNouvelleVersion(estUneErreurDeChargement(e));
+      });
 
     return () => {
       annule = true;
@@ -88,10 +95,26 @@ export const DocumentDialog = ({
             <Loader2 className="h-4 w-4 animate-spin" /> Préparation du document…
           </p>
         )}
-        {erreur && (
+        {erreur && !nouvelleVersion && (
           <p role="alert" className="flex items-center gap-2 text-sm text-destructive">
             <TriangleAlert className="h-4 w-4" /> Le document n'a pas pu être généré. Réessayez.
           </p>
+        )}
+        {erreur && nouvelleVersion && (
+          // La page n'est PAS rechargée d'office : l'utilisateur travaille peut-être
+          // sur un formulaire. C'est à lui de choisir le moment.
+          <div role="alert" className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+            <p className="flex items-start gap-2">
+              <TriangleAlert className="mt-0.5 h-4 w-4 shrink-0" />
+              <span>
+                <strong className="font-semibold">Une nouvelle version de SenClass vient d'être installée.</strong>{' '}
+                Pour générer ce document, la page doit être rechargée. Terminez et enregistrez ce que vous faites, puis rechargez.
+              </span>
+            </p>
+            <Button size="sm" className="mt-3 gap-2" onClick={() => window.location.reload()}>
+              <RefreshCw className="h-4 w-4" /> Recharger la page
+            </Button>
+          </div>
         )}
 
         <DialogFooter className="gap-2 sm:gap-2">

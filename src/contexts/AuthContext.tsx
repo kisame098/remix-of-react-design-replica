@@ -7,6 +7,7 @@ import { getSubscriptionGate } from '@/lib/subscription';
 import { confirmationRequise, adresseRetourConfirmation } from '@/lib/confirmationEmail';
 import { enregistrer, lire, effacerUtilisateur } from '@/lib/cacheHorsLigne';
 import { retirerAbonnementDuCompte } from '@/lib/notificationsPush';
+import { actionPourEvenement } from '@/lib/evenementsAuth';
 
 // platform_admins n'est pas encore dans les types générés (table ajoutée
 // après la dernière génération) — cast localisé, comme ailleurs dans l'app
@@ -274,10 +275,22 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event, session) => {
-        setSession(session);
-        setUser(session?.user ?? null);
+        // À CHAQUE retour sur l'onglet, la bibliothèque d'authentification envoie
+        // SIGNED_IN pour la session DÉJÀ ouverte (elle « récupère » la session
+        // après une absence). Rien n'a changé pour l'utilisateur : le traiter
+        // comme une nouvelle connexion mettait `loading` à vrai, l'écran d'attente
+        // remplaçait TOUTE la page, et une fenêtre ouverte ou un formulaire à moitié
+        // rempli disparaissaient dès qu'on revenait d'un autre onglet (aller voir un
+        // PDF, par exemple). La décision vit dans src/lib/evenementsAuth.ts.
+        const action = actionPourEvenement(event, {
+          utilisateurRecu: session?.user?.id ?? null,
+          utilisateurCourant: userIdRef.current,
+          roleConnu: roleConnuRef.current,
+        });
 
-        if (!session?.user) {
+        if (action === 'deconnecter') {
+          setSession(null);
+          setUser(null);
           setProfile(null);
           setSchool(null);
           setAccountRole(null);
@@ -288,26 +301,27 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           return;
         }
 
-        // Supabase déclenche cet évènement en silence toutes les ~10 min (et à
-        // chaque retour de focus sur l'onglet) pour renouveler le token — ça ne
-        // change ni l'utilisateur ni son rôle. Recharger le profil complet à
-        // chaque fois provoquait un flash "Vérification de la session..." et un
-        // reset de l'app à répétition. On ne recharge que sur une vraie nouvelle
-        // connexion.
-        if (event === 'TOKEN_REFRESHED' || event === 'USER_UPDATED') {
-          // Exception : le rôle n'a jamais pu être chargé (application ouverte
-          // hors connexion, jeton renouvelé au retour du réseau). C'est le
-          // moment de le charger, sinon l'utilisateur resterait bloqué sur
-          // « Chargement du profil… ». Pas de setLoading(true) : il est déjà
-          // devant l'écran d'attente, inutile de le faire clignoter.
-          if (!roleConnuRef.current) loadUserData(session.user.id);
-          return;
-        }
+        // On garde la MÊME référence tant que rien n'a réellement changé : un
+        // nouvel objet identique déclencherait, chez tous ceux qui dépendent de
+        // `session` ou `user`, des recalculs et des écritures inutiles. Un jeton
+        // différent (renouvelé, ou reçu d'un autre onglet) est en revanche bien
+        // retenu : les comptes liés y stockent leur jeton de reconnexion.
+        setSession(prev => (prev && session && prev.access_token === session.access_token ? prev : session));
+        setUser(prev => (prev && session?.user && prev.id === session.user.id && event !== 'USER_UPDATED' ? prev : session?.user ?? null));
 
-        // Remettre loading à true pour bloquer ProtectedRoute jusqu'à ce que
-        // le rôle soit connu (évite le flash du Dashboard pour les élèves/profs)
+        if (action === 'noter-le-jeton') return;
+
+        // Le rôle n'a jamais pu être chargé (application ouverte hors connexion,
+        // jeton renouvelé au retour du réseau) : c'est le moment de le charger,
+        // sinon l'utilisateur resterait bloqué sur « Chargement du profil… ». Pas
+        // de setLoading(true) : il est déjà devant l'écran d'attente, inutile de le
+        // faire clignoter.
+        if (action === 'charger-le-role') { loadUserData(session!.user.id); return; }
+
+        // Vraie nouvelle connexion : bloquer ProtectedRoute jusqu'à ce que le rôle
+        // soit connu (évite le flash du Dashboard pour les élèves/profs).
         setLoading(true);
-        loadUserData(session.user.id).finally(() => setLoading(false));
+        loadUserData(session!.user.id).finally(() => setLoading(false));
       }
     );
 

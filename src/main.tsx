@@ -1,6 +1,7 @@
 import { createRoot } from "react-dom/client";
 import App from "./App.tsx";
 import "./index.css";
+import { doitRechargerDOffice } from "./lib/rechargementApresDeploiement";
 
 // ── Après un déploiement ───────────────────────────────────────────────────
 // Les écrans sont chargés à la demande. Un onglet resté ouvert pendant une
@@ -10,6 +11,10 @@ import "./index.css";
 const CLE_RECHARGEMENT = "teranga.rechargement-apres-deploiement";
 
 window.addEventListener("vite:preloadError", (evenement) => {
+  // Un fichier chargé AU CLIC (générateur de PDF) manque : l'utilisateur est en plein
+  // travail sur une page qui reste affichée. Recharger d'office détruirait sa saisie ;
+  // on laisse l'erreur remonter, la fenêtre concernée l'explique.
+  if (!doitRechargerDOffice((evenement as Event & { payload?: unknown }).payload)) return;
   try {
     if (sessionStorage.getItem(CLE_RECHARGEMENT)) return;
     sessionStorage.setItem(CLE_RECHARGEMENT, "1");
