@@ -15,6 +15,8 @@ import {
   AlertCircle, Loader2, QrCode, ScanLine,
 } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
+import { useRecus } from '@/hooks/useRecus';
+import type { Payment } from '@/types/payment';
 import {
   PaymentMethod, PAYMENT_METHOD_LABELS, PAYMENT_METHOD_ICONS,
   getAcademicMonths, isMonthOverdue, MonthKey, PaymentType,
@@ -112,6 +114,7 @@ const PaymentEntry = ({ initialMode = 'search' }: { initialMode?: 'search' | 'sc
   } = usePayment();
   const { currentYear } = useSchoolYear();
   const { school, profile } = useAuth();
+  const { montrerRecu, dialogueRecu } = useRecus();
   const billingTiming = (school?.settings?.tuitionBillingTiming as TuitionBillingTiming) ?? DEFAULT_TUITION_BILLING_TIMING;
   const academicMonths = useMemo(
     () => currentYear ? getAcademicMonths(currentYear.startDate, currentYear.endDate, billingTiming) : [],
@@ -248,11 +251,14 @@ const PaymentEntry = ({ initialMode = 'search' }: { initialMode?: 'search' | 'sc
       return;
     }
     setProcessing(true);
+    // Paiements réellement enregistrés : le reçu ne couvre que ceux-là, même si
+    // un élément échoue en cours de route.
+    const enregistres: Payment[] = [];
     try {
       const itemsToPay = payableItems.filter(i => selectedItems.has(i.id) && !i.paid && !i.blocked);
       // Process payments sequentially to avoid race conditions on unique constraints
       for (const item of itemsToPay) {
-        await addPayment({
+        enregistres.push(await addPayment({
           studentId:      selectedStudent.id,
           studentUniqueId: selectedStudent.studentId,
           type:           item.type,
@@ -263,7 +269,7 @@ const PaymentEntry = ({ initialMode = 'search' }: { initialMode?: 'search' | 'sc
           reference:      reference.trim() || undefined,
           note:           note.trim() || undefined,
           receivedBy:     profile?.full_name || profile?.email || undefined,
-        });
+        }));
       }
       const total = new Intl.NumberFormat('fr-FR').format(selectedTotal);
       toast({
@@ -273,7 +279,12 @@ const PaymentEntry = ({ initialMode = 'search' }: { initialMode?: 'search' | 'sc
       setSelectedItems(new Set());
       setReference('');
       setNote('');
+      // Après l'encaissement, jamais avant : un souci de reçu ne peut pas
+      // empêcher (ni annuler) un paiement. montrerRecu ne lève pas.
+      await montrerRecu(enregistres, { apresEncaissement: true });
     } catch (err) {
+      // Un élément a échoué mais d'autres sont passés : ceux-là méritent un reçu.
+      if (enregistres.length > 0) void montrerRecu(enregistres, { apresEncaissement: true });
       // Code Postgres 23505 = contrainte d'unicité violée : cet élément a déjà
       // été payé entre-temps (double scan, deux membres du personnel en même
       // temps) — la base a bloqué le double encaissement, on informe clairement
@@ -510,6 +521,8 @@ const PaymentEntry = ({ initialMode = 'search' }: { initialMode?: 'search' | 'sc
           </div>
         )}
       </div>
+
+      {dialogueRecu}
     </div>
   );
 };

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
+import { CLE_ADRESSE_ECOLE, CLE_NINEA_ECOLE } from '@/lib/documentsEcole';
 import { useSchoolYear } from '@/contexts/SchoolYearContext';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
@@ -88,6 +89,10 @@ const SettingsPage = () => {
   const [schoolForm, setSchoolForm] = useState({
     name: '', city: '', country: '', phone: '', email: '',
   });
+  // Adresse et n° d'agrément : dans schools.settings (pas de colonne dédiée), ils
+  // figurent dans l'en-tête des reçus et des fiches d'inscription.
+  const [adresseEcole, setAdresseEcole] = useState('');
+  const [nineaEcole, setNineaEcole] = useState('');
   const [savingSchool, setSavingSchool] = useState(false);
   const [uploadingLogo, setUploadingLogo] = useState(false);
 
@@ -100,6 +105,8 @@ const SettingsPage = () => {
         phone: school.phone ?? '',
         email: school.email ?? '',
       });
+      setAdresseEcole(typeof school.settings?.[CLE_ADRESSE_ECOLE] === 'string' ? school.settings[CLE_ADRESSE_ECOLE] as string : '');
+      setNineaEcole(typeof school.settings?.[CLE_NINEA_ECOLE] === 'string' ? school.settings[CLE_NINEA_ECOLE] as string : '');
     }
   }, [school]);
 
@@ -107,6 +114,7 @@ const SettingsPage = () => {
     setSavingSchool(true);
     try {
       await updateSchool(schoolForm);
+      await updateSchoolSettings({ [CLE_ADRESSE_ECOLE]: adresseEcole.trim(), [CLE_NINEA_ECOLE]: nineaEcole.trim() });
       toast({ title: 'École mise à jour' });
     } catch {
       toast({ title: 'Erreur', description: 'Impossible de sauvegarder', variant: 'destructive' });
@@ -361,6 +369,21 @@ const SettingsPage = () => {
                 <div className="space-y-1.5 sm:col-span-2">
                   <Label>Email de contact</Label>
                   <Input type="email" value={schoolForm.email} onChange={e => setSchoolForm(f => ({ ...f, email: e.target.value }))} />
+                </div>
+                <div className="space-y-1.5 sm:col-span-2">
+                  <Label>Adresse</Label>
+                  <Input
+                    value={adresseEcole}
+                    onChange={e => setAdresseEcole(e.target.value)}
+                    placeholder="Ex : BP 1234, Point E"
+                  />
+                </div>
+                <div className="space-y-1.5 sm:col-span-2">
+                  <Label>N° d'agrément / NINEA <span className="font-normal text-muted-foreground">(facultatif)</span></Label>
+                  <Input value={nineaEcole} onChange={e => setNineaEcole(e.target.value)} />
+                  <p className="text-xs text-muted-foreground">
+                    Le logo, l'adresse et ce numéro figurent dans l'en-tête des reçus de paiement et des fiches d'inscription.
+                  </p>
                 </div>
               </div>
             </CardContent>

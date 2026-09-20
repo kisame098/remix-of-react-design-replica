@@ -19,8 +19,9 @@ import {
   Payment,
 } from '@/types/payment';
 import { Student } from '@/contexts/SchoolContext';
+import { useRecus } from '@/hooks/useRecus';
 import {
-  ScanLine, History, XCircle, CheckCircle2, LogOut, AlertCircle, Loader2, Search, Trash2,
+  ScanLine, History, XCircle, CheckCircle2, LogOut, AlertCircle, Loader2, Search, Trash2, Receipt as ReceiptIcon,
 } from 'lucide-react';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -52,6 +53,7 @@ const Caisse = () => {
     addPayment, cancelPayment, paymentLoading,
   } = usePayment();
   const { currentYear } = useSchoolYear();
+  const { montrerRecu, dialogueRecu } = useRecus();
   // Tant que les élèves/tarifs ne sont pas encore chargés (réseau mobile lent),
   // un scan valide donnerait à tort "élève introuvable" — on bloque le scan.
   const dataReady = !studentsLoading && !paymentLoading;
@@ -129,7 +131,7 @@ const Caisse = () => {
     if (!matched) return;
     setConfirming(true);
     try {
-      await addPayment({
+      const enregistre = await addPayment({
         studentId:       matched.student.id,
         studentUniqueId: matched.student.studentId,
         type:            matched.item.type,
@@ -141,6 +143,8 @@ const Caisse = () => {
       });
       setJustPaid(true);
       setTimeout(resetScan, 1800);
+      // Après l'encaissement, jamais avant : montrerRecu ne lève pas.
+      void montrerRecu([enregistre], { apresEncaissement: true });
     } catch (err) {
       const isDup = (err as { code?: string } | null)?.code === '23505';
       flashError(isDup ? 'Déjà payé entre-temps — aucun double paiement enregistré.' : "Erreur : le paiement n'a pas pu être enregistré.");
@@ -339,6 +343,19 @@ const Caisse = () => {
                     </p>
                   )}
 
+                  {/* Reçu : réimpression d'un reçu émis, ou émission pour un paiement
+                      antérieur au système de reçus. Un paiement annulé sans reçu
+                      n'en a pas : rien à proposer. */}
+                  {tab === 'history' && (!cancelled || p.receiptId) && (
+                    <Button
+                      variant="outline" size="sm" className="w-full mt-3 gap-1.5"
+                      onClick={() => void montrerRecu([p], { duplicata: !!p.receiptId })}
+                    >
+                      <ReceiptIcon className="h-3.5 w-3.5" />
+                      {p.receiptId ? 'Voir / réimprimer le reçu' : 'Émettre le reçu'}
+                    </Button>
+                  )}
+
                   {tab === 'cancel' && !cancelled && (
                     <AlertDialog>
                       <AlertDialogTrigger asChild>
@@ -402,6 +419,8 @@ const Caisse = () => {
           ))}
         </div>
       </nav>
+
+      {dialogueRecu}
     </div>
   );
 };

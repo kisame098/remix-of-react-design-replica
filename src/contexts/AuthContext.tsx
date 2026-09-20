@@ -251,7 +251,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           // blocage du professeur, traité comme le personnel.
           const { data: schoolData } = await supabase
             .from('schools')
-            .select('id, name, country, city, logo_url, subscription_status, subscription_expires_at')
+            .select('id, name, country, city, phone, email, logo_url, settings, subscription_status, subscription_expires_at')
             .eq('id', acct.school_id)
             .maybeSingle();
           setSchool(schoolData as School | null);

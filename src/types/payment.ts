@@ -234,6 +234,22 @@ export interface Payment {
   status: PaymentStatus;
   cancelledAt?: string;
   cancelledBy?: string;
+  /** Reçu qui couvre ce paiement. Absent pour un paiement antérieur au système
+   *  de reçus, ou dont le reçu n'a pas pu être émis : il se rattrape à la demande. */
+  receiptId?: string;
+}
+
+/**
+ * Reçu de paiement : UN encaissement, éventuellement plusieurs lignes de
+ * `Payment` (inscription + trois mois payés d'un coup = un reçu).
+ * Le numéro est séquentiel par école et par année scolaire.
+ */
+export interface Receipt {
+  id: string;
+  academicYearLabel: string;
+  number: number;
+  studentId: string;           // student_enrollment UUID
+  createdAt: string;           // ISO datetime
 }
 
 // ─── Service Enrollment (optional services only) ──────────────────────────────

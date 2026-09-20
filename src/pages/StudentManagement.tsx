@@ -51,7 +51,8 @@ import { useToast } from '@/hooks/use-toast';
 import { resolveAcademicProfile } from '@/lib/academicProfile';
 import AcademicChoicesFields, { useAcademicChoicesRequirement } from '@/components/student/AcademicChoicesFields';
 import { mergeFiliereChoiceGroups, mergeFiliereFacultativeSubjects } from '@/contexts/SchoolContext';
-import { ListChecks } from 'lucide-react';
+import { ListChecks, FileText } from 'lucide-react';
+import { useFicheInscription } from '@/hooks/useFicheInscription';
 
 interface EditFormData {
   firstName: string;
@@ -78,6 +79,7 @@ const StudentManagement = () => {
     filiereChoiceGroups, filiereFacultativeSubjects,
     elementaryClassLines, elementaryLineSettings, setElementaryLineExemption,
   } = useSchool();
+  const { montrerFiche, dialogueFiche } = useFicheInscription();
   const { currentYear } = useSchoolYear();
   const { toast } = useToast();
 
@@ -864,6 +866,15 @@ const StudentManagement = () => {
                     })}
                   </div>
 
+                  <Button
+                    variant="outline"
+                    className="w-full gap-2"
+                    onClick={() => { setIsProfileOpen(false); montrerFiche(selectedStudent); }}
+                  >
+                    <FileText className="w-4 h-4" />
+                    Fiche d'inscription (avec identifiants)
+                  </Button>
+
                   <Button 
                     className="w-full gap-2" 
                     onClick={() => { setIsProfileOpen(false); openEdit(selectedStudent); }}
@@ -876,6 +887,8 @@ const StudentManagement = () => {
             )}
           </SheetContent>
         </Sheet>
+
+        {dialogueFiche}
 
         {/* Edit Dialog - Full Form */}
         <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
