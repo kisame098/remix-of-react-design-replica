@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
+import { Link } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -9,6 +10,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Loader2, CheckCircle2, PauseCircle, XCircle, Ban, RefreshCw, AlertTriangle, Timer, Trash2, Mail } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
+import { ilYA, niveauActivite, LIBELLES_NIVEAU } from '@/lib/activiteEcole';
 import { SuppressionEcoleDialog } from '@/components/platform/SuppressionEcoleDialog';
 import { isExpired, isPaidOverdue, TRIAL_PRESETS, minutesFromNowISO } from '@/lib/subscription';
 
@@ -16,6 +18,10 @@ import { isExpired, isPaidOverdue, TRIAL_PRESETS, minutesFromNowISO } from '@/li
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const sb = supabase as any;
 
+interface VueEcole {
+  eleves: number; professeurs: number; personnel: number; classes: number; notes: number;
+  derniere_activite: string | null; jours_actifs_30: number;
+}
 interface EmailsEcole { contact: string | null; admins: string[] }
 
 type SubscriptionStatus = 'trial' | 'active' | 'suspended' | 'cancelled';
@@ -71,6 +77,7 @@ const PlatformSchools = () => {
   const [customMinutes, setCustomMinutes] = useState('');
   const [isSettingTrial, setIsSettingTrial] = useState(false);
   const [emails, setEmails] = useState<Record<string, EmailsEcole>>({});
+  const [vues, setVues] = useState<Record<string, VueEcole>>({});
   const [deleteTarget, setDeleteTarget] = useState<SchoolRow | null>(null);
 
   const load = useCallback(async () => {
@@ -97,6 +104,19 @@ const PlatformSchools = () => {
         parEcole[r.school_id] = { contact: r.contact_email, admins: r.admin_emails ?? [] };
       }
       setEmails(parEcole);
+    }
+
+    // Effectifs et dernière activité : uniquement des comptes et des dates.
+    const { data: ov, error: ovErr } = await sb.rpc('platform_schools_overview');
+    if (ovErr) {
+      toast({ title: 'Effectifs indisponibles', description: ovErr.message, variant: 'destructive' });
+    } else {
+      const parEcole: Record<string, VueEcole> = {};
+      for (const r of (ov ?? []) as (VueEcole & { school_id: string })[]) {
+        parEcole[r.school_id] = { ...r, eleves: Number(r.eleves), professeurs: Number(r.professeurs), personnel: Number(r.personnel),
+          classes: Number(r.classes), notes: Number(r.notes), jours_actifs_30: Number(r.jours_actifs_30) };
+      }
+      setVues(parEcole);
     }
   }, []);
 
@@ -220,6 +240,8 @@ const PlatformSchools = () => {
               <TableHeader>
                 <TableRow>
                   <TableHead>École</TableHead>
+                  <TableHead className="text-right">Élèves</TableHead>
+                  <TableHead>Activité</TableHead>
                   <TableHead>E-mails</TableHead>
                   <TableHead>Statut</TableHead>
                   <TableHead>Plan</TableHead>
@@ -237,8 +259,28 @@ const PlatformSchools = () => {
                   return (
                     <TableRow key={school.id} className={needsAttention(school) ? 'bg-amber-50/50' : undefined}>
                       <TableCell className="font-medium">
-                        {school.name}
+                        <Link to={`/platform/ecoles/${school.id}`} className="hover:underline text-primary">{school.name}</Link>
                         <div className="text-xs text-muted-foreground font-normal">{school.city ?? '—'}</div>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <p className="font-semibold">{vues[school.id]?.eleves ?? '—'}</p>
+                        <p className="text-[11px] text-muted-foreground">
+                          {vues[school.id] ? `${vues[school.id].professeurs} prof · ${vues[school.id].classes} cl.` : ''}
+                        </p>
+                      </TableCell>
+                      <TableCell className="text-xs whitespace-nowrap">
+                        {(() => {
+                          const v = vues[school.id];
+                          const niveau = niveauActivite(v?.derniere_activite, Date.now());
+                          const n = LIBELLES_NIVEAU[niveau];
+                          return (
+                            <>
+                              <span className={`inline-block rounded-full px-2 py-0.5 font-medium ${n.classe}`}>{n.label}</span>
+                              <p className="text-muted-foreground mt-0.5">{v ? ilYA(v.derniere_activite, Date.now()) : ''}</p>
+                              {v && <p className="text-muted-foreground">{v.jours_actifs_30} j actifs / 30</p>}
+                            </>
+                          );
+                        })()}
                       </TableCell>
                       <TableCell className="text-xs max-w-[240px]">
                         {(() => {

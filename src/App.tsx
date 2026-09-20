@@ -20,6 +20,7 @@ import { ChargementPage } from "./components/ChargementPage";
 import { BandeauHorsConnexion } from "./components/BandeauHorsConnexion";
 import { MiseAJourApplication } from "./components/MiseAJourApplication";
 import { Referencement } from "./components/Referencement";
+import { SuiviActivite } from "@/components/SuiviActivite";
 import { SchoolYearProvider } from "./contexts/SchoolYearContext";
 import { SchoolProvider } from "./contexts/SchoolContext";
 import { ScheduleProvider } from "./contexts/ScheduleContext";
@@ -60,6 +61,7 @@ const AbonnementPage        = lazy(() => import("./pages/Abonnement"));
 const SubscriptionRequired  = lazy(() => import("./pages/SubscriptionRequired"));
 const PlatformStats         = lazy(() => import("./pages/platform/PlatformStats"));
 const PlatformSchools       = lazy(() => import("./pages/platform/PlatformSchools"));
+const PlatformSchoolDetail  = lazy(() => import("./pages/platform/PlatformSchoolDetail"));
 const PlatformPaymentClaims = lazy(() => import("./pages/platform/PlatformPaymentClaims"));
 const NotFound              = lazy(() => import("./pages/NotFound"));
 const PortalAccueil         = lazy(() => import("./pages/portal/PortalAccueil"));
@@ -89,6 +91,7 @@ const App = () => (
             <MiseAJourApplication />
             <BrowserRouter>
               <Referencement />
+              <SuiviActivite />
               {/* Filet du sommet, pour les écrans sans mise en page propre.
                   Les mises en page (tableau de bord, portail) ont le leur, qui
                   garde le menu en place pendant le chargement. */}
@@ -134,6 +137,7 @@ const App = () => (
                   <Route element={<PlatformLayout />}>
                     <Route path="/platform" element={<PlatformStats />} />
                     <Route path="/platform/ecoles" element={<PlatformSchools />} />
+                    <Route path="/platform/ecoles/:schoolId" element={<PlatformSchoolDetail />} />
                     <Route path="/platform/paiements" element={<PlatformPaymentClaims />} />
                   </Route>
                 </Route>
