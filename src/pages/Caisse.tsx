@@ -20,6 +20,8 @@ import {
 } from '@/types/payment';
 import { Student } from '@/contexts/SchoolContext';
 import { useRecus } from '@/hooks/useRecus';
+import { useAnnulerPaiement } from '@/hooks/useAnnulerPaiement';
+import { filtrerHistorique, libellePaiement, numeroRecuDuPaiement } from '@/lib/historiquePaiements';
 import {
   ScanLine, History, XCircle, CheckCircle2, LogOut, AlertCircle, Loader2, Search, Trash2, Receipt as ReceiptIcon,
 } from 'lucide-react';
@@ -50,7 +52,7 @@ const Caisse = () => {
   const {
     payments, annexServices, getTuitionConfig,
     hasPaidInscription, hasPaidTuitionMonth, hasPaidService,
-    addPayment, cancelPayment, paymentLoading,
+    addPayment, receipts, paymentLoading,
   } = usePayment();
   const { currentYear } = useSchoolYear();
   const { montrerRecu, dialogueRecu } = useRecus();
@@ -155,38 +157,15 @@ const Caisse = () => {
   };
 
   // ── Historique / Annulation ──────────────────────────────────────────────────
-  const getPaymentLabel = (p: Payment) => {
-    if (p.type === 'inscription') return "Frais d'inscription";
-    if (p.type === 'tuition') return `Scolarité — ${monthLabel(p.monthKey)}`;
-    if (p.type === 'service') {
-      const svc = annexServices.find(s => s.id === p.serviceId);
-      return `${svc?.name ?? 'Service'}${p.monthKey ? ' — ' + monthLabel(p.monthKey) : ''}`;
-    }
-    return 'Paiement';
-  };
+  const getPaymentLabel = (p: Payment) => libellePaiement(p, annexServices, monthLabel);
 
-  const recent = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    return [...payments]
-      .sort((a, b) => new Date(b.paidAt).getTime() - new Date(a.paidAt).getTime())
-      .filter(p => {
-        if (!q) return true;
-        const s = students.find(st => st.id === p.studentId);
-        const name = s ? `${s.firstName} ${s.lastName}`.toLowerCase() : '';
-        return name.includes(q) || p.studentUniqueId.toLowerCase().includes(q);
-      })
-      .slice(0, 60);
-  }, [payments, search, students]);
+  const recent = useMemo(
+    () => filtrerHistorique(payments, students, receipts, { recherche: search, statut: 'tous' }).slice(0, 60),
+    [payments, receipts, search, students],
+  );
 
-  const [cancelingId, setCancelingId] = useState<string | null>(null);
-  const handleCancel = async (id: string) => {
-    setCancelingId(id);
-    try {
-      await cancelPayment(id);
-    } finally {
-      setCancelingId(null);
-    }
-  };
+  const { annuler, enCours: cancelingId } = useAnnulerPaiement(montrerRecu);
+  const handleCancel = (p: Payment) => annuler(p);
 
   // ── Accès réservé : admin (pour test) ou staff avec la permission "cashier" ──
   const allowed = accountRole === 'admin' || isCashierAccount(accountRole, staffPermissions);
@@ -304,7 +283,7 @@ const Caisse = () => {
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-300" />
               <Input
-                className="pl-9 bg-white" placeholder="Rechercher un élève…"
+                className="pl-9 bg-white" placeholder="Élève, matricule ou n° de reçu…"
                 value={search} onChange={e => setSearch(e.target.value)}
               />
             </div>
@@ -327,6 +306,9 @@ const Caisse = () => {
                         )}
                       </div>
                       <p className="text-xs text-slate-500">{getPaymentLabel(p)}</p>
+                      {numeroRecuDuPaiement(p, receipts) && (
+                        <p className="text-[10px] text-slate-400 font-mono mt-0.5">Reçu {numeroRecuDuPaiement(p, receipts)}</p>
+                      )}
                     </div>
                     <p className={`font-black flex-shrink-0 ${cancelled ? 'text-slate-400 line-through' : 'text-slate-900'}`}>{fmt(p.amount)}</p>
                   </div>
@@ -382,7 +364,7 @@ const Caisse = () => {
                           <AlertDialogCancel>Retour</AlertDialogCancel>
                           <AlertDialogAction
                             className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                            onClick={() => handleCancel(p.id)}
+                            onClick={() => handleCancel(p)}
                           >
                             Oui, annuler
                           </AlertDialogAction>
