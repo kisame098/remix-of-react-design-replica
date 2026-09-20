@@ -4,7 +4,7 @@ import type { FicheInscriptionData } from '@/lib/ficheInscription';
 import { dateDakar } from '@/lib/documentsEcole';
 import { couleurDominanteDuLogo, paletteDepuis, type Palette } from '@/lib/couleurLogo';
 import {
-  ENCRE, GRIS, ROUGE, dessinerBandeau, dessinerTitre, espace, etiquette, filigrane,
+  ENCRE, GRIS, ROUGE, dessinerBandeau, dessinerTitre, ecrireAjuste, espace, etiquette, filigrane,
   guilloche, signatureSenClass,
 } from '@/lib/documentsDesign';
 import { formaterMontant } from '@/lib/montantEnLettres';
@@ -60,7 +60,8 @@ const champ = ({ doc, c }: Etat, nom: string, valeur: string | undefined, x: num
   doc.setFontSize(10);
   doc.setTextColor(ENCRE);
   const texte = valeur && valeur.trim() ? valeur : '—';
-  doc.text((doc.splitTextToSize(texte, largeur - 3) as string[])[0], x, y + 7.4);
+  // Valeur entière : rétrécie avant d'être tronquée (« … » visible), jamais coupée en silence.
+  ecrireAjuste(doc, texte, x, y + 7.4, largeur - 3, { taille: 10, tailleMin: 7 });
   doc.setDrawColor(c.trait);
   doc.setLineWidth(0.2);
   doc.line(x, y + 8.8, x + largeur - 3, y + 8.8);

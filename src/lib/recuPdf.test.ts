@@ -32,6 +32,10 @@ const base = (extra: Partial<RecuData> & { couleur?: string | null } = {}): Recu
   ...extra,
 });
 
+/** Tout le texte écrit, mis bout à bout : une valeur passée sur deux lignes redevient une seule chaîne. */
+const textePdf = (brutPdf: string): string =>
+  [...brutPdf.matchAll(/\(((?:[^()\\]|\\.)*)\) Tj/g)].map(m => m[1]).join('');
+
 /** Le PDF brut, lisible : jsPDF n'y compresse pas le texte par défaut. */
 const brut = async (data: RecuData) => {
   const doc = await genererRecuPdf(data);
@@ -158,6 +162,57 @@ describe('reçu PDF — mentions', () => {
   });
 });
 
+describe('reçu PDF — aucun texte perdu en silence', () => {
+  it('L\'E-MAIL DU CAISSIER s\'imprime en entier (« ahmadoukane3452@gma. » était coupé)', async () => {
+    const { texte } = await brut(base({ encaissePar: 'ahmadoukane3452@gmail.com' }));
+    expect(texte).toContain('ahmadoukane3452@gmail.com');
+    expect(texte).not.toContain('@gma.');
+  });
+
+  it('même chose pour une adresse plus longue', async () => {
+    const { texte } = await brut(base({ encaissePar: 'mamadou.lamine.diallo.comptabilite@collegesainteanne.sn' }));
+    // Rétrécie ou passée sur deux lignes : jamais amputée de sa fin.
+    expect(texte.replace(/\)\s*Tj[^(]*\(/g, '')).toContain('collegesainteanne');
+    expect(texte).toContain('.sn');
+  });
+
+  it('un nom de mode de paiement ou une référence longs restent lisibles', async () => {
+    const { texte } = await brut(base({ mode: 'Espèces, Wave, Orange Money', reference: 'WV-2026-09-19-000088213-XYZ' }));
+    // Trop longue pour sa colonne : passée sur deux lignes — mais rien ne manque.
+    expect(textePdf(texte)).toContain('WV-2026-09-19-000088213-XYZ');
+    // Le mode aussi passe sur deux lignes, coupé entre les mots : chacun est là.
+    for (const mot of ['Wave', 'Orange', 'Money']) expect(texte, mot).toContain(mot);
+  });
+
+  it('LA SOMME EN LETTRES n\'est jamais coupée : un montant très élevé garde tous ses mots', async () => {
+    // Avant : limitée à deux lignes — des mots disparaissaient, donc un AUTRE montant
+    // s\'imprimait en lettres. C\'est ce qui protège le reçu d\'une falsification.
+    const total = 987_654_321;
+    const { texte } = await brut(base({ total, lignes: [{ designation: 'Inscription', montant: total, annulee: false }] }));
+    for (const morceau of ['Neuf cent quatre-vingt-sept millions', 'six cent cinquante-quatre mille', 'trois cent vingt et un francs CFA.']) {
+      expect(texte.replace(/\)\s*Tj[^(]*\(/g, ' '), morceau).toContain(morceau);
+    }
+  });
+
+  it('un nom d\'élève très long est rétréci, pas tronqué', async () => {
+    const nom = 'DIALLO Mamadou Lamine Abdoulaye Cheikh Ahmadou Bamba';
+    const { texte } = await brut(base({ eleve: { nom, matricule: 'ETU-2026-00042', classe: '6ème A' } }));
+    expect(texte).toContain('Bamba');
+  });
+
+  it('une désignation très longue est entière, ou tronquée AVEC « … » — jamais en silence', async () => {
+    const designation = "Participation au voyage pédagogique de fin d'année à Saint-Louis du Sénégal";
+    const { texte } = await brut(base({ lignes: [{ designation, montant: 25000, annulee: false }], total: 25000 }));
+    expect(texte.includes('Sénégal') || texte.includes('\x85')).toBe(true);
+  });
+
+  it('un très long nom d\'école tient dans le bandeau, sans perdre de mots', async () => {
+    const nom = 'Complexe Scolaire Privé Franco-Arabe Cheikh Ahmadou Bamba Mbacké de la Médina Extension Nord';
+    const { texte } = await brut(base({ ecole: { ...base().ecole, nom } }));
+    expect(texte).toContain('NORD');
+  });
+});
+
 describe('reçu PDF — robustesse', () => {
   it('aucun caractère que les polices d\'un PDF ne savent pas dessiner', async () => {
     const { texte } = await brut(base());
@@ -212,6 +267,8 @@ describe.runIf(process.env.SORTIE_PDF)('exemplaires pour relecture visuelle', ()
     const dossier = process.env.SORTIE_PDF as string;
     const cas: [string, RecuData & { couleur?: string | null }][] = [
       ['recu-ordinaire', base({ couleur: '#1F5FA9' })],
+      ['recu-email-caissier', base({ couleur: '#1F5FA9', encaissePar: 'ahmadoukane3452@gmail.com', reference: 'WV-2026-09-19-000088213' })],
+      ['recu-tres-long', base({ couleur: '#1F5FA9', total: 987654321, lignes: [{ designation: "Participation au voyage pédagogique de fin d'année à Saint-Louis", montant: 987654321, annulee: false }], encaissePar: 'mamadou.lamine.diallo.comptabilite@collegesainteanne.sn', eleve: { nom: 'DIALLO Mamadou Lamine Abdoulaye Cheikh Ahmadou Bamba', matricule: 'ETU-2026-00042', classe: '6ème A' } })],
       ['recu-vert', base({ couleur: '#1E9E5A', ecole: { ...base().ecole, nom: 'Groupe Scolaire Les Bâtisseurs', logo: logoDeTest(120, [30, 150, 90], [220, 60, 50]) } })],
       ['recu-rouge', base({ couleur: '#C0282D', ecole: { ...base().ecole, nom: 'Institut Cheikh Ahmadou Bamba', logo: logoDeTest(120, [190, 40, 45], [240, 200, 40]) } })],
       ['recu-jaune', base({ couleur: '#F2C200', ecole: { ...base().ecole, nom: 'École Le Petit Prince', logo: logoDeTest(120, [242, 194, 0], [40, 40, 40]) } })],

@@ -43,6 +43,84 @@ export const etiquette = (doc: jsPDF, t: string, x: number, y: number, couleur: 
   espace(doc, t.toUpperCase(), x, y, 0.2, align);
 };
 
+export interface OptionsAjuste {
+  /** Taille de départ, en points. */
+  taille: number;
+  /** Plus petite taille acceptée avant de passer sur plusieurs lignes. */
+  tailleMin?: number;
+  /** Nombre de lignes au-delà duquel on tronque, AVEC « … ». */
+  lignesMax?: number;
+  /** Écart entre deux lignes, en mm. */
+  interligne?: number;
+}
+
+/**
+ * Coupe un texte en lignes de `largeur` mm au plus, en préférant les séparateurs
+ * naturels : espaces, tirets, points, @, /, _. Une adresse e-mail ou une
+ * référence se coupe alors « mamadou.lamine.diallo. / comptabilite@… » et non en
+ * plein mot (« collegesai / nteanne.sn »). Un morceau plus large que la ligne
+ * à lui seul est coupé caractère par caractère, en dernier recours.
+ */
+export const decouperProprement = (doc: jsPDF, texte: string, largeur: number): string[] => {
+  const morceaux = texte.split(/(?<=[\s\-_/.@])/);
+  const lignes: string[] = [];
+  let courante = '';
+  for (const morceau of morceaux) {
+    if (doc.getTextWidth(courante + morceau) <= largeur) { courante += morceau; continue; }
+    if (courante) { lignes.push(courante.trimEnd()); courante = ''; }
+    if (doc.getTextWidth(morceau) <= largeur) { courante = morceau; continue; }
+    // Un seul morceau trop large : découpage brut.
+    const brut = doc.splitTextToSize(morceau, largeur) as string[];
+    lignes.push(...brut.slice(0, -1));
+    courante = brut[brut.length - 1] ?? '';
+  }
+  if (courante) lignes.push(courante.trimEnd());
+  return lignes.length ? lignes : [''];
+};
+
+/** Raccourcit une ligne avec « … » jusqu'à ce qu'elle tienne. */
+const avecPoints = (doc: jsPDF, ligne: string, largeur: number): string => {
+  let t = ligne.trimEnd();
+  while (t.length > 1 && doc.getTextWidth(`${t}…`) > largeur) t = t.slice(0, -1).trimEnd();
+  return `${t}…`;
+};
+
+/**
+ * Écrit un texte dans une largeur donnée SANS JAMAIS EN PERDRE EN SILENCE.
+ *
+ * Trois recours, dans l'ordre : rétrécir la police jusqu'à `tailleMin` ; puis
+ * passer sur plusieurs lignes ; et seulement au-delà de `lignesMax`, tronquer —
+ * avec « … », pour que ça se voie. (Un `splitTextToSize(...)[0]` jetait le reste
+ * sans un mot : « ahmadoukane3452@gmail.com » sortait « ahmadoukane3452@gma. ».)
+ *
+ * La police (famille, style, couleur) est celle réglée par l'appelant.
+ * Renvoie le nombre de lignes écrites.
+ */
+export const ecrireAjuste = (
+  doc: jsPDF, texte: string, x: number, y: number, largeur: number, o: OptionsAjuste,
+): number => {
+  const min = o.tailleMin ?? o.taille * 0.72;
+  let taille = o.taille;
+  doc.setFontSize(taille);
+  while (doc.getTextWidth(texte) > largeur && taille > min) {
+    taille = Math.max(min, taille - 0.25);
+    doc.setFontSize(taille);
+  }
+  if (doc.getTextWidth(texte) <= largeur) {
+    doc.text(texte, x, y);
+    return 1;
+  }
+
+  let lignes = decouperProprement(doc, texte, largeur);
+  const max = o.lignesMax ?? 1;
+  if (lignes.length > max) {
+    lignes = lignes.slice(0, max);
+    lignes[max - 1] = avecPoints(doc, lignes[max - 1], largeur);
+  }
+  lignes.forEach((l, i) => doc.text(l, x, y + i * (o.interligne ?? 3.6)));
+  return lignes.length;
+};
+
 /** Point du plan tourné de `angle` degrés (sens antihoraire à l'écran) autour de (cx, cy). */
 export const tourne = (cx: number, cy: number, u: number, v: number, angle: number): [number, number] => {
   const a = (angle * Math.PI) / 180;
@@ -119,10 +197,17 @@ export const dessinerBandeau = (doc: jsPDF, ecole: InfosEcole, c: Palette, o: Op
   const largeurTexte = o.largeurPage - o.marge - x;
   doc.setTextColor('#FFFFFF');
   doc.setFont('times', 'bold');
-  doc.setFontSize(ecole.nom.length > 34 ? 12.5 : 14.5);
-  const noms = doc.splitTextToSize(ecole.nom.toUpperCase(), largeurTexte) as string[];
+  // Le nom entier, sur deux lignes au plus : on réduit la police plutôt que d'en jeter.
+  let tailleNom = ecole.nom.length > 34 ? 12.5 : 14.5;
+  doc.setFontSize(tailleNom);
+  let noms = doc.splitTextToSize(ecole.nom.toUpperCase(), largeurTexte) as string[];
+  while (noms.length > 2 && tailleNom > 8) {
+    tailleNom -= 0.5;
+    doc.setFontSize(tailleNom);
+    noms = doc.splitTextToSize(ecole.nom.toUpperCase(), largeurTexte) as string[];
+  }
   let y = 10.4 * k;
-  noms.slice(0, 2).forEach(ligne => { espace(doc, ligne, x, y, 0.1); y += 5.4 * k; });
+  noms.forEach(ligne => { espace(doc, ligne, x, y, 0.1); y += 5.4 * k; });
 
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(7.6);
@@ -130,7 +215,7 @@ export const dessinerBandeau = (doc: jsPDF, ecole: InfosEcole, c: Palette, o: Op
   opacite(doc, 0.86);
   y += noms.length > 1 ? -0.4 : 0.6;
   for (const ligne of lignesCoordonnees(ecole).slice(0, 3)) {
-    doc.text((doc.splitTextToSize(ligne, largeurTexte) as string[])[0], x, y);
+    ecrireAjuste(doc, ligne, x, y, largeurTexte, { taille: 7.6, tailleMin: 6.2 });
     y += 3.7 * k;
   }
   doc.restoreGraphicsState();
