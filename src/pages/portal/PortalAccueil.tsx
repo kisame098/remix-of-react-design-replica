@@ -52,11 +52,20 @@ export default function PortalAccueil() {
           .eq('student_enrollment_id', eleveId),
         // La moyenne de l'accueil vient du bulletin PUBLIÉ, jamais des notes
         // en cours de saisie. RLS : un élève ne lit que son propre bulletin.
-        supabase.from('published_bulletins').select('period_id, data').eq('student_enrollment_id', eleveId),
+        // On ne demande QUE la moyenne : l'instantané complet pèse ~120 Ko
+        // (logo de l'école, classement de la classe) et se retéléchargerait à
+        // chaque ouverture de l'accueil.
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (supabase as any).from('published_bulletins')
+          .select('period_id, moyenne:data->ranking->averageGeneral, moyenne10:data->ranking->average')
+          .eq('student_enrollment_id', eleveId),
       ]);
 
       return {
-        bulletins: (bulR.data ?? []).map(b => ({ periodId: b.period_id, data: b.data })),
+        bulletins: ((bulR.data ?? []) as unknown as { period_id: string; moyenne: unknown; moyenne10: unknown }[]).map(b => ({
+          periodId: b.period_id,
+          data: { ranking: { averageGeneral: b.moyenne, average: b.moyenne10 } },
+        })),
         periods: (pR.data ?? []).map(p => ({ id: p.id, name: p.name, ordering: p.ordering })),
 
         grades: (gR.data ?? []).filter(g => g.subjects).map(g => {
