@@ -7,13 +7,16 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
-import { Loader2, CheckCircle2, PauseCircle, XCircle, Ban, RefreshCw, AlertTriangle, Timer } from 'lucide-react';
+import { Loader2, CheckCircle2, PauseCircle, XCircle, Ban, RefreshCw, AlertTriangle, Timer, Trash2, Mail } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
+import { SuppressionEcoleDialog } from '@/components/platform/SuppressionEcoleDialog';
 import { isExpired, isPaidOverdue, TRIAL_PRESETS, minutesFromNowISO } from '@/lib/subscription';
 
 // Les nouvelles RPCs ne sont pas encore dans les types générés.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const sb = supabase as any;
+
+interface EmailsEcole { contact: string | null; admins: string[] }
 
 type SubscriptionStatus = 'trial' | 'active' | 'suspended' | 'cancelled';
 
@@ -67,6 +70,8 @@ const PlatformSchools = () => {
   const [trialTarget, setTrialTarget] = useState<SchoolRow | null>(null);
   const [customMinutes, setCustomMinutes] = useState('');
   const [isSettingTrial, setIsSettingTrial] = useState(false);
+  const [emails, setEmails] = useState<Record<string, EmailsEcole>>({});
+  const [deleteTarget, setDeleteTarget] = useState<SchoolRow | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -80,6 +85,19 @@ const PlatformSchools = () => {
       setSchools((data ?? []) as SchoolRow[]);
     }
     setLoading(false);
+
+    // E-mails (contact de l'école + comptes directeur) : `profiles` n'est lisible
+    // que par son propriétaire, on passe donc par une fonction du chef du système.
+    const { data: em, error: emErr } = await sb.rpc('platform_school_emails');
+    if (emErr) {
+      toast({ title: 'E-mails indisponibles', description: emErr.message, variant: 'destructive' });
+    } else {
+      const parEcole: Record<string, EmailsEcole> = {};
+      for (const r of (em ?? []) as { school_id: string; contact_email: string | null; admin_emails: string[] }[]) {
+        parEcole[r.school_id] = { contact: r.contact_email, admins: r.admin_emails ?? [] };
+      }
+      setEmails(parEcole);
+    }
   }, []);
 
   useEffect(() => { load(); }, [load]);
@@ -128,18 +146,7 @@ const PlatformSchools = () => {
   const openBanDialog = async (school: SchoolRow) => {
     setBanTarget(school);
     setBanReason('');
-    setBanEmail('');
-    const { data: member } = await supabase
-      .from('school_members')
-      .select('user_id')
-      .eq('school_id', school.id)
-      .eq('role', 'admin_school')
-      .limit(1)
-      .maybeSingle();
-    if (member?.user_id) {
-      const { data: prof } = await supabase.from('profiles').select('email').eq('id', member.user_id).single();
-      if (prof?.email) setBanEmail(prof.email);
-    }
+    setBanEmail(emails[school.id]?.admins[0] ?? emails[school.id]?.contact ?? '');
   };
 
   const confirmBan = async () => {
@@ -213,6 +220,7 @@ const PlatformSchools = () => {
               <TableHeader>
                 <TableRow>
                   <TableHead>École</TableHead>
+                  <TableHead>E-mails</TableHead>
                   <TableHead>Statut</TableHead>
                   <TableHead>Plan</TableHead>
                   <TableHead>Expire le</TableHead>
@@ -231,6 +239,19 @@ const PlatformSchools = () => {
                       <TableCell className="font-medium">
                         {school.name}
                         <div className="text-xs text-muted-foreground font-normal">{school.city ?? '—'}</div>
+                      </TableCell>
+                      <TableCell className="text-xs max-w-[240px]">
+                        {(() => {
+                          const e = emails[school.id];
+                          const liste = [...new Set([...(e?.admins ?? []), ...(e?.contact ? [e.contact] : [])])];
+                          return liste.length === 0
+                            ? <span className="text-muted-foreground">—</span>
+                            : liste.map(m => (
+                                <a key={m} href={`mailto:${m}`} className="flex items-center gap-1 text-blue-700 hover:underline break-all">
+                                  <Mail className="h-3 w-3 flex-shrink-0" />{m}
+                                </a>
+                              ));
+                        })()}
                       </TableCell>
                       <TableCell>
                         <div className="flex flex-col items-start gap-1">
@@ -273,6 +294,9 @@ const PlatformSchools = () => {
                           <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive" title="Bannir définitivement" onClick={() => openBanDialog(school)}>
                             <Ban className="h-4 w-4" />
                           </Button>
+                          <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive" title="Supprimer l'école et toutes ses données" onClick={() => setDeleteTarget(school)}>
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
                         </div>
                       </TableCell>
                     </TableRow>
@@ -283,6 +307,12 @@ const PlatformSchools = () => {
           )}
         </CardContent>
       </Card>
+
+      <SuppressionEcoleDialog
+        ecole={deleteTarget}
+        onFermer={() => setDeleteTarget(null)}
+        onSupprimee={id => setSchools(prev => prev.filter(x => x.id !== id))}
+      />
 
       <Dialog open={!!trialTarget} onOpenChange={(open) => !open && setTrialTarget(null)}>
         <DialogContent>
