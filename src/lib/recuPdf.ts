@@ -2,7 +2,7 @@ import jsPDF from 'jspdf';
 import type { RecuData } from '@/lib/recu';
 import { dateDakar, dateLongueDakar } from '@/lib/documentsEcole';
 import {
-  ENCRE, FILET, GRIS, ROUGE, VERT_TAMPON, dessinerBandeau, dessinerTitre, espace, etiquette,
+  ENCRE, FILET, GRIS, ROUGE, VERT_TAMPON, dessinerBandeau, dessinerTitre, ecrireAjuste, espace, etiquette,
   filigrane, guilloche, opacite, polygone, signatureSenClass, texteTourne, tourne,
 } from '@/lib/documentsDesign';
 import { couleurDominanteDuLogo, paletteDepuis, type Palette } from '@/lib/couleurLogo';
@@ -114,7 +114,7 @@ const carteEleve = ({ doc, c, data, d }: Etat, y: number): number => {
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(13);
   doc.setTextColor(ENCRE);
-  doc.text((doc.splitTextToSize(data.eleve.nom, U - 12) as string[])[0], M + 7, y + 11 * k);
+  ecrireAjuste(doc, data.eleve.nom, M + 7, y + 11 * k, U - 12, { taille: 13, tailleMin: 9.5 });
 
   const colonnes: [string, string][] = [
     ['Matricule', data.eleve.matricule],
@@ -128,7 +128,7 @@ const carteEleve = ({ doc, c, data, d }: Etat, y: number): number => {
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(9.4);
     doc.setTextColor(ENCRE);
-    doc.text((doc.splitTextToSize(valeur, largeur - 3) as string[])[0], x, y + 20 * k);
+    ecrireAjuste(doc, valeur, x, y + 20 * k, largeur - 3, { taille: 9.4, tailleMin: 7 });
   });
   return y + h + (d.k < 1 ? 3.5 : 5);
 };
@@ -163,14 +163,16 @@ const ligneTableau = ({ doc, c, d }: Etat, l: RecuData['lignes'][number], y: num
   doc.setFontSize(9.6);
   doc.setTextColor(l.annulee ? GRIS : ENCRE);
   const designation = l.annulee ? `${l.designation} (annulé)` : l.designation;
-  const [coupe] = doc.splitTextToSize(designation, U - 42) as string[];
-  doc.text(coupe, M + 1, y + 4.6 * (0.55 + 0.45 * h));
+  const ligneY = y + 4.6 * (0.55 + 0.45 * h);
+  // Désignation entière : on rétrécit un peu avant de tronquer (« … » visible).
+  ecrireAjuste(doc, designation, M + 1, ligneY, U - 42, { taille: 9.6, tailleMin: 7.6 });
+  const coupe = designation;
   doc.setFont('helvetica', 'bold');
   doc.text(formaterMontant(l.montant), L - M - 1, y + 4.6 * (0.55 + 0.45 * h), { align: 'right' });
   if (l.annulee) {
     doc.setDrawColor(GRIS);
     doc.setLineWidth(0.25);
-    doc.line(M + 1, y + 3.6 * (0.55 + 0.45 * h), M + 1 + doc.getTextWidth(coupe), y + 3.6 * (0.55 + 0.45 * h));
+    doc.line(M + 1, y + 3.6 * (0.55 + 0.45 * h), M + 1 + Math.min(doc.getTextWidth(coupe), U - 42), y + 3.6 * (0.55 + 0.45 * h));
   }
   doc.setDrawColor(FILET);
   doc.setLineWidth(0.15);
@@ -216,7 +218,9 @@ const lettres = ({ doc, c, data }: Etat, y: number): number => {
   doc.setFont('times', 'bolditalic');
   doc.setFontSize(11.6);
   doc.setTextColor(c.fonce);
-  const lignes = (doc.splitTextToSize(`${montantEnLettres(data.total)}.`, U - 6) as string[]).slice(0, 2);
+  // TOUTES les lignes nécessaires : la somme en lettres est ce qui protège le
+  // reçu d'une falsification. La couper, c'est écrire un autre montant.
+  const lignes = doc.splitTextToSize(`${montantEnLettres(data.total)}.`, U - 6) as string[];
   const h = 3.4 + lignes.length * 5.2;
   doc.setFillColor(c.accent);
   doc.rect(M, y + 5, 0.9, h, 'F');
@@ -228,21 +232,28 @@ const infosPaiement = ({ doc, c, data }: Etat, y: number): number => {
   doc.setDrawColor(FILET);
   doc.setLineWidth(0.3);
   doc.line(M, y, L - M, y);
+  // « Encaissé par » est souvent une adresse e-mail (le caissier n'a pas de nom
+  // renseigné) : c'est la colonne la plus large. Les trois valeurs sont écrites en
+  // entier — rétrécies, puis sur deux lignes, jamais coupées en silence.
+  const parts = [0.27, 0.23, 0.5];
   const infos: [string, string | undefined][] = [
     ['Mode de paiement', data.mode || '—'],
     ['Référence', data.reference],
     ['Encaissé par', data.encaissePar],
   ];
-  const largeur = U / 3;
+  let x = M;
+  let lignesMax = 1;
   infos.forEach(([nom, valeur], i) => {
-    const x = M + i * largeur;
+    const largeur = U * parts[i];
     etiquette(doc, nom, x, y + 4.6, c.accent);
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(9);
     doc.setTextColor(ENCRE);
-    doc.text((doc.splitTextToSize(valeur && valeur.trim() ? valeur : '—', largeur - 4) as string[])[0], x, y + 9.4);
+    lignesMax = Math.max(lignesMax, ecrireAjuste(doc, valeur && valeur.trim() ? valeur : '—', x, y + 9.4, largeur - 3, {
+      taille: 9, tailleMin: 7.4, lignesMax: 2, interligne: 3.4,
+    }));
+    x += largeur;
   });
-  return y + 12;
+  return y + 12 + (lignesMax - 1) * 3.4;
 };
 
 const signatures = ({ doc, c, d }: Etat, y: number) => {

@@ -220,3 +220,29 @@ describe('branchements', () => {
     }
   });
 });
+
+describe('aucun texte perdu en silence dans les documents', () => {
+  // « ahmadoukane3452@gmail.com » est sorti « ahmadoukane3452@gma. » : un
+  // splitTextToSize(...)[0] gardait la première ligne et jetait le reste. Sur un
+  // reçu, c'est un nom, une référence ou — pire — une somme en lettres qui
+  // disparaît. Tout texte passe par ecrireAjuste (rétrécir, puis plusieurs
+  // lignes, puis « … » visible).
+  const FICHIERS = ['src/lib/recuPdf.ts', 'src/lib/ficheInscriptionPdf.ts', 'src/lib/documentsDesign.ts'];
+
+  it.each(FICHIERS)('%s ne garde jamais que la première ligne d\'un texte découpé', (fichier) => {
+    // Sans les commentaires : ceux-ci citent volontairement l'ancien défaut.
+    const code = lire(fichier).replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
+    expect(code).not.toMatch(/splitTextToSize\([^;]*\)(?: as string\[\])?\)?\[0\]/);
+    expect(code).not.toMatch(/const \[[a-zA-Z]+\] = doc\.splitTextToSize/);
+  });
+
+  it('la somme en lettres n\'est pas limitée à un nombre de lignes', () => {
+    const lettres = entre(lire('src/lib/recuPdf.ts'), 'const lettres = (', 'const infosPaiement');
+    expect(lettres).not.toMatch(/\.slice\(/);
+  });
+
+  it('les valeurs du reçu passent par l\'outil qui ne perd rien', () => {
+    const recu = lire('src/lib/recuPdf.ts');
+    expect(recu.match(/ecrireAjuste\(/g)!.length).toBeGreaterThanOrEqual(4);
+  });
+});
