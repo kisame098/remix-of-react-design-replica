@@ -13,6 +13,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { useSchool, Tutor } from '@/contexts/SchoolContext';
 import { useSchoolYear } from '@/contexts/SchoolYearContext';
 import { useToast } from '@/hooks/use-toast';
+import { useFicheInscription } from '@/hooks/useFicheInscription';
 import { cn } from '@/lib/utils';
 import BulkImportStudents from '@/components/student/BulkImportStudents';
 import AcademicChoicesFields, { useAcademicChoicesRequirement } from '@/components/student/AcademicChoicesFields';
@@ -229,6 +230,7 @@ const StudentRegistration = () => {
   } = useSchool();
   const { currentYear } = useSchoolYear();
   const { toast } = useToast();
+  const { montrerFiche, dialogueFiche } = useFicheInscription();
 
   const [reEnrollId, setReEnrollId]       = useState('');
   const [isReEnrolling, setIsReEnrolling] = useState(false);
@@ -335,6 +337,8 @@ const StudentRegistration = () => {
         title: 'Réinscription réussie !',
         description: `${student.firstName} ${student.lastName} réinscrit pour ${currentYear?.name || 'cette année'}.`,
       });
+      // La fiche s'ouvre APRÈS le succès : l'inscription est déjà enregistrée.
+      montrerFiche(student, { reinscription: true });
       resetAll();
     } catch (err) {
       toast({ title: 'Erreur', description: String(err), variant: 'destructive' });
@@ -432,6 +436,8 @@ const StudentRegistration = () => {
         title: 'Inscription réussie !',
         description: `${student.firstName} ${student.lastName} — ID : ${student.studentId}`,
       });
+      // La fiche s'ouvre APRÈS le succès : l'inscription est déjà enregistrée.
+      montrerFiche(student, { reinscription: false });
       resetAll();
     } catch (err) {
       toast({ title: "Erreur lors de l'inscription", description: String(err), variant: 'destructive' });
@@ -783,6 +789,8 @@ const StudentRegistration = () => {
           </motion.div>
         </form>
       </motion.div>
+
+      {dialogueFiche}
     </div>
   );
 };

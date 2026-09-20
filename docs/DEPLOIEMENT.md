@@ -225,6 +225,31 @@ Il n'y a **aucun secret à poser** dans « Edge Functions → Secrets ».
 - Le navigateur a-t-il bloqué l'autorisation ? La carte l'indique et explique comment la rétablir.
 - Une ligne de `notification_queue` avec `attempts = 3` et `sent_at` vide : trois échecs, la fonction abandonne. Voir ses logs.
 
+## 5 ter. Reçus de paiement et fiche d'inscription
+
+### Reçu de paiement
+
+Chaque encaissement produit un **reçu numéroté** (`REC-2026-00042`), en PDF A5, avec le logo et les coordonnées de l'école, le nom de l'élève, chaque ligne payée, le total **en chiffres et en lettres**, le mode de paiement, le nom du caissier et deux cases de signature. Il s'ouvre dès l'encaissement, prêt à imprimer ou à télécharger.
+
+- **Un reçu par encaissement**, pas par ligne : inscription plus trois mois payés d'un coup donnent un seul reçu.
+- **Numéro séquentiel par école et par année**, attribué sous verrou : deux caissiers au même instant ne prennent jamais le même numéro. Un reçu ne se supprime ni ne se modifie.
+- **Le chemin d'encaissement n'est pas modifié.** Le numéro est attribué *après* l'enregistrement du paiement, par une fonction séparée (`issue_receipt`). Un incident sur le reçu ne peut donc jamais empêcher d'encaisser ; il affiche « Paiement enregistré, reçu non émis » et le reçu se rouvre depuis l'historique de la caisse.
+- **Réédition** : bouton « Voir / réimprimer le reçu » dans l'historique de la caisse ; la copie porte la mention **DUPLICATA**. Un paiement annulé garde son reçu, marqué **ANNULÉ** et sans valeur.
+- **Les familles** retrouvent leurs reçus dans « Paiements » du portail (toujours en duplicata), même hors connexion.
+- Les paiements **antérieurs** à ce système n'ont pas de reçu : il leur en est attribué un à la demande, avec le prochain numéro.
+- **Logo, adresse et n° d'agrément (NINEA)** : Paramètres → École. Sans logo, un monogramme aux initiales de l'école s'imprime.
+
+Mise en route : exécuter `docs/sql/recus.sql` dans le SQL Editor (une seule fois), puis publier l'application.
+
+### Fiche d'inscription
+
+À chaque inscription ou réinscription, une fiche s'ouvre, prête à imprimer. Elle se réédite depuis le profil de l'élève (« Fiche d'inscription »). Deux pages dans un seul PDF :
+
+- **Page 1, exemplaire de l'école** (signée et archivée) : identité, classe, tuteurs, frais, pièces à fournir, engagement, signatures. Elle ne contient **aucun mot de passe** : un dossier d'archive se consulte, se photocopie, se perd.
+- **Page 2, exemplaire de la famille** : identifiant, mot de passe, QR code vers le site, et le mode d'emploi (se connecter, installer l'application, activer les notifications). Absente si les identifiants ne sont pas lisibles.
+
+Le compte de l'élève se crée en arrière-plan juste après l'inscription : la fiche patiente quelques secondes avant de conclure qu'il n'y a pas d'identifiants.
+
 ## 6. Avant chaque mise en ligne
 
 ```bash

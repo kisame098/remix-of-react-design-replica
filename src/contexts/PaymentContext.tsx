@@ -7,7 +7,7 @@ import { fetchAllRows } from '@/lib/fetchAllRows';
 import { useAuth } from './AuthContext';
 import { useSchoolYear } from './SchoolYearContext';
 import {
-  TuitionConfig, AnnexService, Payment, ServiceEnrollment,
+  TuitionConfig, AnnexService, Payment, Receipt, ServiceEnrollment,
   MonthKey,
 } from '@/types/payment';
 import * as queries from '@/lib/paymentQueries';
@@ -58,6 +58,16 @@ const mapPayment = (r: any): Payment => ({
   status:           r.status ?? 'confirmed',
   cancelledAt:      r.cancelled_at ?? undefined,
   cancelledBy:      r.cancelled_by ?? undefined,
+  receiptId:        r.receipt_id ?? undefined,
+});
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const mapReceipt = (r: any): Receipt => ({
+  id:                r.id,
+  academicYearLabel: r.academic_year_label,
+  number:            Number(r.number),
+  studentId:         r.student_enrollment_id,
+  createdAt:         r.created_at,
 });
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -77,6 +87,8 @@ interface PaymentContextType {
   tuitionConfigs:    TuitionConfig[];
   annexServices:     AnnexService[];
   payments:          Payment[];
+  /** Reçus émis pour l'année courante. */
+  receipts:          Receipt[];
   serviceEnrollments: ServiceEnrollment[];
   paymentLoading:    boolean;
 
@@ -115,6 +127,14 @@ interface PaymentContextType {
 
   // Stats
   getTotalCollectedForYear: () => number;
+
+  /**
+   * Attribue un reçu (numéro séquentiel) aux paiements donnés — tous du même
+   * élève. Idempotent : rappeler avec les mêmes paiements renvoie le même reçu.
+   * À appeler APRÈS l'encaissement : un échec ici n'affecte jamais l'argent.
+   */
+  emettreRecu: (paymentIds: string[]) => Promise<Receipt>;
+  getReceiptOf: (payment: Payment) => Receipt | undefined;
 }
 
 const PaymentContext = createContext<PaymentContextType | null>(null);
@@ -131,6 +151,7 @@ export const PaymentProvider = ({ children }: { children: ReactNode }) => {
   const [tuitionConfigs,     setTuitionConfigs]     = useState<TuitionConfig[]>([]);
   const [annexServices,      setAnnexServices]       = useState<AnnexService[]>([]);
   const [payments,           setPayments]            = useState<Payment[]>([]);
+  const [receipts,           setReceipts]            = useState<Receipt[]>([]);
   const [serviceEnrollments, setServiceEnrollments]  = useState<ServiceEnrollment[]>([]);
   const [paymentLoading,     setPaymentLoading]      = useState(false);
 
@@ -143,6 +164,7 @@ export const PaymentProvider = ({ children }: { children: ReactNode }) => {
       setTuitionConfigs([]);
       setAnnexServices([]);
       setPayments([]);
+      setReceipts([]);
       setServiceEnrollments([]);
       return;
     }
@@ -178,11 +200,19 @@ export const PaymentProvider = ({ children }: { children: ReactNode }) => {
       fetchAllRows('service_enrollments', q => q
         .eq('school_id', schoolId)
         .eq('academic_year_label', yearLabel)),
-    ]).then(([tRes, sRes, pRes, eRes]) => {
+
+      // Les reçus ne doivent JAMAIS empêcher les paiements de se charger : leur
+      // échec (réseau, table pas encore créée) est absorbé ici.
+      fetchAllRows('receipts', q => q
+        .eq('school_id', schoolId)
+        .eq('academic_year_label', yearLabel))
+        .catch(() => ({ data: null })),
+    ]).then(([tRes, sRes, pRes, eRes, rRes]) => {
       if (tRes.data) setTuitionConfigs(tRes.data.map(mapTuition));
       if (sRes.data) setAnnexServices(sRes.data.map(mapService));
       if (pRes.data) setPayments(pRes.data.map(mapPayment));
       if (eRes.data) setServiceEnrollments(eRes.data.map(mapEnrollment));
+      if (rRes?.data) setReceipts(rRes.data.map(mapReceipt));
     }).finally(() => {
       setPaymentLoading(false);
       loadingRef.current = false;
@@ -498,6 +528,24 @@ export const PaymentProvider = ({ children }: { children: ReactNode }) => {
     return saved;
   }, [schoolId, yearLabel]);
 
+  // ── Reçus ───────────────────────────────────────────────────────────────────
+  // Séparé de addPayment volontairement : le numéro est attribué APRÈS
+  // l'encaissement. Un bug ici ne peut donc jamais empêcher d'encaisser.
+  const emettreRecu = useCallback(async (paymentIds: string[]): Promise<Receipt> => {
+    // Les fonctions RPC ne figurent pas encore dans les types générés.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data, error } = await (supabase as any).rpc('issue_receipt', { p_payment_ids: paymentIds });
+    if (error || !data) throw error ?? new Error('Reçu non émis');
+    const recu = mapReceipt(data);
+    setReceipts(prev => prev.some(r => r.id === recu.id) ? prev : [...prev, recu]);
+    setPayments(prev => prev.map(p => paymentIds.includes(p.id) ? { ...p, receiptId: recu.id } : p));
+    return recu;
+  }, []);
+
+  const getReceiptOf = useCallback((payment: Payment): Receipt | undefined =>
+    payment.receiptId ? receipts.find(r => r.id === payment.receiptId) : undefined,
+  [receipts]);
+
   // Annulation = pièce comptable qui reste, jamais une suppression — passe
   // uniquement par le RPC audité `cancel_payment` (trace qui/quand en base).
   const cancelPayment = useCallback(async (id: string) => {
@@ -536,13 +584,15 @@ export const PaymentProvider = ({ children }: { children: ReactNode }) => {
   // Les écrans lisent ce contexte, jamais Supabase : garder ces tranches rend
   // l'écran consultable sans réseau. On n'enregistre qu'une fois le chargement
   // terminé, sinon l'état vide du démarrage effacerait l'instantané.
-  const tranchesHorsLigne = useMemo(() => ({ tuitionConfigs, annexServices, payments, serviceEnrollments }), [tuitionConfigs, annexServices, payments, serviceEnrollments]);
+  const tranchesHorsLigne = useMemo(() => ({ tuitionConfigs, annexServices, payments, receipts, serviceEnrollments }), [tuitionConfigs, annexServices, payments, receipts, serviceEnrollments]);
 
   const appliquerInstantane = useCallback((t: typeof tranchesHorsLigne) => {
     setTuitionConfigs(t.tuitionConfigs);
     setAnnexServices(t.annexServices);
     setPayments(t.payments);
     setServiceEnrollments(t.serviceEnrollments);
+    // Un instantané enregistré avant l'arrivée des reçus n'en contient pas.
+    setReceipts(t.receipts ?? []);
   }, []);
 
   const instantaneLe = useInstantaneHorsLigne(
@@ -550,7 +600,7 @@ export const PaymentProvider = ({ children }: { children: ReactNode }) => {
   );
 
   const value: PaymentContextType = {
-    tuitionConfigs, annexServices, payments, serviceEnrollments, paymentLoading,
+    tuitionConfigs, annexServices, payments, receipts, serviceEnrollments, paymentLoading,
     instantaneLe,
     setTuitionConfig, getTuitionConfig,
     addAnnexService, updateAnnexService, deleteAnnexService, getServicesForClass,
@@ -559,6 +609,7 @@ export const PaymentProvider = ({ children }: { children: ReactNode }) => {
     addPayment, cancelPayment, getStudentPayments,
     hasPaidInscription, hasPaidTuitionMonth, hasPaidService,
     getTotalCollectedForYear,
+    emettreRecu, getReceiptOf,
   };
 
   return <PaymentContext.Provider value={value}>{children}</PaymentContext.Provider>;

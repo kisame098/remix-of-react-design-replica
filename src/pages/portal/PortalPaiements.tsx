@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import QRCode from 'qrcode';
 import { useAuth } from '@/contexts/AuthContext';
 import { useSchoolYear } from '@/contexts/SchoolYearContext';
@@ -9,7 +9,7 @@ import { cn } from '@/lib/utils';
 import {
   CreditCard, Loader2, CheckCircle2, AlertCircle,
   HandCoins, Smartphone, Building2, Banknote, QrCode, X, ChevronRight, Lock, CalendarPlus,
-  XCircle as XCircleIcon,
+  XCircle as XCircleIcon, Receipt as ReceiptIcon,
 } from 'lucide-react';
 import {
   Payment, AnnexSvc,
@@ -24,6 +24,9 @@ import {
 } from '@/types/payment';
 import { computeDueItems, totalExigible, type DueItem } from '@/lib/dueItems';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
+import { chargerRecusEleve, type RecusEleve } from '@/lib/recusFamille';
+import { numeroDeRecu } from '@/lib/recu';
+import { useRecuFamille } from '@/components/portal/RecuFamille';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -82,10 +85,11 @@ export default function PortalPaiements() {
     tuition: TuitionCfg | null;
     classId: string | null;
     enrolledAt: string | null;
+    recus: RecusEleve;
   }>(
     'portail-paiements',
     async () => {
-      const [payR, srvR, enrR, tcR, seR] = await Promise.all([
+      const [payR, srvR, enrR, tcR, seR, recus] = await Promise.all([
         supabase.from('payments')
           .select('id,type,service_id,month_key,amount,paid_at,method,reference,note,received_by,status,cancelled_at,cancelled_by')
           .eq('student_enrollment_id', eleveId)
@@ -107,6 +111,10 @@ export default function PortalPaiements() {
           .select('class_id, enrolled_at')
           .eq('id', eleveId)
           .single(),
+
+        // Les reçus ne doivent jamais empêcher la page de s'afficher : cette
+        // lecture ne lève pas (voir recusFamille.ts).
+        chargerRecusEleve(eleveId),
       ]);
 
       const classeId = seR.data?.class_id ?? null;
@@ -151,6 +159,7 @@ export default function PortalPaiements() {
 
         classId: classeId,
         enrolledAt: seR.data?.enrolled_at ?? null,
+        recus,
       };
     },
     [eleveId, ecoleId],
@@ -163,8 +172,22 @@ export default function PortalPaiements() {
   const classId    = donnees?.classId    ?? null;
   const enrolledAt = donnees?.enrolledAt ?? null;
 
+
   const [payments, setPayments] = useState<Payment[]>([]);
-  useEffect(() => { if (donnees) setPayments(donnees.payments); }, [donnees]);
+  // Rattachements paiement → reçu. Un instantané enregistré avant l'arrivée des
+  // reçus n'en contient pas : on repart alors d'un ensemble vide.
+  const [recusEleve, setRecusEleve] = useState<RecusEleve>({ parPaiement: {}, recus: [] });
+  useEffect(() => {
+    if (!donnees) return;
+    setPayments(donnees.payments);
+    setRecusEleve(donnees.recus ?? { parPaiement: {}, recus: [] });
+  }, [donnees]);
+
+  const libelleMois = useCallback(
+    (cle?: string) => (cle && academicMonths.find(m => m.key === cle)?.label) || cle || '',
+    [academicMonths],
+  );
+  const { ouvrirRecu, dialogueRecu } = useRecuFamille({ services, libelleMois });
 
   // ── Derived ────────────────────────────────────────────────────────────────
 
@@ -210,6 +233,8 @@ export default function PortalPaiements() {
 
   const refetchPayments = async () => {
     if (!schoolAccount?.studentEnrollmentId) return;
+    // Le reçu est émis un instant APRÈS l'encaissement : on relit aussi les reçus.
+    void chargerRecusEleve(schoolAccount.studentEnrollmentId).then(setRecusEleve);
     const { data } = await supabase.from('payments')
       .select('id,type,service_id,month_key,amount,paid_at,method,reference,note,received_by,status,cancelled_at,cancelled_by')
       .eq('student_enrollment_id', schoolAccount.studentEnrollmentId)
@@ -501,6 +526,24 @@ export default function PortalPaiements() {
                           </span>
                         </div>
 
+                        {/* Reçu : copie à télécharger ou imprimer (émis à l'encaissement) */}
+                        {(() => {
+                          const recuId = recusEleve.parPaiement[p.id];
+                          const recu = recuId ? recusEleve.recus.find(r => r.id === recuId) : undefined;
+                          if (!recu) return null;
+                          return (
+                            <button
+                              type="button"
+                              onClick={() => ouvrirRecu(recu, payments, recusEleve.parPaiement)}
+                              className="mt-3 w-full flex items-center justify-center gap-2 rounded-xl border border-slate-200
+                                         bg-slate-50 py-2.5 text-xs font-semibold text-slate-600 active:bg-slate-100"
+                            >
+                              <ReceiptIcon className="h-4 w-4" />
+                              Voir le reçu · {numeroDeRecu(recu.academicYearLabel, recu.number)}
+                            </button>
+                          );
+                        })()}
+
                         {/* Trace d'annulation — visible par l'élève, transparence oblige */}
                         {cancelled && (
                           <div className="mt-1.5 text-[10px] text-red-500">
@@ -565,6 +608,8 @@ export default function PortalPaiements() {
           )}
         </DialogContent>
       </Dialog>
+
+      {dialogueRecu}
     </div>
   );
 }
