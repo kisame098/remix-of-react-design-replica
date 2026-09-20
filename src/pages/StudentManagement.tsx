@@ -53,6 +53,7 @@ import AcademicChoicesFields, { useAcademicChoicesRequirement } from '@/componen
 import { mergeFiliereChoiceGroups, mergeFiliereFacultativeSubjects } from '@/contexts/SchoolContext';
 import { ListChecks, FileText } from 'lucide-react';
 import { useFicheInscription } from '@/hooks/useFicheInscription';
+import { ProfilMatieres } from '@/components/student/ProfilMatieres';
 
 interface EditFormData {
   firstName: string;
@@ -284,8 +285,34 @@ const StudentManagement = () => {
   const academicProfile = useMemo(
     () => resolveAcademicProfile(
       subjects, gradePeriods, getSubjectSettings,
-      selectedStudent?.id ?? '', selectedStudent?.classId ?? null, currentYear?.id ?? null),
+      selectedStudent?.id ?? '', selectedStudent?.classId ?? null, currentYear?.id ?? null,
+      // Une matière qu'on vient de désactiver doit RESTER dans la liste, avec son
+      // interrupteur : sinon elle disparaît et on ne peut plus la réactiver.
+      { inclureDesactivees: true }),
     [selectedStudent, currentYear, gradePeriods, subjects, getSubjectSettings]);
+
+  // Désactiver / réactiver une matière pour cet élève, avec un retour clair.
+  // `coefPerso` : un coefficient personnalisé survit à l'aller-retour.
+  const basculerMatiere = async (
+    row: { subject: { id: string; name: string; coefficient: number }; coefficient: number },
+    active: boolean,
+  ) => {
+    if (!selectedStudent) return;
+    try {
+      await updateStudentSubjectOverride(
+        selectedStudent.id, row.subject.id, active,
+        row.coefficient !== row.subject.coefficient ? String(row.coefficient) : undefined,
+      );
+      toast({
+        title: active ? `${row.subject.name} réactivée` : `${row.subject.name} désactivée`,
+        description: active
+          ? 'Elle compte de nouveau dans les moyennes et les bulletins de cet élève, à toutes les périodes.'
+          : 'Elle ne compte plus dans les moyennes ni les bulletins de cet élève, à toutes les périodes. Vous pouvez la réactiver ici à tout moment.',
+      });
+    } catch (err) {
+      toast({ title: 'Erreur', description: `Impossible de modifier ${row.subject.name} : ${String(err)}`, variant: 'destructive' });
+    }
+  };
 
   // Profil académique d'un élève d'élémentaire : pas de matières à coefficient
   // mais des disciplines à barème de points. Une ligne par discipline, avec la
@@ -824,33 +851,14 @@ const StudentManagement = () => {
                         Aucune matière résolue pour l'instant — assignez une classe avec une année scolaire active.
                       </p>
                     ) : (
-                      <div className="space-y-2">
-                        {academicProfile.map(row => (
-                          <div key={row.subject.id} className="flex items-center justify-between gap-3 rounded-lg border p-3">
-                            <div className="min-w-0">
-                              <p className="font-medium text-sm truncate">{row.subject.name}</p>
-                              <Badge variant="outline" className="text-[10px] mt-1">{row.source}</Badge>
-                            </div>
-                            <div className="flex items-center gap-3 flex-shrink-0">
-                              <Input
-                                type="number" min="0" step="0.5"
-                                className="w-16 h-8 text-center text-sm"
-                                defaultValue={row.coefficient}
-                                onBlur={(e) => {
-                                  const v = e.target.value;
-                                  if (v && Number(v) !== row.coefficient) {
-                                    updateStudentSubjectOverride(selectedStudent.id, row.subject.id, row.active, v);
-                                  }
-                                }}
-                              />
-                              <Switch
-                                checked={row.active}
-                                onCheckedChange={(checked) => updateStudentSubjectOverride(selectedStudent.id, row.subject.id, checked)}
-                              />
-                            </div>
-                          </div>
-                        ))}
-                      </div>
+                      <ProfilMatieres
+                        lignes={academicProfile}
+                        onBasculer={basculerMatiere}
+                        onCoefficient={(ligne, coefficient) => {
+                          updateStudentSubjectOverride(selectedStudent.id, ligne.subject.id, ligne.active, coefficient)
+                            .catch(err => toast({ title: 'Erreur', description: String(err), variant: 'destructive' }));
+                        }}
+                      />
                     )}
                   </TabsContent>
                   </Tabs>
