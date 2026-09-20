@@ -12,10 +12,11 @@ import {
 import {
   GradePeriod, SubjectGrade, SlotEvent, Attendance,
   DAYS_LONG, MONTHS_FULL, TODAY_I,
-  weightedAvg, fmtTime, fmtGrade, fmtAmount,
+  fmtTime, fmtGrade, fmtAmount,
   gradeLevel, GP, initials,
 } from './portalHelpers';
 import TeacherAccueil from './teacher/TeacherAccueil';
+import { moyennePubliee, type BulletinPublieBrut } from '@/lib/moyennePubliee';
 
 // ─── Accueil (Dashboard) ──────────────────────────────────────────────────────
 
@@ -34,10 +35,11 @@ export default function PortalAccueil() {
     grades: SubjectGrade[];
     schedule: SlotEvent[];
     attendances: Attendance[];
+    bulletins: BulletinPublieBrut[];
   }>(
     'portail-accueil',
     async () => {
-      const [pR, gR, schR, aR] = await Promise.all([
+      const [pR, gR, schR, aR, bulR] = await Promise.all([
         supabase.from('grade_periods').select('id,name,ordering').eq('school_id', ecoleId).order('ordering'),
         supabase.from('grades')
           .select('id,subject_id,devoir1,devoir2,devoir3,devoir4,devoir5,composition,note,subjects(id,name,coefficient,period_id)')
@@ -48,9 +50,13 @@ export default function PortalAccueil() {
         supabase.from('student_attendances')
           .select('id,status,attendance_sessions(date,subject_name,start_time,end_time)')
           .eq('student_enrollment_id', eleveId),
+        // La moyenne de l'accueil vient du bulletin PUBLIÉ, jamais des notes
+        // en cours de saisie. RLS : un élève ne lit que son propre bulletin.
+        supabase.from('published_bulletins').select('period_id, data').eq('student_enrollment_id', eleveId),
       ]);
 
       return {
+        bulletins: (bulR.data ?? []).map(b => ({ periodId: b.period_id, data: b.data })),
         periods: (pR.data ?? []).map(p => ({ id: p.id, name: p.name, ordering: p.ordering })),
 
         grades: (gR.data ?? []).filter(g => g.subjects).map(g => {
@@ -90,20 +96,14 @@ export default function PortalAccueil() {
   const grades      = donnees?.grades      ?? [];
   const schedule    = donnees?.schedule    ?? [];
   const attendances = donnees?.attendances ?? [];
+  const bulletins   = donnees?.bulletins   ?? [];
 
   // ── Computed ──────────────────────────────────────────────────────────────
 
   const hour     = new Date().getHours();
   const greeting = hour < 12 ? 'Bonjour' : hour < 18 ? 'Bon après-midi' : 'Bonsoir';
 
-  const avgInfo = useMemo(() => {
-    for (const p of [...periods].reverse()) {
-      const pg  = grades.filter(g => g.periodId === p.id);
-      const avg = weightedAvg(pg);
-      if (avg !== null) return { avg, periodName: p.name };
-    }
-    return null;
-  }, [grades, periods]);
+  const avgInfo = useMemo(() => moyennePubliee(bulletins, periods), [bulletins, periods]);
 
   const todaySlots = useMemo(() =>
     schedule.filter(e => e.dayIndex === TODAY_I).sort((a, b) => a.startTime.localeCompare(b.startTime)),
@@ -131,7 +131,7 @@ export default function PortalAccueil() {
   }
 
   const ini = initials(schoolAccount.displayName);
-  const pal = GP[gradeLevel(avgInfo?.avg ?? null)];
+  const pal = GP[gradeLevel(avgInfo ? (avgInfo.moyenne * 20) / avgInfo.sur : null)];
 
   return (
     <div className="px-4 pt-5 pb-6 space-y-5">
@@ -175,12 +175,16 @@ export default function PortalAccueil() {
           {avgInfo ? (
             <>
               <p className={cn('text-2xl font-black leading-none mt-1.5', pal.text)}>
-                {avgInfo.avg.toFixed(1)}
+                {avgInfo.moyenne.toFixed(2)}
+                <span className="text-xs font-semibold text-gray-400">/{avgInfo.sur}</span>
               </p>
               <p className="text-[10px] text-gray-400 mt-1 truncate">{avgInfo.periodName}</p>
             </>
           ) : (
-            <p className="text-2xl font-black text-gray-300 mt-1.5">—</p>
+            <>
+              <p className="text-2xl font-black text-gray-300 mt-1.5">—</p>
+              <p className="text-[10px] text-gray-400 mt-1">Bulletin non publié</p>
+            </>
           )}
         </div>
 
