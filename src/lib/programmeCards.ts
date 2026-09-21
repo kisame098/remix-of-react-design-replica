@@ -21,13 +21,20 @@ export type ProgrammeCard =
   | { type: 'niveau'; niveau: string }
   | { type: 'filiere'; filiereId: string; filiereName: string; niveau: string };
 
+export { getNiveauxSupprimes } from '@/lib/amorcageProgramme';
+
 export const buildProgrammeCards = (
   filieres: Filiere[],
   niveauDefaultSubjects: NiveauDefaultSubject[],
   elementaryDefaultLines: ElementaryDefaultLine[] = [],
+  niveauxSupprimes: string[] = [],
 ): ProgrammeCard[] => {
-  const collegeNiveaux = Array.from(new Set<string>([...NIVEAUX_COLLEGE, ...niveauDefaultSubjects.map(s => s.niveau)]));
-  const elementaireNiveaux = Array.from(new Set<string>([...NIVEAUX_ELEMENTAIRE, ...elementaryDefaultLines.map(l => l.niveau)]));
+  // Un niveau supprimé disparaît, SAUF s'il a de nouveau du contenu (une
+  // matière importée, par exemple) : un contenu ne doit jamais être invisible.
+  const masques = new Set(niveauxSupprimes);
+  const visibles = (fixes: readonly string[]) => fixes.filter(n => !masques.has(n));
+  const collegeNiveaux = Array.from(new Set<string>([...visibles(NIVEAUX_COLLEGE), ...niveauDefaultSubjects.map(s => s.niveau)]));
+  const elementaireNiveaux = Array.from(new Set<string>([...visibles(NIVEAUX_ELEMENTAIRE), ...elementaryDefaultLines.map(l => l.niveau)]));
 
   const filiereCards = filieres
     .filter(f => !isCompanionFiliere(f))

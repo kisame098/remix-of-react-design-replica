@@ -1,6 +1,7 @@
+import { doitAmorcer, getNiveauxSupprimes, sansNiveauxSupprimes } from '@/lib/amorcageProgramme';
 import React, {
   createContext, useContext, useState, useEffect,
-  useCallback, useMemo, ReactNode,
+  useCallback, useMemo, useRef, ReactNode,
 } from 'react';
 import { useSchoolYear } from './SchoolYearContext';
 import { useAuth } from '@/contexts/AuthContext';
@@ -808,6 +809,10 @@ const buildStudentUniqueIdPreview = (existingCount: number): string => {
 export const SchoolProvider = ({ children }: { children: ReactNode }) => {
   const { currentYear } = useSchoolYear();
   const { school, accountRole, isSchoolAccessBlocked } = useAuth();
+  // Réglages de l'école lus au moment de l'amorçage (voir src/lib/amorcageProgramme.ts) :
+  // une référence, pour ne pas relancer les chargements à chaque changement de réglage.
+  const reglagesEcoleRef = useRef<Record<string, unknown> | undefined>(school?.settings as Record<string, unknown> | undefined);
+  reglagesEcoleRef.current = school?.settings as Record<string, unknown> | undefined;
   const enLigne = useEnLigne();
 
   // schoolId provient exclusivement de school.id, chargé via get_my_school_id()
@@ -1249,10 +1254,13 @@ export const SchoolProvider = ({ children }: { children: ReactNode }) => {
       // `length === 0` ne veut PAS dire « école neuve » quand l'abonnement
       // bloque l'accès : les policies renvoient une liste vide. Amorcer ici
       // déclencherait une rafale d'INSERT tous refusés (403), lente et inutile.
-      if ((ndRes.data ?? []).length === 0 && accountRole === 'admin' && !isSchoolAccessBlocked) {
+      if (doitAmorcer({
+        type: 'college', settings: reglagesEcoleRef.current, tableVide: (ndRes.data ?? []).length === 0,
+        estAdmin: accountRole === 'admin', accesBloque: isSchoolAccessBlocked,
+      })) {
         try {
           await supabase.from('niveau_default_subjects').insert(
-            DEFAULT_NIVEAU_SUBJECTS.map((s, i) => ({
+            sansNiveauxSupprimes(DEFAULT_NIVEAU_SUBJECTS, getNiveauxSupprimes(reglagesEcoleRef.current)).map((s, i) => ({
               school_id: schoolId, niveau: s.niveau, name: s.name, coefficient: s.coefficient, ordering: i,
             }))
           );
@@ -1389,9 +1397,12 @@ export const SchoolProvider = ({ children }: { children: ReactNode }) => {
       // sur une erreur (ex: cache de schéma PostgREST pas encore à jour juste
       // après une migration), pour éviter une tentative de ré-insertion en
       // doublon (409) qui écraserait ensuite l'état avec une liste vide.
-      if (!dRes.error && (dRes.data ?? []).length === 0 && accountRole === 'admin' && !isSchoolAccessBlocked) {
+      if (!dRes.error && doitAmorcer({
+        type: 'elementaire', settings: reglagesEcoleRef.current, tableVide: (dRes.data ?? []).length === 0,
+        estAdmin: accountRole === 'admin', accesBloque: isSchoolAccessBlocked,
+      })) {
         try {
-          const seed = [...ELEMENTARY_DEFAULT_LINES, ...ELEMENTARY_OPTIONAL_CATALOG];
+          const seed = sansNiveauxSupprimes([...ELEMENTARY_DEFAULT_LINES, ...ELEMENTARY_OPTIONAL_CATALOG], getNiveauxSupprimes(reglagesEcoleRef.current));
           await sbElementary.from('elementary_default_lines').insert(
             seed.map(s => ({
               school_id: schoolId, niveau: s.niveau, domaine: s.domaine, registre: s.registre,

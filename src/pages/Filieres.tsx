@@ -24,7 +24,8 @@ import {
   Plus, Trash2, Loader2, Pencil, GraduationCap, X, Download, Upload, Copy,
 } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
-import { buildProgrammeCards, isCompanionFiliere, getNiveauLabels, resolveNiveauLabel, type ProgrammeCard } from '@/lib/programmeCards';
+import { buildProgrammeCards, isCompanionFiliere, getNiveauLabels, getNiveauxSupprimes, resolveNiveauLabel, type ProgrammeCard } from '@/lib/programmeCards';
+import { CLE_AMORCE, type TypeProgramme } from '@/lib/amorcageProgramme';
 import { NIVEAUX_ELEMENTAIRE } from '@/lib/elementaryDefaults';
 import ElementaryBaremeEditor from '@/components/ElementaryBaremeEditor';
 
@@ -76,6 +77,16 @@ const Filieres = () => {
   // de matérialisation), seul ce qui est AFFICHÉ ici et dans le sélecteur de
   // bloc de Gestion des Classes change. Voir src/lib/programmeCards.ts.
   const niveauLabels = getNiveauLabels(school?.settings);
+  const niveauxSupprimes = getNiveauxSupprimes(school?.settings);
+
+  // Marque l'école « amorcée » AVANT toute suppression : sans cela, une école qui
+  // supprimerait tout verrait tout revenir à la connexion suivante (voir
+  // src/lib/amorcageProgramme.ts).
+  const assurerAmorce = async (type: TypeProgramme) => {
+    if (school?.settings?.[CLE_AMORCE[type]] !== true) {
+      await updateSchoolSettings({ [CLE_AMORCE[type]]: true });
+    }
+  };
 
   // ── Export / import du programme (partage entre écoles) ────────────────
   // Format JSON simple, lisible, indépendant de l'école qui l'a produit —
@@ -223,7 +234,7 @@ const Filieres = () => {
   // Source partagée avec ClassManagement.tsx (src/lib/programmeCards.ts) —
   // pour que "les blocs qu'on peut choisir à la création d'une classe" soient
   // toujours exactement "les blocs qui existent ici dans Cursus".
-  const allCards: ProgrammeCard[] = buildProgrammeCards(filieres, niveauDefaultSubjects, elementaryDefaultLines);
+  const allCards: ProgrammeCard[] = buildProgrammeCards(filieres, niveauDefaultSubjects, elementaryDefaultLines, niveauxSupprimes);
 
   // ── Éditeur de barème élémentaire (CI-CM2) — système à part, voir ElementaryBaremeEditor ──
   const [elementaryBaremeNiveau, setElementaryBaremeNiveau] = useState<string | null>(null);
@@ -232,6 +243,7 @@ const Filieres = () => {
   const handleDeleteElementaryLine = async (id: string) => {
     setDeletingLineId(id);
     try {
+      await assurerAmorce('elementaire');
       await deleteElementaryDefaultLine(id);
     } catch (err) {
       toast({ title: 'Erreur', description: String(err), variant: 'destructive' });
@@ -341,7 +353,7 @@ const Filieres = () => {
   const doDeleteRow = async (target: EditTarget) => {
     setDeletingRowId(target.row.id);
     try {
-      if (target.kind === 'niveau') await deleteNiveauDefaultSubject(target.row.id);
+      if (target.kind === 'niveau') { await assurerAmorce('college'); await deleteNiveauDefaultSubject(target.row.id); }
       else if (target.kind === 'obligatoire') await deleteFiliereMandatorySubject(target.row.id);
       else if (target.kind === 'facultative') await deleteFiliereFacultativeSubject(target.row.id);
       else await deleteFiliereChoiceGroup(target.row.id);
@@ -454,27 +466,61 @@ const Filieres = () => {
     }
   };
 
-  // ── Vider un niveau de collège (supprime toutes ses matières par défaut +
-  // ses créneaux au choix compagnons) — le bloc lui-même reste affiché (c'est
-  // un niveau fixe, pas une entité qu'on peut supprimer) mais redevient vide. ──
+  // ── Supprimer un bloc de niveau (élémentaire OU collège) ────────────────
+  // Efface le contenu du bloc (matières ou barème, et créneaux au choix) puis le
+  // retire de Cursus et du choix de bloc à la création d'une classe ; il se
+  // retrouve dans « Blocs supprimés », d'où on peut le restaurer (vide).
+  // Refusé tant que des classes l'utilisent : on ne coupe pas le programme sous
+  // les pieds d'une classe en cours. Les classes déjà créées gardent de toute
+  // façon leurs propres matières et leurs notes.
   const [clearingNiveau, setClearingNiveau] = useState<string | null>(null);
   const [confirmClearNiveau, setConfirmClearNiveau] = useState<string | null>(null);
   const handleClearNiveau = async (niveau: string) => {
+    const utilisees = classes.filter(c => c.niveau === niveau);
+    if (utilisees.length > 0) {
+      setConfirmClearNiveau(null);
+      toast({
+        title: 'Impossible de supprimer ce bloc',
+        description: `${utilisees.length} classe${utilisees.length > 1 ? 's utilisent' : ' utilise'} ce niveau (${utilisees.map(c => c.name).slice(0, 3).join(', ')}${utilisees.length > 3 ? '…' : ''}). Supprimez-${utilisees.length > 1 ? 'les' : 'la'} ou changez leur niveau d'abord.`,
+        variant: 'destructive',
+      });
+      return;
+    }
     setClearingNiveau(niveau);
     try {
-      const toDelete = niveauDefaultSubjects.filter(s => s.niveau === niveau);
-      for (const s of toDelete) await deleteNiveauDefaultSubject(s.id);
-      const companion = findCompanionFiliere(niveau);
-      if (companion) {
-        const groups = mergeFiliereChoiceGroups(filiereChoiceGroups, companion.id, niveau);
-        for (const g of groups) await deleteFiliereChoiceGroup(g.id);
+      const type: TypeProgramme = (NIVEAUX_ELEMENTAIRE as readonly string[]).includes(niveau) ? 'elementaire' : 'college';
+      await assurerAmorce(type);
+      if (type === 'elementaire') {
+        for (const l of elementaryDefaultLines.filter(x => x.niveau === niveau)) await deleteElementaryDefaultLine(l.id);
+      } else {
+        for (const s of niveauDefaultSubjects.filter(x => x.niveau === niveau)) await deleteNiveauDefaultSubject(s.id);
+        const companion = findCompanionFiliere(niveau);
+        if (companion) {
+          const groups = mergeFiliereChoiceGroups(filiereChoiceGroups, companion.id, niveau);
+          for (const g of groups) await deleteFiliereChoiceGroup(g.id);
+        }
       }
-      toast({ title: 'Niveau vidé', description: `Toutes les matières de ${niveau} ont été supprimées.` });
+      // Un seul enregistrement (le drapeau d'amorçage y est repris, sinon une
+      // copie périmée des réglages l'effacerait).
+      await updateSchoolSettings({
+        [CLE_AMORCE[type]]: true,
+        niveauxSupprimes: Array.from(new Set([...niveauxSupprimes, niveau])),
+      });
+      toast({ title: 'Bloc supprimé', description: `${resolveNiveauLabel(niveauLabels, niveau)} a été supprimé. Vous pouvez le restaurer en bas de page.` });
     } catch (err) {
       toast({ title: 'Erreur', description: String(err), variant: 'destructive' });
     } finally {
       setClearingNiveau(null);
       setConfirmClearNiveau(null);
+    }
+  };
+
+  const handleRestaurerNiveau = async (niveau: string) => {
+    try {
+      await updateSchoolSettings({ niveauxSupprimes: niveauxSupprimes.filter(n => n !== niveau) });
+      toast({ title: 'Bloc restauré', description: `${resolveNiveauLabel(niveauLabels, niveau)} est de retour, vide : ajoutez ses matières.` });
+    } catch (err) {
+      toast({ title: 'Erreur', description: String(err), variant: 'destructive' });
     }
   };
 
@@ -660,6 +706,17 @@ const Filieres = () => {
         </DialogContent>
       </Dialog>
 
+      {niveauxSupprimes.length > 0 && (
+        <div className="rounded-lg border border-dashed p-3 flex items-center gap-2 flex-wrap text-sm">
+          <span className="text-muted-foreground">Blocs supprimés :</span>
+          {niveauxSupprimes.map(n => (
+            <Button key={n} variant="outline" size="sm" className="h-7 gap-1.5" onClick={() => void handleRestaurerNiveau(n)}>
+              <Plus className="h-3 w-3" />Restaurer {resolveNiveauLabel(niveauLabels, n)}
+            </Button>
+          ))}
+        </div>
+      )}
+
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {allCards.map(card => {
           if (card.type === 'niveau' && (NIVEAUX_ELEMENTAIRE as readonly string[]).includes(card.niveau)) {
@@ -706,13 +763,23 @@ const Filieres = () => {
                       <CardTitle className="text-base">{resolveNiveauLabel(niveauLabels, niveau)}</CardTitle>
                       <p className="text-xs text-muted-foreground mt-0.5">{classCount} classe{classCount !== 1 ? 's' : ''} · barème</p>
                     </div>
-                    <Button
-                      variant="ghost" size="icon" className="h-6 w-6 opacity-0 group-hover:opacity-100 flex-shrink-0"
-                      title="Éditer le barème"
-                      onClick={() => { setElementaryEditLineId(null); setElementaryBaremeNiveau(niveau); }}
-                    >
-                      <Pencil className="h-3 w-3" />
-                    </Button>
+                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 flex-shrink-0">
+                      <Button
+                        variant="ghost" size="icon" className="h-6 w-6"
+                        title="Éditer le barème"
+                        onClick={() => { setElementaryEditLineId(null); setElementaryBaremeNiveau(niveau); }}
+                      >
+                        <Pencil className="h-3 w-3" />
+                      </Button>
+                      <Button
+                        variant="ghost" size="icon" className="h-6 w-6 text-destructive hover:text-destructive"
+                        title={`Supprimer le bloc ${resolveNiveauLabel(niveauLabels, niveau)}`}
+                        disabled={clearingNiveau === niveau}
+                        onClick={() => setConfirmClearNiveau(niveau)}
+                      >
+                        {clearingNiveau === niveau ? <Loader2 className="h-3 w-3 animate-spin" /> : <Trash2 className="h-3 w-3" />}
+                      </Button>
+                    </div>
                   </div>
                 </CardHeader>
                 <CardContent className="flex-1 flex flex-col">
@@ -767,7 +834,7 @@ const Filieres = () => {
                       <Button
                         variant="ghost" size="icon"
                         className="h-6 w-6 text-destructive hover:text-destructive"
-                        title={`Supprimer toutes les matières de ${niveau}`}
+                        title={`Supprimer le bloc ${resolveNiveauLabel(niveauLabels, niveau)}`}
                         disabled={clearingNiveau === niveau}
                         onClick={() => setConfirmClearNiveau(niveau)}
                       >
@@ -1136,14 +1203,15 @@ const Filieres = () => {
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* ── Confirmation vidage d'un niveau de collège ── */}
+      {/* ── Confirmation suppression d'un bloc de niveau ── */}
       <AlertDialog open={!!confirmClearNiveau} onOpenChange={(open) => !open && setConfirmClearNiveau(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Vider {confirmClearNiveau && resolveNiveauLabel(niveauLabels, confirmClearNiveau)} ?</AlertDialogTitle>
+            <AlertDialogTitle>Supprimer le bloc {confirmClearNiveau && resolveNiveauLabel(niveauLabels, confirmClearNiveau)} ?</AlertDialogTitle>
             <AlertDialogDescription>
-              Supprime toutes les matières et créneaux au choix par défaut de ce niveau — vous pourrez le
-              reconstruire matière par matière. Les classes déjà créées et leurs notes ne sont pas affectées.
+              Le bloc et tout son contenu (matières ou barème, créneaux au choix) disparaissent de Cursus et du choix
+              de niveau à la création d'une classe. Vous pourrez le restaurer, vide, depuis « Blocs supprimés ».
+              Impossible tant qu'une classe utilise ce niveau.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -1152,7 +1220,7 @@ const Filieres = () => {
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
               onClick={() => confirmClearNiveau && handleClearNiveau(confirmClearNiveau)}
             >
-              Vider
+              Supprimer le bloc
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

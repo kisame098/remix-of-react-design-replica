@@ -134,3 +134,31 @@ describe('programmeCardKey', () => {
     expect(programmeCardKey({ type: 'niveau', niveau: '6ème' })).toBe('niveau:6ème');
   });
 });
+
+describe('buildProgrammeCards — blocs supprimés par l\'école', () => {
+  const niveaux = (cards: ProgrammeCard[]) => cards.filter(c => c.type === 'niveau').map(c => c.niveau);
+
+  it('un bloc de l\'élémentaire peut être supprimé (avant : toujours affiché)', () => {
+    const cards = buildProgrammeCards([], [], [], ['CI', 'CP']);
+    expect(niveaux(cards)).not.toContain('CI');
+    expect(niveaux(cards)).not.toContain('CP');
+    expect(niveaux(cards)).toContain('CE1');
+  });
+
+  it('un bloc du collège aussi', () => {
+    expect(niveaux(buildProgrammeCards([], [], [], ['6ème']))).not.toContain('6ème');
+  });
+
+  it('sans suppression, rien ne change', () => {
+    expect(buildProgrammeCards([], [], [])).toEqual(buildProgrammeCards([], [], [], []));
+  });
+
+  it('un niveau supprimé qui retrouve du contenu redevient visible : jamais de contenu caché', () => {
+    expect(niveaux(buildProgrammeCards([], [defaultSubject('6ème')], [], ['6ème']))).toContain('6ème');
+  });
+
+  it('supprimer un niveau ne touche pas aux blocs de lycée ni de série', () => {
+    const cards = buildProgrammeCards([filiere('f1', 'S1', ['1ère'])], [], [], ['CI', '6ème']);
+    expect(cards.some(c => c.type === 'filiere' && c.filiereName === 'S1')).toBe(true);
+  });
+});
