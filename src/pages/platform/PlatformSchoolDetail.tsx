@@ -6,7 +6,12 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend } from 'recharts';
-import { ArrowLeft, Loader2, RefreshCw, ShieldAlert } from 'lucide-react';
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import { ArrowLeft, Loader2, RefreshCw, ShieldAlert, Repeat } from 'lucide-react';
+import { LIBELLES_MODE, type ModeGestion } from '@/lib/modeGestion';
 import { toast } from '@/hooks/use-toast';
 import {
   ilYA, jourActif, joursSansActivite, LIBELLES_NIVEAU, niveauActivite, type JourHistorique,
@@ -62,6 +67,9 @@ const PlatformSchoolDetail = () => {
   const [d, setD] = useState<Detail | null>(null);
   const [loading, setLoading] = useState(true);
   const [erreur, setErreur] = useState<string | null>(null);
+  const [mode, setMode] = useState<ModeGestion | null>(null);
+  const [confirmerMode, setConfirmerMode] = useState<ModeGestion | null>(null);
+  const [changementMode, setChangementMode] = useState(false);
 
   const charger = useCallback(async () => {
     if (!schoolId) return;
@@ -72,9 +80,27 @@ const PlatformSchoolDetail = () => {
       toast({ title: 'Erreur', description: error.message, variant: 'destructive' });
     } else {
       setD(data as Detail);
+      const { data: m } = await sb.rpc('platform_school_mode', { p_school_id: schoolId });
+      if (m === 'classique' || m === 'formation_pro') setMode(m);
     }
     setLoading(false);
   }, [schoolId]);
+
+  const appliquerMode = async (cible: ModeGestion) => {
+    if (!schoolId) return;
+    setChangementMode(true);
+    try {
+      const { error } = await sb.rpc('platform_set_school_mode', { p_school_id: schoolId, p_mode: cible });
+      if (error) throw error;
+      setMode(cible);
+      toast({ title: 'Mode de gestion modifié', description: `${d?.ecole.nom} est maintenant en mode « ${LIBELLES_MODE[cible]} ».` });
+    } catch (e) {
+      toast({ title: 'Mode non modifié', description: (e as { message?: string })?.message ?? 'Erreur inconnue', variant: 'destructive' });
+    } finally {
+      setChangementMode(false);
+      setConfirmerMode(null);
+    }
+  };
 
   useEffect(() => { void charger(); }, [charger]);
 
@@ -123,6 +149,53 @@ const PlatformSchoolDetail = () => {
       <p className="text-xs text-muted-foreground -mt-3">
         Cette page ne montre que des totaux et des dates : aucun nom, note ou montant individuel d'élève.
       </p>
+
+      {/* ── Mode de gestion ───────────────────────────────────────────── */}
+      <Card>
+        <CardHeader className="pb-2"><CardTitle className="text-base">Mode de gestion</CardTitle></CardHeader>
+        <CardContent className="flex items-center justify-between gap-4 flex-wrap">
+          <div className="text-sm">
+            <p>
+              Mode actuel : <span className="font-semibold">{mode ? LIBELLES_MODE[mode] : '—'}</span>
+            </p>
+            <p className="text-xs text-muted-foreground mt-1 max-w-xl">
+              Le mode « Formation professionnelle » change le menu de l'école (formations, promotions, examens, stages…).
+              Aucune donnée n'est supprimée : basculer ne fait que changer les écrans, et le retour au mode classique est possible à tout moment.
+            </p>
+          </div>
+          {mode && (
+            <Button
+              variant="outline" className="gap-2" disabled={changementMode}
+              onClick={() => setConfirmerMode(mode === 'classique' ? 'formation_pro' : 'classique')}
+            >
+              <Repeat className="h-4 w-4" />
+              {mode === 'classique' ? 'Passer en Formation professionnelle' : 'Revenir au mode classique'}
+            </Button>
+          )}
+        </CardContent>
+      </Card>
+
+      <AlertDialog open={!!confirmerMode} onOpenChange={o => { if (!o && !changementMode) setConfirmerMode(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {confirmerMode === 'formation_pro' ? 'Passer' : 'Revenir'} {d.ecole.nom} en mode « {confirmerMode && LIBELLES_MODE[confirmerMode]} » ?
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {confirmerMode === 'formation_pro'
+                ? "Le menu de cette école va changer : « Gestion Classe », « Gestion Notes » et « Cursus » sont remplacés par les rubriques Formation professionnelle (en cours de développement). Ses données ne sont ni modifiées ni supprimées."
+                : "Le menu classique de l'école (Gestion Classe, Gestion Notes, Cursus) revient. Les rubriques Formation professionnelle disparaissent, sans perte de données."}
+              {' '}Ce changement est enregistré dans le journal de la plateforme.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={changementMode}>Annuler</AlertDialogCancel>
+            <AlertDialogAction disabled={changementMode} onClick={e => { e.preventDefault(); if (confirmerMode) void appliquerMode(confirmerMode); }}>
+              {changementMode && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}Confirmer
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* ── Effectifs ─────────────────────────────────────────────────── */}
       <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">

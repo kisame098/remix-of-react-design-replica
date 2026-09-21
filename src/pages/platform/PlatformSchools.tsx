@@ -35,6 +35,7 @@ interface SchoolRow {
   subscription_status: SubscriptionStatus;
   subscription_plan: string | null;
   subscription_expires_at: string | null;
+  management_mode?: 'classique' | 'formation_pro';
 }
 
 const STATUS_INFO: Record<SubscriptionStatus, { label: string; variant: 'default' | 'secondary' | 'destructive' | 'outline' }> = {
@@ -82,9 +83,9 @@ const PlatformSchools = () => {
 
   const load = useCallback(async () => {
     setLoading(true);
-    const { data, error } = await supabase
+    const { data, error } = await sb
       .from('schools')
-      .select('id, name, city, country, created_at, subscription_status, subscription_plan, subscription_expires_at')
+      .select('id, name, city, country, created_at, subscription_status, subscription_plan, subscription_expires_at, management_mode')
       .order('created_at', { ascending: false });
     if (error) {
       toast({ title: 'Erreur', description: error.message, variant: 'destructive' });
@@ -260,6 +261,9 @@ const PlatformSchools = () => {
                     <TableRow key={school.id} className={needsAttention(school) ? 'bg-amber-50/50' : undefined}>
                       <TableCell className="font-medium">
                         <Link to={`/platform/ecoles/${school.id}`} className="hover:underline text-primary">{school.name}</Link>
+                        {school.management_mode === 'formation_pro' && (
+                          <span className="ml-2 rounded-full bg-violet-100 text-violet-700 px-2 py-0.5 text-[10px] font-semibold align-middle">Formation pro</span>
+                        )}
                         <div className="text-xs text-muted-foreground font-normal">{school.city ?? '—'}</div>
                       </TableCell>
                       <TableCell className="text-right">

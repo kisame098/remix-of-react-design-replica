@@ -29,6 +29,8 @@ export interface School {
   subscription_status: 'trial' | 'active' | 'suspended' | 'cancelled';
   subscription_plan: string | null;
   subscription_expires_at: string | null;
+  /** 'classique' (défaut) ou 'formation_pro' — changé uniquement par le chef du système. */
+  management_mode?: 'classique' | 'formation_pro';
   created_at: string;
   updated_at: string;
 }

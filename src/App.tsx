@@ -20,6 +20,7 @@ import { ChargementPage } from "./components/ChargementPage";
 import { BandeauHorsConnexion } from "./components/BandeauHorsConnexion";
 import { MiseAJourApplication } from "./components/MiseAJourApplication";
 import { Referencement } from "./components/Referencement";
+import ModeRoute from "./components/ModeRoute";
 import { SuiviActivite } from "@/components/SuiviActivite";
 import { SchoolYearProvider } from "./contexts/SchoolYearContext";
 import { SchoolProvider } from "./contexts/SchoolContext";
@@ -59,6 +60,7 @@ const IdentityManagement    = lazy(() => import("./pages/IdentityManagement"));
 const SettingsPage          = lazy(() => import("./pages/Settings"));
 const AbonnementPage        = lazy(() => import("./pages/Abonnement"));
 const SubscriptionRequired  = lazy(() => import("./pages/SubscriptionRequired"));
+const FormationEnDeveloppement = lazy(() => import("./pages/formation/FormationEnDeveloppement"));
 const PlatformStats         = lazy(() => import("./pages/platform/PlatformStats"));
 const PlatformSchools       = lazy(() => import("./pages/platform/PlatformSchools"));
 const PlatformSchoolDetail  = lazy(() => import("./pages/platform/PlatformSchoolDetail"));
@@ -150,16 +152,22 @@ const App = () => (
                     <Route path="/eleves" element={<RequirePermission permission="students"><StudentManagement /></RequirePermission>} />
                     <Route path="/inscription-prof" element={<RequirePermission permission="teachers"><TeacherRegistration /></RequirePermission>} />
                     <Route path="/professeurs" element={<RequirePermission permission="teachers"><TeacherManagement /></RequirePermission>} />
-                    <Route path="/classes" element={<RequirePermission permission="classes"><ClassManagement /></RequirePermission>} />
-                    <Route path="/notes" element={<RequirePermission permission="grades"><GradeManagement /></RequirePermission>} />
-                    <Route path="/notes/:periodId" element={<RequirePermission permission="grades"><PeriodClasses /></RequirePermission>} />
-                    <Route path="/notes/:periodId/:classId" element={<RequirePermission permission="grades"><ClassSubjects /></RequirePermission>} />
-                    <Route path="/notes/:periodId/:classId/filiere-choices" element={<RequirePermission permission="grades"><ClassFiliereChoices /></RequirePermission>} />
-                    <Route path="/notes/:periodId/:classId/elementaire/:lineId" element={<RequirePermission permission="grades"><ElementaryLineGrades /></RequirePermission>} />
-                    <Route path="/notes/:periodId/:classId/:subjectId" element={<RequirePermission permission="grades"><SubjectGrades /></RequirePermission>} />
-                    <Route path="/notes/:periodId/:classId/:subjectId/settings" element={<RequirePermission permission="grades"><SubjectSettings /></RequirePermission>} />
-                    <Route path="/filieres" element={<RequirePermission permission="grades"><Filieres /></RequirePermission>} />
-                    <Route path="/filieres/:filiereId" element={<RequirePermission permission="grades"><FiliereEditor /></RequirePermission>} />
+                    <Route path="/classes" element={<ModeRoute mode="classique"><RequirePermission permission="classes"><ClassManagement /></RequirePermission></ModeRoute>} />
+                    <Route path="/notes" element={<ModeRoute mode="classique"><RequirePermission permission="grades"><GradeManagement /></RequirePermission></ModeRoute>} />
+                    <Route path="/notes/:periodId" element={<ModeRoute mode="classique"><RequirePermission permission="grades"><PeriodClasses /></RequirePermission></ModeRoute>} />
+                    <Route path="/notes/:periodId/:classId" element={<ModeRoute mode="classique"><RequirePermission permission="grades"><ClassSubjects /></RequirePermission></ModeRoute>} />
+                    <Route path="/notes/:periodId/:classId/filiere-choices" element={<ModeRoute mode="classique"><RequirePermission permission="grades"><ClassFiliereChoices /></RequirePermission></ModeRoute>} />
+                    <Route path="/notes/:periodId/:classId/elementaire/:lineId" element={<ModeRoute mode="classique"><RequirePermission permission="grades"><ElementaryLineGrades /></RequirePermission></ModeRoute>} />
+                    <Route path="/notes/:periodId/:classId/:subjectId" element={<ModeRoute mode="classique"><RequirePermission permission="grades"><SubjectGrades /></RequirePermission></ModeRoute>} />
+                    <Route path="/notes/:periodId/:classId/:subjectId/settings" element={<ModeRoute mode="classique"><RequirePermission permission="grades"><SubjectSettings /></RequirePermission></ModeRoute>} />
+                    <Route path="/filieres" element={<ModeRoute mode="classique"><RequirePermission permission="grades"><Filieres /></RequirePermission></ModeRoute>} />
+                    <Route path="/filieres/:filiereId" element={<ModeRoute mode="classique"><RequirePermission permission="grades"><FiliereEditor /></RequirePermission></ModeRoute>} />
+                    {["/formation", "/formation/formations", "/formation/promotions", "/formation/evaluations",
+                      "/formation/examens", "/formation/stages", "/formation/documents"].map(chemin => (
+                      <Route key={chemin} path={chemin} element={
+                        <ModeRoute mode="formation_pro"><RequirePermission permission="grades"><FormationEnDeveloppement /></RequirePermission></ModeRoute>
+                      } />
+                    ))}
                     <Route path="/emplois-du-temps" element={<RequirePermission permission="schedule"><ScheduleManagement /></RequirePermission>} />
                     <Route path="/presences" element={<RequirePermission permission="attendance"><AttendanceManagement /></RequirePermission>} />
                     <Route path="/paiements" element={<RequirePermission permission="payments"><PaymentManagement /></RequirePermission>} />
