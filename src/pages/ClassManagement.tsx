@@ -21,7 +21,7 @@ import { useSchool, NIVEAUX, NIVEAUX_ELEMENTAIRE, SchoolClass } from '@/contexts
 import { useSchoolYear } from '@/contexts/SchoolYearContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
-import { buildProgrammeCards, programmeCardLabel, programmeCardKey, getNiveauLabels, type ProgrammeCard } from '@/lib/programmeCards';
+import { buildProgrammeCards, programmeCardLabel, programmeCardKey, getNiveauLabels, getNiveauxSupprimes, type ProgrammeCard } from '@/lib/programmeCards';
 
 const NO_BLOC = '__none__';
 
@@ -40,7 +40,7 @@ const ClassManagement = () => {
   // niveau puis, séparément, un cursus. Ça évite qu'une classe se retrouve
   // avec un niveau qui n'a aucun bloc défini dans Cursus (donc aucune matière
   // préremplie).
-  const programmeCards = buildProgrammeCards(filieres, niveauDefaultSubjects, elementaryDefaultLines);
+  const programmeCards = buildProgrammeCards(filieres, niveauDefaultSubjects, elementaryDefaultLines, getNiveauxSupprimes(school?.settings));
   const niveauLabels = getNiveauLabels(school?.settings);
 
   const [isDialogOpen, setIsDialogOpen]   = useState(false);
