@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 
 const DETAIL = {
@@ -50,5 +51,33 @@ describe('PlatformSchoolDetail', () => {
     rpc.mockResolvedValue({ data: null, error: { message: 'Non autorisé' } });
     ouvrir();
     expect(await screen.findByText('Non autorisé')).toBeInTheDocument();
+  });
+});
+
+describe('PlatformSchoolDetail — mode de gestion', () => {
+  const repondre = (mode: string) => rpc.mockImplementation(async (fn: string) => {
+    if (fn === 'platform_school_detail') return { data: DETAIL, error: null };
+    if (fn === 'platform_school_mode') return { data: mode, error: null };
+    if (fn === 'platform_set_school_mode') return { data: 'formation_pro', error: null };
+    return { data: null, error: null };
+  });
+
+  it('propose de passer en Formation professionnelle, avec confirmation, puis appelle le serveur', async () => {
+    rpc.mockReset(); repondre('classique');
+    const user = userEvent.setup();
+    ouvrir();
+    expect(await screen.findByText('Classique')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /Passer en Formation professionnelle/ }));
+    expect(screen.getByText(/Aucune donnée n'a|ne sont ni modifiées ni supprimées/)).toBeInTheDocument();
+    expect(rpc).not.toHaveBeenCalledWith('platform_set_school_mode', expect.anything());   // pas avant confirmation
+    await user.click(screen.getByRole('button', { name: 'Confirmer' }));
+    await waitFor(() => expect(rpc).toHaveBeenCalledWith('platform_set_school_mode', { p_school_id: 's1', p_mode: 'formation_pro' }));
+    expect(await screen.findByRole('button', { name: /Revenir au mode classique/ })).toBeInTheDocument();
+  });
+
+  it('une école déjà en formation pro propose le retour au mode classique', async () => {
+    rpc.mockReset(); repondre('formation_pro');
+    ouvrir();
+    expect(await screen.findByRole('button', { name: /Revenir au mode classique/ })).toBeInTheDocument();
   });
 });

@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '@/hooks/useAuth';
-import { hasPermission, PermissionKey } from '@/lib/permissions';
+import { hasPermission } from '@/lib/permissions';
 import {
   LayoutDashboard,
   UserPlus,
@@ -23,7 +23,15 @@ import {
   Shuffle,
   CreditCard,
   Banknote,
+  LayoutGrid,
+  BookOpen,
+  UsersRound,
+  PenLine,
+  FileCheck2,
+  Hotel,
+  FileText,
 } from 'lucide-react';
+import { menuPourMode, modeDeLEcole, type IconeMenu } from '@/lib/modeGestion';
 import { SchoolYearSelector } from './SchoolYearSelector';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {
@@ -31,21 +39,13 @@ import {
   DropdownMenuItem, DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
 
-const menuItems: { title: string; url: string; icon: typeof LayoutDashboard; active: boolean; permission?: PermissionKey }[] = [
-  { title: 'Dashboard', url: '/dashboard', icon: LayoutDashboard, active: true },
-  { title: 'Inscription Élèves', url: '/inscription', icon: UserPlus, active: true, permission: 'students' },
-  { title: 'Gestion Élèves', url: '/eleves', icon: Users, active: true, permission: 'students' },
-  { title: 'Inscription Profs', url: '/inscription-prof', icon: UserPlus, active: true, permission: 'teachers' },
-  { title: 'Gestion Profs', url: '/professeurs', icon: Briefcase, active: true, permission: 'teachers' },
-  { title: 'Gestion Classe', url: '/classes', icon: School, active: true, permission: 'classes' },
-  { title: 'Gestion Notes', url: '/notes', icon: ClipboardList, active: true, permission: 'grades' },
-  { title: 'Cursus', url: '/filieres', icon: Shuffle, active: true, permission: 'grades' },
-  { title: 'Emplois du Temps', url: '/emplois-du-temps', icon: Calendar, active: true, permission: 'schedule' },
-  { title: 'Gestion Présences',    url: '/presences',    icon: UserCheck, active: true, permission: 'attendance' },
-  { title: 'Gestion Paiements',    url: '/paiements',    icon: Wallet,    active: true, permission: 'payments' },
-  { title: 'Gestion Salaires',     url: '/salaires',     icon: Banknote,  active: true, permission: 'payroll' },
-  { title: 'Gestion Identifiants', url: '/identifiants', icon: KeyRound,  active: true, permission: 'credentials' },
-];
+const ICONES: Record<IconeMenu, typeof LayoutDashboard> = {
+  dashboard: LayoutDashboard, inscription: UserPlus, eleves: Users, profs: Briefcase, classes: School,
+  notes: ClipboardList, cursus: Shuffle, emploi: Calendar, presences: UserCheck, paiements: Wallet,
+  salaires: Banknote, identifiants: KeyRound,
+  apercu: LayoutGrid, formations: BookOpen, promotions: UsersRound, evaluations: PenLine,
+  examens: FileCheck2, stages: Hotel, documents: FileText,
+};
 
 export const DashboardSidebar = () => {
   const [collapsed, setCollapsed] = useState(false);
@@ -53,9 +53,10 @@ export const DashboardSidebar = () => {
   const navigate = useNavigate();
   const { profile, school, signOut, accountRole, staffPermissions } = useAuth();
 
+  const mode = modeDeLEcole(school);
   const visibleMenuItems = useMemo(
-    () => menuItems.filter(item => !item.permission || hasPermission(accountRole, staffPermissions, item.permission)),
-    [accountRole, staffPermissions]
+    () => menuPourMode(mode).filter(item => !item.permission || hasPermission(accountRole, staffPermissions, item.permission)),
+    [mode, accountRole, staffPermissions]
   );
 
   const handleSignOut = async () => {
@@ -115,11 +116,19 @@ export const DashboardSidebar = () => {
             // (ex: /notes/:periodId/:classId reste sur "Gestion Notes"). Le
             // '/' final évite qu'un chemin comme /notesomething matche /notes.
             const isActive = location.pathname === item.url || location.pathname.startsWith(`${item.url}/`);
-            const isDisabled = !item.active;
+            const Icone = ICONES[item.icon];
+            const premierDuGroupe = item.groupe === 'formation_pro'
+              && visibleMenuItems.find(i => i.groupe === 'formation_pro')?.url === item.url;
 
             return (
               <li key={item.title}>
-                {item.active ? (
+                {premierDuGroupe && !collapsed && (
+                  <p className="px-4 pt-3 pb-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/70">
+                    Formation professionnelle
+                  </p>
+                )}
+                {premierDuGroupe && collapsed && <div className="my-2 h-px bg-border" />}
+                {(
                   <NavLink
                     to={item.url}
                     className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 ${
@@ -128,7 +137,7 @@ export const DashboardSidebar = () => {
                         : 'text-muted-foreground hover:bg-muted hover:text-foreground'
                     }`}
                   >
-                    <item.icon className="w-5 h-5 flex-shrink-0" />
+                    <Icone className="w-5 h-5 flex-shrink-0" />
                     <AnimatePresence>
                       {!collapsed && (
                         <motion.span
@@ -138,29 +147,17 @@ export const DashboardSidebar = () => {
                           className="font-medium whitespace-nowrap"
                         >
                           {item.title}
+                          {item.bientot && (
+                            <span className={`ml-2 rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${
+                              isActive ? 'bg-primary-foreground/20 text-primary-foreground' : 'bg-amber-100 text-amber-700'
+                            }`}>
+                              En dév.
+                            </span>
+                          )}
                         </motion.span>
                       )}
                     </AnimatePresence>
                   </NavLink>
-                ) : (
-                  <div
-                    className={`flex items-center gap-3 px-4 py-3 rounded-xl text-muted-foreground/50 cursor-not-allowed`}
-                  >
-                    <item.icon className="w-5 h-5 flex-shrink-0" />
-                    <AnimatePresence>
-                      {!collapsed && (
-                        <motion.span
-                          initial={{ opacity: 0, x: -10 }}
-                          animate={{ opacity: 1, x: 0 }}
-                          exit={{ opacity: 0, x: -10 }}
-                          className="font-medium whitespace-nowrap"
-                        >
-                          {item.title}
-                          <span className="text-xs ml-2">(Bientôt)</span>
-                        </motion.span>
-                      )}
-                    </AnimatePresence>
-                  </div>
                 )}
               </li>
             );

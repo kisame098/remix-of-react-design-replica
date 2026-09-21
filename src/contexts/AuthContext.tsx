@@ -252,10 +252,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           // blocage du professeur, traité comme le personnel.
           const { data: schoolData } = await supabase
             .from('schools')
-            .select('id, name, country, city, phone, email, logo_url, settings, subscription_status, subscription_expires_at')
+            .select('id, name, country, city, phone, email, logo_url, settings, subscription_status, subscription_expires_at, management_mode')
             .eq('id', acct.school_id)
             .maybeSingle();
-          setSchool(schoolData as School | null);
+          setSchool(schoolData as unknown as School | null);
         } else {
           // Compte inconnu (ni admin ni élève/prof)
           setAccountRole(null);
