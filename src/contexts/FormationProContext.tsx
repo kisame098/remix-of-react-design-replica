@@ -6,6 +6,7 @@ import { estFormationPro } from '@/lib/modeGestion';
 import {
   type Formation, type Niveau, type MatiereCatalogue, type NiveauMatiere, type ChoixGroup, type ChoixOption,
   type NiveauMatiereType, type NiveauMatiereNature, type Promotion, type RythmePromotion, type StatutPromotion,
+  type BaremeCategorie, type Periode, type Evaluation, type Note, type StatutNote,
 } from '@/lib/formationPro';
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -52,6 +53,34 @@ type DonneesPromotion = {
   name: string; studentLimit: number; rythme: RythmePromotion;
   startDate?: string; endDate?: string; status?: StatutPromotion; description?: string;
 };
+type DonneesBaremeCategorie = { name: string; pourcentage: number };
+type DonneesPeriode = { name: string; startDate?: string; endDate?: string };
+type DonneesEvaluation = {
+  promotionId: string; niveauMatiereId: string; periodeId: string; categorieId: string;
+  type: string; title: string; date: string; bareme: number; poids: number; description?: string;
+};
+type DonneesNote = { valeur?: number; statut: StatutNote; observation?: string };
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const mapBaremeCategorie = (r: any): BaremeCategorie => ({
+  id: r.id, formationId: r.formation_id, name: r.name, pourcentage: Number(r.pourcentage), ordering: r.ordering ?? 0,
+});
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const mapPeriode = (r: any): Periode => ({
+  id: r.id, promotionId: r.promotion_id, name: r.name,
+  startDate: r.start_date ?? undefined, endDate: r.end_date ?? undefined, ordering: r.ordering ?? 0,
+});
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const mapEvaluation = (r: any): Evaluation => ({
+  id: r.id, promotionId: r.promotion_id, niveauMatiereId: r.niveau_matiere_id, periodeId: r.periode_id,
+  categorieId: r.categorie_id, type: r.type, title: r.title, date: r.date, bareme: Number(r.bareme),
+  poids: Number(r.poids), description: r.description ?? undefined, createdAt: r.created_at,
+});
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const mapNote = (r: any): Note => ({
+  id: r.id, evaluationId: r.evaluation_id, studentEnrollmentId: r.student_enrollment_id,
+  valeur: r.valeur == null ? undefined : Number(r.valeur), statut: r.statut, observation: r.observation ?? undefined,
+});
 
 interface FormationProContextType {
   loading: boolean;
@@ -91,6 +120,25 @@ interface FormationProContextType {
   deletePromotion: (id: string) => Promise<void>;
   /** Nouvelle promotion sur le même niveau, sans élève ni note — jamais l'originale modifiée. */
   duplicatePromotion: (sourceId: string, data: DonneesPromotion) => Promise<Promotion>;
+
+  baremeCategories: BaremeCategorie[];
+  addBaremeCategorie: (formationId: string, data: DonneesBaremeCategorie) => Promise<BaremeCategorie>;
+  updateBaremeCategorie: (id: string, data: Partial<DonneesBaremeCategorie>) => Promise<void>;
+  deleteBaremeCategorie: (id: string) => Promise<void>;
+
+  periodes: Periode[];
+  addPeriode: (promotionId: string, data: DonneesPeriode) => Promise<Periode>;
+  updatePeriode: (id: string, data: Partial<DonneesPeriode>) => Promise<void>;
+  deletePeriode: (id: string) => Promise<void>;
+
+  evaluations: Evaluation[];
+  addEvaluation: (data: DonneesEvaluation) => Promise<Evaluation>;
+  updateEvaluation: (id: string, data: Partial<DonneesEvaluation>) => Promise<void>;
+  deleteEvaluation: (id: string) => Promise<void>;
+
+  notes: Note[];
+  /** Insère ou met à jour la note d'un élève pour une évaluation — trace le changement dans fp_notes_historique. */
+  saisirNote: (evaluationId: string, studentEnrollmentId: string, data: DonneesNote) => Promise<void>;
 }
 
 const FormationProContext = createContext<FormationProContextType | null>(null);
@@ -111,17 +159,22 @@ export const FormationProProvider = ({ children }: { children: ReactNode }) => {
   const [niveauMatieresBrut, setNiveauMatieresBrut] = useState<{ id: string; niveauId: string; matiereId: string; type: NiveauMatiereType; coefficient: number; volumeHoraire?: number; nature: NiveauMatiereNature; categorie?: string; ordering: number }[]>([]);
   const [choixGroups, setChoixGroups] = useState<ChoixGroup[]>([]);
   const [promotionsBrut, setPromotionsBrut] = useState<{ id: string; niveauId: string; classId: string; rythme: RythmePromotion; startDate?: string; endDate?: string; status: StatutPromotion; description?: string; createdAt: string }[]>([]);
+  const [baremeCategories, setBaremeCategories] = useState<BaremeCategorie[]>([]);
+  const [periodes, setPeriodes] = useState<Periode[]>([]);
+  const [evaluations, setEvaluations] = useState<Evaluation[]>([]);
+  const [notes, setNotes] = useState<Note[]>([]);
 
   useEffect(() => {
     let annule = false;
     if (!schoolId || !actif) {
       setFormations([]); setNiveaux([]); setCatalogue([]); setNiveauMatieresBrut([]); setChoixGroups([]); setPromotionsBrut([]);
+      setBaremeCategories([]); setPeriodes([]); setEvaluations([]); setNotes([]);
       setLoading(false);
       return;
     }
     setLoading(true);
     (async () => {
-      const [fRes, nRes, mRes, nmRes, cRes, oRes, pRes] = await Promise.all([
+      const [fRes, nRes, mRes, nmRes, cRes, oRes, pRes, bcRes, perRes, evRes, noRes] = await Promise.all([
         sb.from('fp_formations').select('*').eq('school_id', schoolId).order('ordering'),
         sb.from('fp_niveaux').select('*').eq('school_id', schoolId).order('ordering'),
         sb.from('fp_matieres').select('*').eq('school_id', schoolId).order('name'),
@@ -129,8 +182,16 @@ export const FormationProProvider = ({ children }: { children: ReactNode }) => {
         sb.from('fp_choix').select('*').eq('school_id', schoolId).order('ordering'),
         sb.from('fp_choix_options').select('*').eq('school_id', schoolId).order('ordering'),
         sb.from('fp_promotions').select('*').eq('school_id', schoolId).order('created_at'),
+        sb.from('fp_bareme_categories').select('*').eq('school_id', schoolId).order('ordering'),
+        sb.from('fp_periodes').select('*').eq('school_id', schoolId).order('ordering'),
+        sb.from('fp_evaluations').select('*').eq('school_id', schoolId).order('date', { ascending: false }),
+        sb.from('fp_notes').select('*').eq('school_id', schoolId),
       ]);
       if (annule) return;
+      setBaremeCategories((bcRes.data ?? []).map(mapBaremeCategorie));
+      setPeriodes((perRes.data ?? []).map(mapPeriode));
+      setEvaluations((evRes.data ?? []).map(mapEvaluation));
+      setNotes((noRes.data ?? []).map(mapNote));
       const options = (oRes.data ?? []).map(mapOption);
       setFormations((fRes.data ?? []).map(mapFormation));
       setNiveaux((nRes.data ?? []).map(mapNiveau));
@@ -181,6 +242,9 @@ export const FormationProProvider = ({ children }: { children: ReactNode }) => {
   const niveauMatieresRef = useRef(niveauMatieresBrut); niveauMatieresRef.current = niveauMatieresBrut;
   const choixRef = useRef(choixGroups); choixRef.current = choixGroups;
   const promotionsRef = useRef(promotionsBrut); promotionsRef.current = promotionsBrut;
+  const baremeCategoriesRef = useRef(baremeCategories); baremeCategoriesRef.current = baremeCategories;
+  const periodesRef = useRef(periodes); periodesRef.current = periodes;
+  const notesRef = useRef(notes); notesRef.current = notes;
 
   // ── Formations ─────────────────────────────────────────────────────────
   const addFormation = useCallback(async (data: DonneesFormation): Promise<Formation> => {
@@ -467,6 +531,140 @@ export const FormationProProvider = ({ children }: { children: ReactNode }) => {
     return addPromotion(source.niveauId, data);
   }, [addPromotion]);
 
+  // ── Barème d'évaluation (catégories, par formation) ───────────────────────
+  const addBaremeCategorie = useCallback(async (formationId: string, data: DonneesBaremeCategorie): Promise<BaremeCategorie> => {
+    if (!schoolId) throw new Error('Non connecté à une école');
+    const ordering = baremeCategoriesRef.current.filter(c => c.formationId === formationId).length;
+    const { data: row, error } = await sb.from('fp_bareme_categories').insert({
+      school_id: schoolId, formation_id: formationId, name: data.name.trim(), pourcentage: data.pourcentage, ordering,
+    }).select().single();
+    if (error) throw error;
+    const cat = mapBaremeCategorie(row);
+    setBaremeCategories(prev => [...prev, cat]);
+    return cat;
+  }, [schoolId]);
+
+  const updateBaremeCategorie = useCallback(async (id: string, data: Partial<DonneesBaremeCategorie>): Promise<void> => {
+    if (!schoolId) return;
+    const patch: Record<string, unknown> = {};
+    if (data.name !== undefined) patch.name = data.name.trim();
+    if (data.pourcentage !== undefined) patch.pourcentage = data.pourcentage;
+    const { error } = await sb.from('fp_bareme_categories').update(patch).eq('id', id).eq('school_id', schoolId);
+    if (error) throw error;
+    setBaremeCategories(prev => prev.map(c => c.id === id ? { ...c, ...data } : c));
+  }, [schoolId]);
+
+  const deleteBaremeCategorie = useCallback(async (id: string): Promise<void> => {
+    if (!schoolId) return;
+    const { error } = await sb.from('fp_bareme_categories').delete().eq('id', id).eq('school_id', schoolId);
+    if (error) throw error;
+    setBaremeCategories(prev => prev.filter(c => c.id !== id));
+  }, [schoolId]);
+
+  // ── Périodes (par promotion) ──────────────────────────────────────────────
+  const addPeriode = useCallback(async (promotionId: string, data: DonneesPeriode): Promise<Periode> => {
+    if (!schoolId) throw new Error('Non connecté à une école');
+    const ordering = periodesRef.current.filter(p => p.promotionId === promotionId).length;
+    const { data: row, error } = await sb.from('fp_periodes').insert({
+      school_id: schoolId, promotion_id: promotionId, name: data.name.trim(),
+      start_date: data.startDate || null, end_date: data.endDate || null, ordering,
+    }).select().single();
+    if (error) throw error;
+    const per = mapPeriode(row);
+    setPeriodes(prev => [...prev, per]);
+    return per;
+  }, [schoolId]);
+
+  const updatePeriode = useCallback(async (id: string, data: Partial<DonneesPeriode>): Promise<void> => {
+    if (!schoolId) return;
+    const patch: Record<string, unknown> = {};
+    if (data.name !== undefined) patch.name = data.name.trim();
+    if (data.startDate !== undefined) patch.start_date = data.startDate || null;
+    if (data.endDate !== undefined) patch.end_date = data.endDate || null;
+    const { error } = await sb.from('fp_periodes').update(patch).eq('id', id).eq('school_id', schoolId);
+    if (error) throw error;
+    setPeriodes(prev => prev.map(p => p.id === id ? { ...p, ...data } : p));
+  }, [schoolId]);
+
+  const deletePeriode = useCallback(async (id: string): Promise<void> => {
+    if (!schoolId) return;
+    const { error } = await sb.from('fp_periodes').delete().eq('id', id).eq('school_id', schoolId);
+    if (error) throw error;
+    setPeriodes(prev => prev.filter(p => p.id !== id));
+    setEvaluations(prev => prev.filter(e => e.periodeId !== id));
+  }, [schoolId]);
+
+  // ── Évaluations ────────────────────────────────────────────────────────────
+  const addEvaluation = useCallback(async (data: DonneesEvaluation): Promise<Evaluation> => {
+    if (!schoolId) throw new Error('Non connecté à une école');
+    const { data: row, error } = await sb.from('fp_evaluations').insert({
+      school_id: schoolId, promotion_id: data.promotionId, niveau_matiere_id: data.niveauMatiereId,
+      periode_id: data.periodeId, categorie_id: data.categorieId, type: data.type, title: data.title.trim(),
+      date: data.date, bareme: data.bareme, poids: data.poids, description: data.description?.trim() || null,
+    }).select().single();
+    if (error) throw error;
+    const ev = mapEvaluation(row);
+    setEvaluations(prev => [ev, ...prev]);
+    return ev;
+  }, [schoolId]);
+
+  const updateEvaluation = useCallback(async (id: string, data: Partial<DonneesEvaluation>): Promise<void> => {
+    if (!schoolId) return;
+    const patch: Record<string, unknown> = { updated_at: new Date().toISOString() };
+    if (data.periodeId !== undefined) patch.periode_id = data.periodeId;
+    if (data.categorieId !== undefined) patch.categorie_id = data.categorieId;
+    if (data.type !== undefined) patch.type = data.type;
+    if (data.title !== undefined) patch.title = data.title.trim();
+    if (data.date !== undefined) patch.date = data.date;
+    if (data.bareme !== undefined) patch.bareme = data.bareme;
+    if (data.poids !== undefined) patch.poids = data.poids;
+    if (data.description !== undefined) patch.description = data.description.trim() || null;
+    const { error } = await sb.from('fp_evaluations').update(patch).eq('id', id).eq('school_id', schoolId);
+    if (error) throw error;
+    setEvaluations(prev => prev.map(e => e.id === id ? { ...e, ...data } : e));
+  }, [schoolId]);
+
+  const deleteEvaluation = useCallback(async (id: string): Promise<void> => {
+    if (!schoolId) return;
+    const { error } = await sb.from('fp_evaluations').delete().eq('id', id).eq('school_id', schoolId);
+    if (error) throw error;
+    setEvaluations(prev => prev.filter(e => e.id !== id));
+    setNotes(prev => prev.filter(n => n.evaluationId !== id));
+  }, [schoolId]);
+
+  // ── Notes ──────────────────────────────────────────────────────────────────
+  // Chaque saisie/correction laisse une trace dans fp_notes_historique —
+  // jamais de motif obligatoire, juste un enregistrement automatique.
+  const saisirNote = useCallback(async (evaluationId: string, studentEnrollmentId: string, data: DonneesNote): Promise<void> => {
+    if (!schoolId) return;
+    const existante = notesRef.current.find(n => n.evaluationId === evaluationId && n.studentEnrollmentId === studentEnrollmentId);
+    const valeur = data.statut === 'note' ? (data.valeur ?? null) : null;
+    if (existante) {
+      const { error } = await sb.from('fp_notes').update({
+        valeur, statut: data.statut, observation: data.observation?.trim() || null, updated_at: new Date().toISOString(),
+      }).eq('id', existante.id).eq('school_id', schoolId);
+      if (error) throw error;
+      await sb.from('fp_notes_historique').insert({
+        school_id: schoolId, note_id: existante.id,
+        ancienne_valeur: existante.valeur ?? null, ancien_statut: existante.statut,
+        nouvelle_valeur: valeur, nouveau_statut: data.statut,
+      });
+      setNotes(prev => prev.map(n => n.id === existante.id ? { ...n, valeur: valeur ?? undefined, statut: data.statut, observation: data.observation } : n));
+    } else {
+      const { data: row, error } = await sb.from('fp_notes').insert({
+        school_id: schoolId, evaluation_id: evaluationId, student_enrollment_id: studentEnrollmentId,
+        valeur, statut: data.statut, observation: data.observation?.trim() || null,
+      }).select().single();
+      if (error) throw error;
+      const note = mapNote(row);
+      await sb.from('fp_notes_historique').insert({
+        school_id: schoolId, note_id: note.id,
+        ancienne_valeur: null, ancien_statut: null, nouvelle_valeur: valeur, nouveau_statut: data.statut,
+      });
+      setNotes(prev => [...prev, note]);
+    }
+  }, [schoolId]);
+
   const value = useMemo<FormationProContextType>(() => ({
     loading, formations, niveaux, catalogue, niveauMatieres, choixGroups, promotions,
     addFormation, updateFormation, deleteFormation, duplicateFormation,
@@ -474,12 +672,20 @@ export const FormationProProvider = ({ children }: { children: ReactNode }) => {
     addPromotion, updatePromotion, deletePromotion, duplicatePromotion,
     addMatiereToNiveau, updateNiveauMatiere, deleteNiveauMatiere,
     addChoixGroup, updateChoixGroup, deleteChoixGroup, addChoixOption, deleteChoixOption,
+    baremeCategories, addBaremeCategorie, updateBaremeCategorie, deleteBaremeCategorie,
+    periodes, addPeriode, updatePeriode, deletePeriode,
+    evaluations, addEvaluation, updateEvaluation, deleteEvaluation,
+    notes, saisirNote,
   }), [loading, formations, niveaux, catalogue, niveauMatieres, choixGroups, promotions,
       addFormation, updateFormation, deleteFormation, duplicateFormation,
       addNiveau, updateNiveau, deleteNiveau, duplicateNiveau,
       addPromotion, updatePromotion, deletePromotion, duplicatePromotion,
       addMatiereToNiveau, updateNiveauMatiere, deleteNiveauMatiere,
-      addChoixGroup, updateChoixGroup, deleteChoixGroup, addChoixOption, deleteChoixOption]);
+      addChoixGroup, updateChoixGroup, deleteChoixGroup, addChoixOption, deleteChoixOption,
+      baremeCategories, addBaremeCategorie, updateBaremeCategorie, deleteBaremeCategorie,
+      periodes, addPeriode, updatePeriode, deletePeriode,
+      evaluations, addEvaluation, updateEvaluation, deleteEvaluation,
+      notes, saisirNote]);
 
   return <FormationProContext.Provider value={value}>{children}</FormationProContext.Provider>;
 };

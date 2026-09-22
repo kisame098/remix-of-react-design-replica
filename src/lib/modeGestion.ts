@@ -67,7 +67,7 @@ export const RUBRIQUES_FORMATION_PRO: (ItemMenu & { description: string })[] = [
     description: "Le catalogue de l'école : formations, années, options et matières avec coefficients et volumes horaires. Modèles hôtellerie-restauration fournis." },
   { title: 'Promotions', url: '/formation/promotions', icon: 'promotions', permission: 'grades', groupe: 'formation_pro',
     description: "Les groupes d'élèves d'une formation, avec leurs dates de début et de fin, en cours du jour ou du soir." },
-  { title: 'Évaluations', url: '/formation/evaluations', icon: 'evaluations', permission: 'grades', bientot: true, groupe: 'formation_pro',
+  { title: 'Évaluations', url: '/formation/evaluations', icon: 'evaluations', permission: 'grades', groupe: 'formation_pro',
     description: "La formule de notation de l'année (contrôle continu, TP, examens…) et la saisie des notes par matière." },
   { title: 'Examens', url: '/formation/examens', icon: 'examens', permission: 'grades', bientot: true, groupe: 'formation_pro',
     description: "Examens blancs et officiels à un ou plusieurs tours : épreuves, notes éliminatoires, décisions, mentions et relevés." },
