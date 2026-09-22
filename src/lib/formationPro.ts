@@ -16,6 +16,8 @@ export interface FormationBloc {
   anneeLabel: string;
   diplome?: string;
   duree?: string;
+  /** Ex : « CM2 à 4e secondaire », « BFEM requis » — condition d'entrée dans la formation. */
+  niveauEntree?: string;
   description?: string;
   ordering: number;
   createdAt: string;
@@ -117,6 +119,34 @@ export const triBlocs = (blocs: FormationBloc[]): FormationBloc[] =>
   [...blocs].sort((a, b) =>
     a.formationName.localeCompare(b.formationName, 'fr') || a.ordering - b.ordering);
 
+// ─── Regroupement par formation (affichage) ────────────────────────────────
+// Un bloc reste un bloc en base (rien ne change côté données) : ce n'est que
+// l'écran qui rassemble « CAP Restauration — Année 1/2/3 » sous un même
+// intitulé, pour qu'une école à 7-10 formations garde une liste lisible.
+export interface GroupeFormation {
+  formationName: string;
+  blocs: FormationBloc[];
+}
+
+export const grouperBlocsParFormation = (blocs: FormationBloc[]): GroupeFormation[] => {
+  const tries = triBlocs(blocs);
+  const groupes: GroupeFormation[] = [];
+  for (const b of tries) {
+    const dernier = groupes[groupes.length - 1];
+    if (dernier && dernier.formationName === b.formationName) dernier.blocs.push(b);
+    else groupes.push({ formationName: b.formationName, blocs: [b] });
+  }
+  return groupes;
+};
+
+// ─── Autocomplétion des noms de matières ────────────────────────────────────
+// Pas un catalogue séparé (aucune table, aucun écran de plus) : juste la
+// liste, triée, des noms déjà utilisés ailleurs dans l'école — pour qu'on
+// retape rarement « Anglais » deux fois avec une faute qui le dédouble
+// silencieusement dans les statistiques.
+export const nomsDeMatieresConnus = (matieres: FormationMatiere[]): string[] =>
+  [...new Set(matieres.map(m => m.name.trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'fr'));
+
 // ─── Export / import (même esprit que le programme de Cursus) ─────────────
 
 export interface FormationExport {
@@ -128,6 +158,7 @@ export interface FormationExport {
     anneeLabel: string;
     diplome?: string;
     duree?: string;
+    niveauEntree?: string;
     description?: string;
     matieres: { type: FormationMatiereType; name: string; coefficient: number; volumeHoraire?: number; nature: FormationMatiereNature }[];
     choixGroups: { label: string; coefficient: number; options: string[] }[];
@@ -142,7 +173,8 @@ export const construireExport = (
   version: 1,
   exportedAt: maintenant.toISOString(),
   blocs: triBlocs(blocs).map(b => ({
-    formationName: b.formationName, anneeLabel: b.anneeLabel, diplome: b.diplome, duree: b.duree, description: b.description,
+    formationName: b.formationName, anneeLabel: b.anneeLabel, diplome: b.diplome, duree: b.duree,
+    niveauEntree: b.niveauEntree, description: b.description,
     matieres: matieres.filter(m => m.blocId === b.id).sort((a, c) => a.ordering - c.ordering)
       .map(m => ({ type: m.type, name: m.name, coefficient: m.coefficient, volumeHoraire: m.volumeHoraire, nature: m.nature })),
     choixGroups: choixGroups.filter(c => c.blocId === b.id).sort((a, c) => a.ordering - c.ordering)

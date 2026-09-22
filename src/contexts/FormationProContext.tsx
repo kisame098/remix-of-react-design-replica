@@ -21,11 +21,13 @@ import {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const sb = supabase as any;
 
+type DonneesBloc = { formationName: string; anneeLabel: string; diplome?: string; duree?: string; niveauEntree?: string; description?: string };
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const mapBloc = (r: any): FormationBloc => ({
   id: r.id, formationName: r.formation_name, anneeLabel: r.annee_label,
-  diplome: r.diplome ?? undefined, duree: r.duree ?? undefined, description: r.description ?? undefined,
-  ordering: r.ordering ?? 0, createdAt: r.created_at,
+  diplome: r.diplome ?? undefined, duree: r.duree ?? undefined, niveauEntree: r.niveau_entree ?? undefined,
+  description: r.description ?? undefined, ordering: r.ordering ?? 0, createdAt: r.created_at,
 });
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const mapMatiere = (r: any): FormationMatiere => ({
@@ -48,11 +50,22 @@ interface FormationProContextType {
   matieres: FormationMatiere[];
   choixGroups: FormationChoixGroup[];
 
-  addBloc: (data: { formationName: string; anneeLabel: string; diplome?: string; duree?: string; description?: string }) => Promise<FormationBloc>;
-  updateBloc: (id: string, data: Partial<Pick<FormationBloc, 'formationName' | 'anneeLabel' | 'diplome' | 'duree' | 'description'>>) => Promise<void>;
+  addBloc: (data: DonneesBloc) => Promise<FormationBloc>;
+  updateBloc: (id: string, data: Partial<DonneesBloc>) => Promise<void>;
   deleteBloc: (id: string) => Promise<void>;
   /** Copie matières et créneaux au choix d'un bloc vers un bloc neuf — le bloc source n'est jamais modifié. */
-  duplicateBloc: (sourceId: string, data: { formationName: string; anneeLabel: string; diplome?: string; duree?: string; description?: string }) => Promise<FormationBloc>;
+  duplicateBloc: (sourceId: string, data: DonneesBloc) => Promise<FormationBloc>;
+  /**
+   * Copie TOUS les blocs d'une formation (CAP 1, 2, 3…) vers une formation
+   * neuve en une seule fois — ex : « CAP Restauration » → « DAP
+   * Restauration ». `overrides` s'applique à chaque bloc copié ; ce qui n'y
+   * est pas précisé reprend la valeur du bloc source (l'année, elle, n'est
+   * jamais réécrite : Année 1 reste Année 1).
+   */
+  duplicateFormation: (
+    sourceFormationName: string,
+    overrides: { formationName: string; diplome?: string; duree?: string; niveauEntree?: string; description?: string },
+  ) => Promise<FormationBloc[]>;
 
   addMatiere: (blocId: string, data: { type: FormationMatiereType; name: string; coefficient: number; volumeHoraire?: number; nature: FormationMatiereNature }) => Promise<FormationMatiere>;
   updateMatiere: (id: string, data: Partial<Pick<FormationMatiere, 'type' | 'name' | 'coefficient' | 'volumeHoraire' | 'nature'>>) => Promise<void>;
@@ -111,12 +124,13 @@ export const FormationProProvider = ({ children }: { children: ReactNode }) => {
   const matieresRef = useRef(matieres); matieresRef.current = matieres;
   const choixRef = useRef(choixGroups); choixRef.current = choixGroups;
 
-  const addBloc = useCallback(async (data: { formationName: string; anneeLabel: string; diplome?: string; duree?: string; description?: string }): Promise<FormationBloc> => {
+  const addBloc = useCallback(async (data: DonneesBloc): Promise<FormationBloc> => {
     if (!schoolId) throw new Error('Non connecté à une école');
     const ordering = blocsRef.current.length;
     const { data: row, error } = await sb.from('fp_blocs').insert({
       school_id: schoolId, formation_name: data.formationName.trim(), annee_label: data.anneeLabel.trim(),
-      diplome: data.diplome?.trim() || null, duree: data.duree?.trim() || null, description: data.description?.trim() || null,
+      diplome: data.diplome?.trim() || null, duree: data.duree?.trim() || null,
+      niveau_entree: data.niveauEntree?.trim() || null, description: data.description?.trim() || null,
       ordering,
     }).select().single();
     if (error) throw error;
@@ -125,13 +139,14 @@ export const FormationProProvider = ({ children }: { children: ReactNode }) => {
     return bloc;
   }, [schoolId]);
 
-  const updateBloc = useCallback(async (id: string, data: Partial<Pick<FormationBloc, 'formationName' | 'anneeLabel' | 'diplome' | 'duree' | 'description'>>): Promise<void> => {
+  const updateBloc = useCallback(async (id: string, data: Partial<DonneesBloc>): Promise<void> => {
     if (!schoolId) return;
     const patch: Record<string, unknown> = { updated_at: new Date().toISOString() };
     if (data.formationName !== undefined) patch.formation_name = data.formationName.trim();
     if (data.anneeLabel !== undefined) patch.annee_label = data.anneeLabel.trim();
     if (data.diplome !== undefined) patch.diplome = data.diplome.trim() || null;
     if (data.duree !== undefined) patch.duree = data.duree.trim() || null;
+    if (data.niveauEntree !== undefined) patch.niveau_entree = data.niveauEntree.trim() || null;
     if (data.description !== undefined) patch.description = data.description.trim() || null;
     const { error } = await sb.from('fp_blocs').update(patch).eq('id', id).eq('school_id', schoolId);
     if (error) throw error;
@@ -227,9 +242,7 @@ export const FormationProProvider = ({ children }: { children: ReactNode }) => {
     setChoixGroups(prev => prev.map(c => ({ ...c, options: c.options.filter(o => o.id !== id) })));
   }, [schoolId]);
 
-  const duplicateBloc = useCallback(async (
-    sourceId: string, data: { formationName: string; anneeLabel: string; diplome?: string; duree?: string; description?: string },
-  ): Promise<FormationBloc> => {
+  const duplicateBloc = useCallback(async (sourceId: string, data: DonneesBloc): Promise<FormationBloc> => {
     const nouveau = await addBloc(data);
     const matieresSource = matieresRef.current.filter(m => m.blocId === sourceId).sort((a, b) => a.ordering - b.ordering);
     for (const m of matieresSource) {
@@ -243,12 +256,36 @@ export const FormationProProvider = ({ children }: { children: ReactNode }) => {
     return nouveau;
   }, [addBloc, addMatiere, addChoixGroup, addChoixOption]);
 
+  const duplicateFormation = useCallback(async (
+    sourceFormationName: string,
+    overrides: { formationName: string; diplome?: string; duree?: string; niveauEntree?: string; description?: string },
+  ): Promise<FormationBloc[]> => {
+    const sourceBlocs = blocsRef.current
+      .filter(b => b.formationName === sourceFormationName)
+      .sort((a, b) => a.ordering - b.ordering);
+    const crees: FormationBloc[] = [];
+    // Séquentiel, pas Promise.all : chaque duplicateBloc lit blocsRef/matieresRef
+    // par effet de bord (setState) — les paralléliser mélangerait les `ordering`.
+    for (const source of sourceBlocs) {
+      const nouveau = await duplicateBloc(source.id, {
+        formationName: overrides.formationName,
+        anneeLabel: source.anneeLabel,   // l'année de chaque bloc ne change jamais : Année 1 reste Année 1
+        diplome: overrides.diplome ?? source.diplome,
+        duree: overrides.duree ?? source.duree,
+        niveauEntree: overrides.niveauEntree ?? source.niveauEntree,
+        description: overrides.description ?? source.description,
+      });
+      crees.push(nouveau);
+    }
+    return crees;
+  }, [duplicateBloc]);
+
   const value = useMemo<FormationProContextType>(() => ({
     loading, blocs, matieres, choixGroups,
-    addBloc, updateBloc, deleteBloc, duplicateBloc,
+    addBloc, updateBloc, deleteBloc, duplicateBloc, duplicateFormation,
     addMatiere, updateMatiere, deleteMatiere,
     addChoixGroup, updateChoixGroup, deleteChoixGroup, addChoixOption, deleteChoixOption,
-  }), [loading, blocs, matieres, choixGroups, addBloc, updateBloc, deleteBloc, duplicateBloc,
+  }), [loading, blocs, matieres, choixGroups, addBloc, updateBloc, deleteBloc, duplicateBloc, duplicateFormation,
       addMatiere, updateMatiere, deleteMatiere, addChoixGroup, updateChoixGroup, deleteChoixGroup, addChoixOption, deleteChoixOption]);
 
   return <FormationProContext.Provider value={value}>{children}</FormationProContext.Provider>;

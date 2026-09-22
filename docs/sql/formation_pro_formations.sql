@@ -104,3 +104,6 @@ drop policy if exists "fp_bloc_choix_options: staff update" on public.fp_bloc_ch
 create policy "fp_bloc_choix_options: staff update" on public.fp_bloc_choix_options for update using (school_id = get_my_school_id()) with check (school_id = get_my_school_id());
 drop policy if exists "fp_bloc_choix_options: staff delete" on public.fp_bloc_choix_options;
 create policy "fp_bloc_choix_options: staff delete" on public.fp_bloc_choix_options for delete using (school_id = get_my_school_id());
+
+-- ─── Ajout : niveau d'entrée du bloc (ex: « CM2 à 4e », « BFEM requis ») ────
+alter table public.fp_blocs add column if not exists niveau_entree text;

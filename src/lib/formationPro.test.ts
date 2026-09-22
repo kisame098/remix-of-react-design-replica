@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   totauxBloc, nomBlocValide, coefficientValide, volumeHoraireValide, nomMatiereDejaPris,
   libelleBloc, triBlocs, construireExport, analyserImport, peutGererMatieres,
+  grouperBlocsParFormation, nomsDeMatieresConnus,
   type FormationBloc, type FormationMatiere, type FormationChoixGroup,
 } from './formationPro';
 
@@ -140,5 +141,51 @@ describe('peutGererMatieres — matières et coefficients réservés au directeu
     expect(peutGererMatieres('student')).toBe(false);
     expect(peutGererMatieres(null)).toBe(false);
     expect(peutGererMatieres(undefined)).toBe(false);
+  });
+});
+
+describe('grouperBlocsParFormation — lisibilité de la liste pour une école à plusieurs formations', () => {
+  it('rassemble les blocs d\'une même formation, dans l\'ordre du tri', () => {
+    const b = [
+      bloc({ id: '1', formationName: 'BEP Hôtellerie', anneeLabel: 'Année 1', ordering: 0 }),
+      bloc({ id: '2', formationName: 'CAP Restauration', anneeLabel: 'Année 2', ordering: 1 }),
+      bloc({ id: '3', formationName: 'CAP Restauration', anneeLabel: 'Année 1', ordering: 0 }),
+    ];
+    const groupes = grouperBlocsParFormation(b);
+    expect(groupes.map(g => g.formationName)).toEqual(['BEP Hôtellerie', 'CAP Restauration']);
+    expect(groupes[1].blocs.map(x => x.id)).toEqual(['3', '2']);   // Année 1 avant Année 2
+  });
+
+  it('une seule formation avec un seul bloc donne un seul groupe', () => {
+    expect(grouperBlocsParFormation([bloc()])).toEqual([{ formationName: 'CAP Restauration', blocs: [bloc()] }]);
+  });
+
+  it('liste vide → aucun groupe, sans planter', () => {
+    expect(grouperBlocsParFormation([])).toEqual([]);
+  });
+});
+
+describe('nomsDeMatieresConnus — autocomplétion, sans catalogue séparé', () => {
+  it('renvoie les noms uniques, triés, sans les vider deux fois', () => {
+    const m = [
+      matiere({ id: 'a', name: 'Anglais' }),
+      matiere({ id: 'b', name: 'Français' }),
+      matiere({ id: 'c', name: 'anglais' }),   // même nom, casse différente : PAS dédoublonné ici (c'est nomMatiereDejaPris qui l'empêche à la saisie)
+    ];
+    expect(nomsDeMatieresConnus(m)).toEqual(['anglais', 'Anglais', 'Français'].sort((a, b) => a.localeCompare(b, 'fr')));
+  });
+  it('ignore les noms vides et ne plante pas sur une liste vide', () => {
+    expect(nomsDeMatieresConnus([matiere({ name: '   ' })])).toEqual([]);
+    expect(nomsDeMatieresConnus([])).toEqual([]);
+  });
+});
+
+describe('duplication d\'une formation entière — export/import garde le niveau d\'entrée', () => {
+  it('niveauEntree traverse un export puis un import sans perte', () => {
+    const b = [bloc({ niveauEntree: 'CM2 à 4e secondaire' })];
+    const exporté = construireExport(b, [], []);
+    expect(exporté.blocs[0].niveauEntree).toBe('CM2 à 4e secondaire');
+    const relu = analyserImport(JSON.parse(JSON.stringify(exporté)));
+    expect(relu?.blocs[0].niveauEntree).toBe('CM2 à 4e secondaire');
   });
 });
