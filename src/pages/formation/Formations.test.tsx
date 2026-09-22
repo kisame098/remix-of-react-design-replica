@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import userEvent from '@testing-library/user-event';
+import { readFileSync } from 'node:fs';
 
 let accountRole: string = 'admin';
 vi.mock('@/contexts/AuthContext', () => ({ useAuth: () => ({ accountRole }) }));
@@ -83,5 +84,23 @@ describe('Formations — liste (une carte par formation, pas par année)', () =>
     await user.type(champ, 'DAP Restauration');
     await user.click(screen.getByRole('button', { name: 'Dupliquer' }));
     expect(ctx.duplicateFormation).toHaveBeenCalledWith('f1', expect.objectContaining({ name: 'DAP Restauration' }));
+  });
+});
+
+describe('Formations — modèles IFHO : catégories réellement renseignées (pas « Sans catégorie » partout)', () => {
+  const source = readFileSync('src/pages/formation/Formations.tsx', 'utf8');
+
+  it('chaque matière d\'un modèle a une catégorie explicite', () => {
+    // Avant : aucune categorie n'était fournie à l'import, donc TOUT tombait
+    // sous « Sans catégorie » dans le programme — un seul bloc informe, sans
+    // le découpage Général/Professionnel voulu.
+    const lignesMatiere = source.split('\n').filter(l => l.trim().startsWith('{ name:') && l.includes('type:'));
+    expect(lignesMatiere.length).toBeGreaterThan(100);
+    for (const ligne of lignesMatiere) expect(ligne).toContain('categorie:');
+  });
+
+  it('les deux catégories attendues apparaissent bien (pas une seule fourre-tout)', () => {
+    expect(source).toContain("'Enseignement général'");
+    expect(source).toContain("'Enseignement professionnel'");
   });
 });

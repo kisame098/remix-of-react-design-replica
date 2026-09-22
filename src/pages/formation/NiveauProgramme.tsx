@@ -161,12 +161,12 @@ const NiveauProgramme = () => {
   }
 
   const renderMatiere = (m: NiveauMatiere) => (
-    <li key={m.id} className="flex items-center justify-between gap-2 py-2 border-b last:border-0 text-sm group/row">
-      <span className="truncate flex items-center gap-2">
-        {m.matiereName}
-        <span className="text-[10px] uppercase tracking-wide text-muted-foreground/70">{m.type === 'facultative' ? 'Facultatif' : ''}</span>
+    <li key={m.id} className="flex items-center justify-between gap-2 px-4 py-2.5 border-b last:border-0 text-sm group/row hover:bg-muted/30">
+      <span className="truncate flex items-center gap-2 min-w-0">
+        <span className="truncate">{m.matiereName}</span>
+        {m.type === 'facultative' && <span className="text-[10px] uppercase tracking-wide text-muted-foreground/70 border rounded px-1 flex-shrink-0">Facultatif</span>}
         {m.nature !== 'theorique' && (
-          <span className="text-[10px] uppercase tracking-wide text-muted-foreground/70 border rounded px-1">{NATURE_LABELS[m.nature]}</span>
+          <span className="text-[10px] uppercase tracking-wide text-muted-foreground/70 border rounded px-1 flex-shrink-0">{NATURE_LABELS[m.nature]}</span>
         )}
       </span>
       <span className="flex items-center gap-3 flex-shrink-0">
@@ -191,7 +191,7 @@ const NiveauProgramme = () => {
   );
 
   return (
-    <div className="p-6 space-y-6 max-w-3xl">
+    <div className="p-6 space-y-6 max-w-6xl">
       <Link to={`/formation/formations/${formationId}`} className="text-sm text-primary flex items-center gap-1 w-fit">
         <ArrowLeft className="h-4 w-4" />{formation.name}
       </Link>
@@ -218,55 +218,74 @@ const NiveauProgramme = () => {
           </CardContent>
         </Card>
       ) : (
-        <div className="space-y-6">
-          {groupesCategorie.map(groupe => (
-            <div key={groupe.categorie}>
-              <p className="text-[11px] uppercase tracking-wide text-muted-foreground/70 font-semibold mb-1.5">{groupe.categorie}</p>
-              <ul>{groupe.matieres.map(renderMatiere)}</ul>
-            </div>
-          ))}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
+          {/* ── Programme (matières + créneaux au choix) ─────────────────── */}
+          <Card className="lg:col-span-2">
+            <CardContent className="p-0 divide-y">
+              {groupesCategorie.map(groupe => (
+                <div key={groupe.categorie} className="py-3">
+                  <p className="text-[11px] uppercase tracking-wide text-muted-foreground/70 font-semibold px-4 mb-1">{groupe.categorie}</p>
+                  <ul>{groupe.matieres.map(renderMatiere)}</ul>
+                </div>
+              ))}
 
-          {choix.length > 0 && (
-            <div>
-              <p className="text-[11px] uppercase tracking-wide text-muted-foreground/70 font-semibold mb-1.5">Au choix (options)</p>
-              <ul>
-                {choix.map(g => (
-                  <li key={g.id} className="py-2 border-b last:border-0 text-sm group/row">
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="truncate">{g.label}</span>
-                      <span className="flex items-center gap-3 flex-shrink-0">
-                        <span className="text-muted-foreground text-xs">coef {g.coefficient}</span>
-                        {estDirecteur && (
-                          <span className="flex items-center gap-1">
-                            <Button variant="ghost" size="icon" className="h-6 w-6 opacity-0 group-hover/row:opacity-100" aria-label={`Modifier ${g.label}`} onClick={() => openEditRow({ kind: 'choix', row: g })}>
-                              <Pencil className="h-3 w-3" />
-                            </Button>
-                            <Button
-                              variant="ghost" size="icon" className="h-6 w-6 opacity-0 group-hover/row:opacity-100 text-destructive hover:text-destructive"
-                              disabled={deletingRowId === g.id} onClick={() => void handleDeleteRow({ kind: 'choix', row: g })}
-                            >
-                              {deletingRowId === g.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <Trash2 className="h-3 w-3" />}
-                            </Button>
+              {choix.length > 0 && (
+                <div className="py-3">
+                  <p className="text-[11px] uppercase tracking-wide text-muted-foreground/70 font-semibold px-4 mb-1">Au choix (options)</p>
+                  <ul>
+                    {choix.map(g => (
+                      <li key={g.id} className="px-4 py-2.5 border-b last:border-0 text-sm group/row hover:bg-muted/30">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="truncate">{g.label}</span>
+                          <span className="flex items-center gap-3 flex-shrink-0">
+                            <span className="text-muted-foreground text-xs">coef {g.coefficient}</span>
+                            {estDirecteur && (
+                              <span className="flex items-center gap-1">
+                                <Button variant="ghost" size="icon" className="h-6 w-6 opacity-0 group-hover/row:opacity-100" aria-label={`Modifier ${g.label}`} onClick={() => openEditRow({ kind: 'choix', row: g })}>
+                                  <Pencil className="h-3 w-3" />
+                                </Button>
+                                <Button
+                                  variant="ghost" size="icon" className="h-6 w-6 opacity-0 group-hover/row:opacity-100 text-destructive hover:text-destructive"
+                                  disabled={deletingRowId === g.id} onClick={() => void handleDeleteRow({ kind: 'choix', row: g })}
+                                >
+                                  {deletingRowId === g.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <Trash2 className="h-3 w-3" />}
+                                </Button>
+                              </span>
+                            )}
                           </span>
-                        )}
-                      </span>
-                    </div>
-                    <p className="text-xs text-muted-foreground/80">{g.options.map(o => o.subjectName).join(' / ') || 'Aucune option'}</p>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
+                        </div>
+                        <p className="text-xs text-muted-foreground/80">{g.options.map(o => o.subjectName).join(' / ') || 'Aucune option'}</p>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </CardContent>
+          </Card>
 
-          <Card>
-            <CardContent className="py-4 flex items-center gap-4 text-sm">
-              <span className="font-semibold">{totaux.nbMatieres} matière{totaux.nbMatieres > 1 ? 's' : ''}</span>
-              <span className="text-muted-foreground">Coefficient total : <span className="font-semibold text-foreground">{totaux.totalCoef}</span></span>
-              {totaux.totalHeures > 0 && (
-                <span className="text-muted-foreground flex items-center gap-1">
-                  <Clock className="h-3.5 w-3.5" />Volume horaire : <span className="font-semibold text-foreground">{totaux.totalHeures} h</span>
-                  {totaux.heuresIncompletes && ' (partiel)'}
-                </span>
+          {/* ── Résumé, à côté (jamais un vide sur les grands écrans) ────── */}
+          <Card className="lg:sticky lg:top-6">
+            <CardContent className="pt-6 space-y-4">
+              <p className="text-sm font-semibold text-foreground">{niveau.name}</p>
+              <dl className="space-y-2.5 text-sm">
+                <div className="flex items-center justify-between">
+                  <dt className="text-muted-foreground">Matières</dt>
+                  <dd className="font-semibold">{totaux.nbMatieres}</dd>
+                </div>
+                <div className="flex items-center justify-between">
+                  <dt className="text-muted-foreground">Coefficient total</dt>
+                  <dd className="font-semibold">{totaux.totalCoef}</dd>
+                </div>
+                <div className="flex items-center justify-between">
+                  <dt className="text-muted-foreground flex items-center gap-1"><Clock className="h-3.5 w-3.5" />Volume horaire</dt>
+                  <dd className="font-semibold">{totaux.totalHeures > 0 ? `${totaux.totalHeures} h${totaux.heuresIncompletes ? ' (partiel)' : ''}` : '—'}</dd>
+                </div>
+              </dl>
+              {formation.description && (
+                <>
+                  <div className="h-px bg-border" />
+                  <p className="text-xs text-muted-foreground">{formation.description}</p>
+                </>
               )}
             </CardContent>
           </Card>

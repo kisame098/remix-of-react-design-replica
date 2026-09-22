@@ -31,7 +31,7 @@ import {
   Hotel,
   FileText,
 } from 'lucide-react';
-import { menuPourMode, modeDeLEcole, type IconeMenu } from '@/lib/modeGestion';
+import { menuPourMode, modeDeLEcole, urlMenuActive, type IconeMenu } from '@/lib/modeGestion';
 import { SchoolYearSelector } from './SchoolYearSelector';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {
@@ -58,6 +58,9 @@ export const DashboardSidebar = () => {
     () => menuPourMode(mode).filter(item => !item.permission || hasPermission(accountRole, staffPermissions, item.permission)),
     [mode, accountRole, staffPermissions]
   );
+  // Une seule rubrique s'allume à la fois — la plus précise, même quand deux
+  // URLs se chevauchent par préfixe (ex : /formation et /formation/formations).
+  const urlActive = useMemo(() => urlMenuActive(visibleMenuItems, location.pathname), [visibleMenuItems, location.pathname]);
 
   const handleSignOut = async () => {
     await signOut();
@@ -112,10 +115,7 @@ export const DashboardSidebar = () => {
       <nav className="flex-1 p-4 overflow-y-auto sidebar-scroll">
         <ul className="space-y-2">
           {visibleMenuItems.map((item) => {
-            // Comparaison par préfixe : une sous-page garde sa rubrique allumée
-            // (ex: /notes/:periodId/:classId reste sur "Gestion Notes"). Le
-            // '/' final évite qu'un chemin comme /notesomething matche /notes.
-            const isActive = location.pathname === item.url || location.pathname.startsWith(`${item.url}/`);
+            const isActive = item.url === urlActive;
             const Icone = ICONES[item.icon];
             const premierDuGroupe = item.groupe === 'formation_pro'
               && visibleMenuItems.find(i => i.groupe === 'formation_pro')?.url === item.url;
