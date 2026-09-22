@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   totauxBloc, nomBlocValide, coefficientValide, volumeHoraireValide, nomMatiereDejaPris,
-  libelleBloc, triBlocs, construireExport, analyserImport, peutModifierCoefficients,
+  libelleBloc, triBlocs, construireExport, analyserImport, peutGererMatieres,
   type FormationBloc, type FormationMatiere, type FormationChoixGroup,
 } from './formationPro';
 
@@ -132,13 +132,13 @@ describe('export / import — aller-retour sans perte', () => {
   });
 });
 
-describe('peutModifierCoefficients — réservé au directeur général', () => {
-  it('seul le compte admin_school peut modifier un coefficient', () => {
-    expect(peutModifierCoefficients('admin')).toBe(true);
-    expect(peutModifierCoefficients('staff')).toBe(false);
-    expect(peutModifierCoefficients('teacher')).toBe(false);
-    expect(peutModifierCoefficients('student')).toBe(false);
-    expect(peutModifierCoefficients(null)).toBe(false);
-    expect(peutModifierCoefficients(undefined)).toBe(false);
+describe('peutGererMatieres — matières et coefficients réservés au directeur général', () => {
+  it('seul le compte admin_school peut créer, modifier ou supprimer une matière (donc un coefficient)', () => {
+    expect(peutGererMatieres('admin')).toBe(true);
+    expect(peutGererMatieres('staff')).toBe(false);
+    expect(peutGererMatieres('teacher')).toBe(false);
+    expect(peutGererMatieres('student')).toBe(false);
+    expect(peutGererMatieres(null)).toBe(false);
+    expect(peutGererMatieres(undefined)).toBe(false);
   });
 });

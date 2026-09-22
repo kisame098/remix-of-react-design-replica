@@ -14,13 +14,13 @@ import {
   AlertDialogDescription, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import {
-  Plus, Trash2, Loader2, Pencil, GraduationCap, Copy, Download, Upload, Clock, Lock,
+  Plus, Trash2, Loader2, Pencil, GraduationCap, Copy, Download, Upload, Clock,
 } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import {
   type FormationBloc, type FormationMatiere, type FormationMatiereType, type FormationMatiereNature,
   NATURE_LABELS, totauxBloc, nomBlocValide, coefficientValide, volumeHoraireValide, nomMatiereDejaPris,
-  libelleBloc, triBlocs, construireExport, analyserImport, peutModifierCoefficients,
+  libelleBloc, triBlocs, construireExport, analyserImport, peutGererMatieres,
 } from '@/lib/formationPro';
 
 type RowKind = 'obligatoire' | 'facultative' | 'choix';
@@ -30,7 +30,7 @@ type EditTarget =
 
 const Formations = () => {
   const { accountRole } = useAuth();
-  const estDirecteur = peutModifierCoefficients(accountRole);
+  const estDirecteur = peutGererMatieres(accountRole);
   const {
     loading, blocs, matieres, choixGroups,
     addBloc, updateBloc, deleteBloc, duplicateBloc,
@@ -198,9 +198,7 @@ const Formations = () => {
     setRowType('obligatoire'); setRowName(''); setRowCoef('1'); setRowVolume(''); setRowNature('theorique');
     setExistingOptions([]); setNewOptionNames(['', '']);
   };
-  // Le personnel ne fixe jamais un coefficient : le champ reste à 1 pour une
-  // nouvelle matière, à ajuster par le directeur général ensuite.
-  const rowCoefEffectif = estDirecteur ? rowCoef : (editTarget?.row.coefficient != null ? String(editTarget.row.coefficient) : '1');
+
   const openEditRow = (blocId: string, target: EditTarget) => {
     setRowDialogBlocId(blocId); setEditTarget(target);
     if (target.kind === 'choix') {
@@ -222,7 +220,7 @@ const Formations = () => {
       toast({ title: 'Erreur', description: 'Le nom est obligatoire.', variant: 'destructive' });
       return;
     }
-    const coef = parseFloat(rowCoefEffectif.replace(',', '.'));
+    const coef = parseFloat(rowCoef.replace(',', '.'));
     if (!coefficientValide(coef)) {
       toast({ title: 'Erreur', description: 'Le coefficient doit être un nombre supérieur à 0.', variant: 'destructive' });
       return;
@@ -357,15 +355,19 @@ const Formations = () => {
                   <span className="text-muted-foreground text-xs">
                     coef {m.coefficient}{m.volumeHoraire != null ? ` · ${m.volumeHoraire} h` : ''}
                   </span>
-                  <Button variant="ghost" size="icon" className="h-6 w-6 opacity-0 group-hover/row:opacity-100" aria-label={`Modifier ${m.name}`} onClick={() => openEditRow(bloc.id, { kind: m.type, row: m })}>
-                    <Pencil className="h-3 w-3" />
-                  </Button>
-                  <Button
-                    variant="ghost" size="icon" className="h-6 w-6 opacity-0 group-hover/row:opacity-100 text-destructive hover:text-destructive"
-                    disabled={deletingRowId === m.id} onClick={() => void handleDeleteRow({ kind: m.type, row: m })}
-                  >
-                    {deletingRowId === m.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <Trash2 className="h-3 w-3" />}
-                  </Button>
+                  {estDirecteur && (
+                    <>
+                      <Button variant="ghost" size="icon" className="h-6 w-6 opacity-0 group-hover/row:opacity-100" aria-label={`Modifier ${m.name}`} onClick={() => openEditRow(bloc.id, { kind: m.type, row: m })}>
+                        <Pencil className="h-3 w-3" />
+                      </Button>
+                      <Button
+                        variant="ghost" size="icon" className="h-6 w-6 opacity-0 group-hover/row:opacity-100 text-destructive hover:text-destructive"
+                        disabled={deletingRowId === m.id} onClick={() => void handleDeleteRow({ kind: m.type, row: m })}
+                      >
+                        {deletingRowId === m.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <Trash2 className="h-3 w-3" />}
+                      </Button>
+                    </>
+                  )}
                 </span>
               </li>
             );
@@ -398,7 +400,9 @@ const Formations = () => {
                 <CardContent className="flex-1 flex flex-col">
                   <div className="flex-1 space-y-3">
                     {mats.length === 0 && choix.length === 0 ? (
-                      <p className="text-sm text-muted-foreground/70 italic">Aucune matière définie</p>
+                      <p className="text-sm text-muted-foreground/70 italic">
+                        {estDirecteur ? 'Aucune matière définie' : 'Aucune matière définie — le directeur général doit les ajouter'}
+                      </p>
                     ) : (
                       <>
                         {obligatoires.length > 0 && <ul className="space-y-1.5">{obligatoires.map(renderMatiere)}</ul>}
@@ -418,15 +422,19 @@ const Formations = () => {
                                     <span className="truncate">{g.label}</span>
                                     <span className="flex items-center gap-1 flex-shrink-0">
                                       <span className="text-muted-foreground text-xs">coef {g.coefficient}</span>
-                                      <Button variant="ghost" size="icon" className="h-6 w-6 opacity-0 group-hover/row:opacity-100" onClick={() => openEditRow(bloc.id, { kind: 'choix', row: g })}>
-                                        <Pencil className="h-3 w-3" />
-                                      </Button>
-                                      <Button
-                                        variant="ghost" size="icon" className="h-6 w-6 opacity-0 group-hover/row:opacity-100 text-destructive hover:text-destructive"
-                                        disabled={deletingRowId === g.id} onClick={() => void handleDeleteRow({ kind: 'choix', row: g })}
-                                      >
-                                        {deletingRowId === g.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <Trash2 className="h-3 w-3" />}
-                                      </Button>
+                                      {estDirecteur && (
+                                        <>
+                                          <Button variant="ghost" size="icon" className="h-6 w-6 opacity-0 group-hover/row:opacity-100" aria-label={`Modifier ${g.label}`} onClick={() => openEditRow(bloc.id, { kind: 'choix', row: g })}>
+                                            <Pencil className="h-3 w-3" />
+                                          </Button>
+                                          <Button
+                                            variant="ghost" size="icon" className="h-6 w-6 opacity-0 group-hover/row:opacity-100 text-destructive hover:text-destructive"
+                                            disabled={deletingRowId === g.id} onClick={() => void handleDeleteRow({ kind: 'choix', row: g })}
+                                          >
+                                            {deletingRowId === g.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <Trash2 className="h-3 w-3" />}
+                                          </Button>
+                                        </>
+                                      )}
                                     </span>
                                   </div>
                                   <p className="text-xs text-muted-foreground/80">{g.options.map(o => o.subjectName).join(' / ') || 'Aucune option'}</p>
@@ -446,9 +454,11 @@ const Formations = () => {
                       )}
                     </p>
                   )}
-                  <Button variant="outline" size="sm" className="w-full gap-1.5 mt-3" onClick={() => openAddRow(bloc.id)}>
-                    <Plus className="h-3.5 w-3.5" />Ajouter une matière
-                  </Button>
+                  {estDirecteur && (
+                    <Button variant="outline" size="sm" className="w-full gap-1.5 mt-3" onClick={() => openAddRow(bloc.id)}>
+                      <Plus className="h-3.5 w-3.5" />Ajouter une matière
+                    </Button>
+                  )}
                 </CardContent>
               </Card>
             );
@@ -542,18 +552,11 @@ const Formations = () => {
 
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-2">
-                <Label htmlFor="row-coefficient" className="flex items-center gap-1.5">
-                  Coefficient *
-                  {!estDirecteur && <Lock className="h-3 w-3 text-muted-foreground" />}
-                </Label>
+                <Label htmlFor="row-coefficient">Coefficient *</Label>
                 <Input
-                  id="row-coefficient" type="number" min="0.5" step="0.5" value={rowCoefEffectif}
-                  disabled={!estDirecteur}
+                  id="row-coefficient" type="number" min="0.5" step="0.5" value={rowCoef}
                   onChange={e => setRowCoef(e.target.value)}
                 />
-                {!estDirecteur && (
-                  <p className="text-xs text-muted-foreground">Réservé au directeur général.</p>
-                )}
               </div>
               {rowType !== 'choix' && (
                 <div className="space-y-2">

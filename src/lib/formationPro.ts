@@ -89,15 +89,17 @@ export const coefficientValide = (v: number): boolean => Number.isFinite(v) && v
 export const volumeHoraireValide = (v: number | undefined): boolean =>
   v === undefined || (Number.isFinite(v) && v >= 0);
 
-// ─── Coefficients : réservés au directeur général ──────────────────────────
-// À la demande d'IFHO : n'importe quel membre du personnel ayant accès à
-// Formations (permission « Notes ») peut créer des matières et organiser le
-// programme, mais SEUL le compte admin_school (directeur général) peut fixer
-// ou modifier un coefficient — celui d'une matière comme d'un créneau au
-// choix. Un import (fichier ou modèle) fixe aussi des coefficients : il est
-// donc réservé au même titre, pour qu'un import ne serve pas à contourner la
-// restriction du formulaire.
-export const peutModifierCoefficients = (accountRole: string | null | undefined): boolean => accountRole === 'admin';
+// ─── Matières et créneaux au choix : réservés au directeur général ─────────
+// À la demande d'IFHO : laisser le personnel CRÉER une matière sans pouvoir
+// en fixer le coefficient ne sert à rien — ça ne fait que produire des
+// coefficients à 1 que le directeur doit ensuite corriger un par un, ce qui
+// est justement la source d'erreurs qu'on veut éviter. Le personnel organise
+// donc les FORMATIONS et leurs blocs (créer, renommer, dupliquer, supprimer),
+// mais tout ce qui porte un coefficient — créer, modifier ou supprimer une
+// matière ou un créneau au choix, comme importer un fichier ou un modèle qui
+// en fixe en bloc — est réservé au seul compte admin_school (directeur
+// général).
+export const peutGererMatieres = (accountRole: string | null | undefined): boolean => accountRole === 'admin';
 
 /** Deux matières ne peuvent pas porter le même nom dans le même bloc (insensible à la casse/aux espaces). */
 export const nomMatiereDejaPris = (
