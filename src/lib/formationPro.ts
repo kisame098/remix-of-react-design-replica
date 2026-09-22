@@ -1,69 +1,102 @@
 // ═══════════════════════════════════════════════════════════════════════════
 // FORMATION PROFESSIONNELLE — Catalogue des formations (étape 1)
 //
-// Un « bloc » est le programme d'UNE année d'UNE formation (ex: « CAP
-// Restauration — Année 1 »), jamais partagé entre années — exactement comme un
-// bloc de lycée en Cursus (src/lib/programmeCards.ts) : pour créer l'année
-// suivante, on duplique le bloc.
+// La hiérarchie colle à la façon dont une école pense sa propre organisation :
 //
-// Tout est délibérément du texte libre (formation, année, diplôme, durée) :
-// le métier de chaque école n'est pas le nôtre, à elle de nommer ses choses.
+//   FORMATION (« CAP Restauration »)
+//     └─ NIVEAU (« CAP 1 », « CAP 2 »… ou « Cycle unique » pour un cursus qui
+//        n'a qu'une seule étape)
+//          └─ MATIÈRE DU NIVEAU : coefficient, volume horaire, nature, type,
+//             catégorie — pointe vers le CATALOGUE de matières de l'école
+//             (fp_matieres), pour ne jamais retaper « Anglais » deux fois
+//             avec une faute qui le dédouble silencieusement dans les
+//             statistiques.
+//          └─ CRÉNEAU AU CHOIX (spécialité Cuisine/Pâtisserie/Bar…), avec ses
+//             options.
+//
+// Personne n'inscrit un élève en « CAP Restauration Année 2 » : on dit
+// « il est en CAP 2 ». On clique une fois sur la formation, puis on choisit
+// le niveau — deux écrans, pas une liste plate de blocs qui se ressemblent.
 // ═══════════════════════════════════════════════════════════════════════════
 
-export interface FormationBloc {
+export interface Formation {
   id: string;
-  formationName: string;
-  anneeLabel: string;
-  diplome?: string;
-  duree?: string;
-  /** Ex : « CM2 à 4e secondaire », « BFEM requis » — condition d'entrée dans la formation. */
-  niveauEntree?: string;
+  name: string;
+  /** Texte libre, suggéré par une liste de valeurs à l'écran — jamais imposé. */
+  diplomaType?: string;
+  duration?: string;
+  entryLevel?: string;
+  description?: string;
+  active: boolean;
+  ordering: number;
+  createdAt: string;
+}
+
+export const TYPES_DIPLOME_SUGGERES = [
+  "Diplôme d'État",
+  "Diplôme de l'établissement",
+  'Attestation',
+  'Certificat',
+  'Autre',
+] as const;
+
+export interface Niveau {
+  id: string;
+  formationId: string;
+  name: string;
   description?: string;
   ordering: number;
   createdAt: string;
 }
 
-export type FormationMatiereType = 'obligatoire' | 'facultative';
-export type FormationMatiereNature = 'theorique' | 'pratique' | 'stage';
-
-export interface FormationMatiere {
+/** Une ligne du catalogue de matières de l'école — un nom, rien d'autre. */
+export interface MatiereCatalogue {
   id: string;
-  blocId: string;
-  type: FormationMatiereType;
   name: string;
+}
+
+export type NiveauMatiereType = 'obligatoire' | 'facultative';
+export type NiveauMatiereNature = 'theorique' | 'pratique' | 'stage' | 'projet';
+
+export const NATURE_LABELS: Record<NiveauMatiereNature, string> = {
+  theorique: 'Théorique',
+  pratique: 'Pratique',
+  stage: 'Stage',
+  projet: 'Projet',
+};
+
+/** Une matière ENSEIGNÉE à un niveau donné — le contenu pédagogique proprement dit. */
+export interface NiveauMatiere {
+  id: string;
+  niveauId: string;
+  matiereId: string;
+  /** Dénormalisé à la lecture pour l'affichage — jamais retapé à la main. */
+  matiereName: string;
+  type: NiveauMatiereType;
   coefficient: number;
   volumeHoraire?: number;
-  nature: FormationMatiereNature;
+  nature: NiveauMatiereNature;
+  /** Regroupement libre affiché à l'écran (« Enseignement général »…). */
+  categorie?: string;
   ordering: number;
 }
 
-export interface FormationChoixOption {
+export interface ChoixOption {
   id: string;
   subjectName: string;
 }
 
-export interface FormationChoixGroup {
+export interface ChoixGroup {
   id: string;
-  blocId: string;
+  niveauId: string;
   label: string;
   coefficient: number;
   ordering: number;
-  options: FormationChoixOption[];
+  options: ChoixOption[];
 }
 
-export const NATURE_LABELS: Record<FormationMatiereNature, string> = {
-  theorique: 'Théorique',
-  pratique: 'Pratique',
-  stage: 'Stage',
-};
-
-// ─── Totaux d'un bloc ───────────────────────────────────────────────────────
-// Coefficients des matières obligatoires ET facultatives (une facultative
-// activée compte comme les autres — la distinction ne sert qu'à l'affichage),
-// des créneaux au choix (un seul coefficient par créneau, quel que soit le
-// nombre d'options), et somme des volumes horaires renseignés (un volume
-// vide ne compte pas comme zéro, il est simplement absent du total).
-export interface TotauxBloc {
+// ─── Totaux d'un niveau ─────────────────────────────────────────────────────
+export interface TotauxNiveau {
   nbMatieres: number;
   totalCoef: number;
   totalHeures: number;
@@ -71,7 +104,7 @@ export interface TotauxBloc {
   heuresIncompletes: boolean;
 }
 
-export const totauxBloc = (matieres: FormationMatiere[], choix: FormationChoixGroup[]): TotauxBloc => {
+export const totauxNiveau = (matieres: NiveauMatiere[], choix: ChoixGroup[]): TotauxNiveau => {
   const heuresRenseignees = matieres.filter(m => m.volumeHoraire != null);
   return {
     nbMatieres: matieres.length + choix.length,
@@ -81,104 +114,112 @@ export const totauxBloc = (matieres: FormationMatiere[], choix: FormationChoixGr
   };
 };
 
+/** Résumé d'une formation, tous niveaux confondus — affiché sur sa carte. */
+export interface ResumeFormation {
+  nbNiveaux: number;
+  nbMatieres: number;
+  totalHeures: number;
+}
+
+export const resumeFormation = (
+  niveaux: Niveau[], matieresParNiveau: NiveauMatiere[], choixParNiveau: ChoixGroup[],
+): ResumeFormation => {
+  const idsNiveaux = new Set(niveaux.map(n => n.id));
+  const mats = matieresParNiveau.filter(m => idsNiveaux.has(m.niveauId));
+  const choix = choixParNiveau.filter(c => idsNiveaux.has(c.niveauId));
+  return {
+    nbNiveaux: niveaux.length,
+    nbMatieres: mats.length + choix.length,
+    totalHeures: mats.reduce((s, m) => s + (m.volumeHoraire ?? 0), 0),
+  };
+};
+
 // ─── Validation ─────────────────────────────────────────────────────────────
 
-export const nomBlocValide = (formationName: string, anneeLabel: string): boolean =>
-  formationName.trim() !== '' && anneeLabel.trim() !== '';
-
+export const nomFormationValide = (name: string): boolean => name.trim() !== '';
+export const nomNiveauValide = (name: string): boolean => name.trim() !== '';
 export const coefficientValide = (v: number): boolean => Number.isFinite(v) && v > 0;
-
 export const volumeHoraireValide = (v: number | undefined): boolean =>
   v === undefined || (Number.isFinite(v) && v >= 0);
 
-// ─── Matières et créneaux au choix : réservés au directeur général ─────────
-// À la demande d'IFHO : laisser le personnel CRÉER une matière sans pouvoir
-// en fixer le coefficient ne sert à rien — ça ne fait que produire des
-// coefficients à 1 que le directeur doit ensuite corriger un par un, ce qui
-// est justement la source d'erreurs qu'on veut éviter. Le personnel organise
-// donc les FORMATIONS et leurs blocs (créer, renommer, dupliquer, supprimer),
-// mais tout ce qui porte un coefficient — créer, modifier ou supprimer une
-// matière ou un créneau au choix, comme importer un fichier ou un modèle qui
-// en fixe en bloc — est réservé au seul compte admin_school (directeur
-// général).
-export const peutGererMatieres = (accountRole: string | null | undefined): boolean => accountRole === 'admin';
-
-/** Deux matières ne peuvent pas porter le même nom dans le même bloc (insensible à la casse/aux espaces). */
-export const nomMatiereDejaPris = (
-  matieres: FormationMatiere[], name: string, blocId: string, excludeId?: string,
+/** Le catalogue de l'école ne prend jamais deux fois le même nom (insensible à la casse/aux espaces). */
+export const nomMatiereCatalogueDejaPris = (
+  catalogue: MatiereCatalogue[], name: string, excludeId?: string,
 ): boolean => {
   const norm = name.trim().toLowerCase();
-  return matieres.some(m => m.blocId === blocId && m.id !== excludeId && m.name.trim().toLowerCase() === norm);
+  return catalogue.some(m => m.id !== excludeId && m.name.trim().toLowerCase() === norm);
 };
 
-// ─── Libellé d'une carte de bloc ────────────────────────────────────────────
-export const libelleBloc = (bloc: Pick<FormationBloc, 'formationName' | 'anneeLabel'>): string =>
-  `${bloc.formationName} — ${bloc.anneeLabel}`;
+/** Une matière ne peut pas être enseignée deux fois au même niveau. */
+export const matiereDejaAuNiveau = (
+  matieres: NiveauMatiere[], matiereId: string, niveauId: string, excludeId?: string,
+): boolean => matieres.some(m => m.id !== excludeId && m.niveauId === niveauId && m.matiereId === matiereId);
 
-export const triBlocs = (blocs: FormationBloc[]): FormationBloc[] =>
-  [...blocs].sort((a, b) =>
-    a.formationName.localeCompare(b.formationName, 'fr') || a.ordering - b.ordering);
+// ─── Tri et regroupement ────────────────────────────────────────────────────
 
-// ─── Regroupement par formation (affichage) ────────────────────────────────
-// Un bloc reste un bloc en base (rien ne change côté données) : ce n'est que
-// l'écran qui rassemble « CAP Restauration — Année 1/2/3 » sous un même
-// intitulé, pour qu'une école à 7-10 formations garde une liste lisible.
-export interface GroupeFormation {
-  formationName: string;
-  blocs: FormationBloc[];
-}
+export const triFormations = (formations: Formation[]): Formation[] =>
+  [...formations].sort((a, b) => a.name.localeCompare(b.name, 'fr') || a.ordering - b.ordering);
 
-export const grouperBlocsParFormation = (blocs: FormationBloc[]): GroupeFormation[] => {
-  const tries = triBlocs(blocs);
-  const groupes: GroupeFormation[] = [];
-  for (const b of tries) {
-    const dernier = groupes[groupes.length - 1];
-    if (dernier && dernier.formationName === b.formationName) dernier.blocs.push(b);
-    else groupes.push({ formationName: b.formationName, blocs: [b] });
+export const triNiveaux = (niveaux: Niveau[]): Niveau[] =>
+  [...niveaux].sort((a, b) => a.ordering - b.ordering);
+
+/** Les catégories dans l'ordre où elles apparaissent (première matière rencontrée). */
+export const regrouperParCategorie = (matieres: NiveauMatiere[]): { categorie: string; matieres: NiveauMatiere[] }[] => {
+  const tries = [...matieres].sort((a, b) => a.ordering - b.ordering);
+  const groupes: { categorie: string; matieres: NiveauMatiere[] }[] = [];
+  for (const m of tries) {
+    const cle = m.categorie?.trim() || 'Sans catégorie';
+    const dernier = groupes.find(g => g.categorie === cle);
+    if (dernier) dernier.matieres.push(m);
+    else groupes.push({ categorie: cle, matieres: [m] });
   }
   return groupes;
 };
 
-// ─── Autocomplétion des noms de matières ────────────────────────────────────
-// Pas un catalogue séparé (aucune table, aucun écran de plus) : juste la
-// liste, triée, des noms déjà utilisés ailleurs dans l'école — pour qu'on
-// retape rarement « Anglais » deux fois avec une faute qui le dédouble
-// silencieusement dans les statistiques.
-export const nomsDeMatieresConnus = (matieres: FormationMatiere[]): string[] =>
-  [...new Set(matieres.map(m => m.name.trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'fr'));
+// ─── Autocomplétion des noms de matières (le catalogue lui-même) ───────────
+export const nomsDuCatalogue = (catalogue: MatiereCatalogue[]): string[] =>
+  [...catalogue].map(m => m.name).sort((a, b) => a.localeCompare(b, 'fr'));
 
-// ─── Export / import (même esprit que le programme de Cursus) ─────────────
+// ─── Export / import ────────────────────────────────────────────────────────
+// Une formation complète : ses niveaux, chacun avec ses matières (par NOM —
+// portable d'une école à l'autre, aucun identifiant interne) et ses créneaux
+// au choix.
 
 export interface FormationExport {
   type: 'senclass_formation_pro_export';
-  version: 1;
+  version: 2;
   exportedAt: string;
-  blocs: {
-    formationName: string;
-    anneeLabel: string;
-    diplome?: string;
-    duree?: string;
-    niveauEntree?: string;
+  formations: {
+    name: string;
+    diplomaType?: string;
+    duration?: string;
+    entryLevel?: string;
     description?: string;
-    matieres: { type: FormationMatiereType; name: string; coefficient: number; volumeHoraire?: number; nature: FormationMatiereNature }[];
-    choixGroups: { label: string; coefficient: number; options: string[] }[];
+    niveaux: {
+      name: string;
+      description?: string;
+      matieres: { name: string; type: NiveauMatiereType; coefficient: number; volumeHoraire?: number; nature: NiveauMatiereNature; categorie?: string }[];
+      choixGroups: { label: string; coefficient: number; options: string[] }[];
+    }[];
   }[];
 }
 
 export const construireExport = (
-  blocs: FormationBloc[], matieres: FormationMatiere[], choixGroups: FormationChoixGroup[],
+  formations: Formation[], niveaux: Niveau[], matieres: NiveauMatiere[], choixGroups: ChoixGroup[],
   maintenant: Date = new Date(),
 ): FormationExport => ({
   type: 'senclass_formation_pro_export',
-  version: 1,
+  version: 2,
   exportedAt: maintenant.toISOString(),
-  blocs: triBlocs(blocs).map(b => ({
-    formationName: b.formationName, anneeLabel: b.anneeLabel, diplome: b.diplome, duree: b.duree,
-    niveauEntree: b.niveauEntree, description: b.description,
-    matieres: matieres.filter(m => m.blocId === b.id).sort((a, c) => a.ordering - c.ordering)
-      .map(m => ({ type: m.type, name: m.name, coefficient: m.coefficient, volumeHoraire: m.volumeHoraire, nature: m.nature })),
-    choixGroups: choixGroups.filter(c => c.blocId === b.id).sort((a, c) => a.ordering - c.ordering)
-      .map(c => ({ label: c.label, coefficient: c.coefficient, options: c.options.map(o => o.subjectName) })),
+  formations: triFormations(formations).map(f => ({
+    name: f.name, diplomaType: f.diplomaType, duration: f.duration, entryLevel: f.entryLevel, description: f.description,
+    niveaux: triNiveaux(niveaux.filter(n => n.formationId === f.id)).map(n => ({
+      name: n.name, description: n.description,
+      matieres: matieres.filter(m => m.niveauId === n.id).sort((a, b) => a.ordering - b.ordering)
+        .map(m => ({ name: m.matiereName, type: m.type, coefficient: m.coefficient, volumeHoraire: m.volumeHoraire, nature: m.nature, categorie: m.categorie })),
+      choixGroups: choixGroups.filter(c => c.niveauId === n.id).sort((a, b) => a.ordering - b.ordering)
+        .map(c => ({ label: c.label, coefficient: c.coefficient, options: c.options.map(o => o.subjectName) })),
+    })),
   })),
 });
 
@@ -186,6 +227,16 @@ export const construireExport = (
 export const analyserImport = (brut: unknown): FormationExport | null => {
   if (!brut || typeof brut !== 'object') return null;
   const o = brut as Record<string, unknown>;
-  if (o.type !== 'senclass_formation_pro_export' || !Array.isArray(o.blocs)) return null;
+  if (o.type !== 'senclass_formation_pro_export' || !Array.isArray(o.formations)) return null;
   return o as unknown as FormationExport;
 };
+
+// ─── Coefficients (donc les matières) : réservés au directeur général ──────
+// À la demande d'IFHO : laisser le personnel CRÉER une matière sans pouvoir en
+// fixer le coefficient ne sert à rien — ça ne produit que des coefficients à 1
+// que le directeur doit ensuite corriger un par un, la source d'erreurs qu'on
+// cherche justement à éviter. Le personnel organise donc les FORMATIONS et
+// leurs NIVEAUX (créer, renommer, dupliquer, supprimer), mais tout ce qui
+// porte un coefficient — matière d'un niveau, créneau au choix, import qui en
+// fixe en bloc — est réservé au seul compte admin_school (directeur général).
+export const peutGererMatieres = (accountRole: string | null | undefined): boolean => accountRole === 'admin';
