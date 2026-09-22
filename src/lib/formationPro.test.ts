@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   totauxBloc, nomBlocValide, coefficientValide, volumeHoraireValide, nomMatiereDejaPris,
-  libelleBloc, triBlocs, construireExport, analyserImport,
+  libelleBloc, triBlocs, construireExport, analyserImport, peutModifierCoefficients,
   type FormationBloc, type FormationMatiere, type FormationChoixGroup,
 } from './formationPro';
 
@@ -129,5 +129,16 @@ describe('export / import — aller-retour sans perte', () => {
   it('un bloc sans matière ni créneau s\'exporte quand même (formation vide, en cours de construction)', () => {
     const exporté = construireExport([bloc()], [], []);
     expect(exporté.blocs[0]).toMatchObject({ matieres: [], choixGroups: [] });
+  });
+});
+
+describe('peutModifierCoefficients — réservé au directeur général', () => {
+  it('seul le compte admin_school peut modifier un coefficient', () => {
+    expect(peutModifierCoefficients('admin')).toBe(true);
+    expect(peutModifierCoefficients('staff')).toBe(false);
+    expect(peutModifierCoefficients('teacher')).toBe(false);
+    expect(peutModifierCoefficients('student')).toBe(false);
+    expect(peutModifierCoefficients(null)).toBe(false);
+    expect(peutModifierCoefficients(undefined)).toBe(false);
   });
 });

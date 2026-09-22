@@ -1,5 +1,6 @@
 import { useMemo, useRef, useState } from 'react';
 import { useFormationPro } from '@/contexts/FormationProContext';
+import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -13,13 +14,13 @@ import {
   AlertDialogDescription, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import {
-  Plus, Trash2, Loader2, Pencil, GraduationCap, Copy, Download, Upload, Clock,
+  Plus, Trash2, Loader2, Pencil, GraduationCap, Copy, Download, Upload, Clock, Lock,
 } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import {
   type FormationBloc, type FormationMatiere, type FormationMatiereType, type FormationMatiereNature,
   NATURE_LABELS, totauxBloc, nomBlocValide, coefficientValide, volumeHoraireValide, nomMatiereDejaPris,
-  libelleBloc, triBlocs, construireExport, analyserImport,
+  libelleBloc, triBlocs, construireExport, analyserImport, peutModifierCoefficients,
 } from '@/lib/formationPro';
 
 type RowKind = 'obligatoire' | 'facultative' | 'choix';
@@ -28,6 +29,8 @@ type EditTarget =
   | { kind: 'choix'; row: { id: string; label: string; coefficient: number; options: { id: string; subjectName: string }[] } };
 
 const Formations = () => {
+  const { accountRole } = useAuth();
+  const estDirecteur = peutModifierCoefficients(accountRole);
   const {
     loading, blocs, matieres, choixGroups,
     addBloc, updateBloc, deleteBloc, duplicateBloc,
@@ -195,6 +198,9 @@ const Formations = () => {
     setRowType('obligatoire'); setRowName(''); setRowCoef('1'); setRowVolume(''); setRowNature('theorique');
     setExistingOptions([]); setNewOptionNames(['', '']);
   };
+  // Le personnel ne fixe jamais un coefficient : le champ reste à 1 pour une
+  // nouvelle matière, à ajuster par le directeur général ensuite.
+  const rowCoefEffectif = estDirecteur ? rowCoef : (editTarget?.row.coefficient != null ? String(editTarget.row.coefficient) : '1');
   const openEditRow = (blocId: string, target: EditTarget) => {
     setRowDialogBlocId(blocId); setEditTarget(target);
     if (target.kind === 'choix') {
@@ -216,7 +222,7 @@ const Formations = () => {
       toast({ title: 'Erreur', description: 'Le nom est obligatoire.', variant: 'destructive' });
       return;
     }
-    const coef = parseFloat(rowCoef.replace(',', '.'));
+    const coef = parseFloat(rowCoefEffectif.replace(',', '.'));
     if (!coefficientValide(coef)) {
       toast({ title: 'Erreur', description: 'Le coefficient doit être un nombre supérieur à 0.', variant: 'destructive' });
       return;
@@ -283,19 +289,26 @@ const Formations = () => {
           </p>
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">
-          <input
-            ref={fileInputRef} type="file" accept="application/json" className="hidden"
-            onChange={(e) => { const f = e.target.files?.[0]; if (f) void handleImportFile(f); e.target.value = ''; }}
-          />
-          <Button variant="outline" size="sm" className="gap-2" onClick={() => setModelesOuvert(true)}>
-            Modèles hôtellerie-restauration
-          </Button>
           <Button variant="outline" size="sm" className="gap-2" onClick={handleExport} disabled={blocs.length === 0}>
             <Download className="h-3.5 w-3.5" />Exporter
           </Button>
-          <Button variant="outline" size="sm" className="gap-2" onClick={() => fileInputRef.current?.click()} disabled={importing}>
-            {importing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}Importer
-          </Button>
+          {/* Importer un fichier ou un modèle fixe des coefficients en bloc — même
+              restriction que le formulaire, pour qu'un import ne serve pas à la
+              contourner. */}
+          {estDirecteur && (
+            <>
+              <input
+                ref={fileInputRef} type="file" accept="application/json" className="hidden"
+                onChange={(e) => { const f = e.target.files?.[0]; if (f) void handleImportFile(f); e.target.value = ''; }}
+              />
+              <Button variant="outline" size="sm" className="gap-2" onClick={() => setModelesOuvert(true)}>
+                Modèles hôtellerie-restauration
+              </Button>
+              <Button variant="outline" size="sm" className="gap-2" onClick={() => fileInputRef.current?.click()} disabled={importing}>
+                {importing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}Importer
+              </Button>
+            </>
+          )}
           <Button size="sm" className="gap-2" onClick={openCreateBloc}>
             <Plus className="h-3.5 w-3.5" />Nouveau bloc
           </Button>
@@ -312,10 +325,12 @@ const Formations = () => {
             <GraduationCap className="w-16 h-16 mx-auto mb-4 text-muted-foreground/50" />
             <h3 className="text-lg font-semibold text-foreground mb-2">Aucune formation créée</h3>
             <p className="text-muted-foreground mb-6">
-              Créez votre premier bloc, ou partez d'un modèle hôtellerie-restauration à adapter.
+              {estDirecteur
+                ? "Créez votre premier bloc, ou partez d'un modèle hôtellerie-restauration à adapter."
+                : "Créez votre premier bloc — demandez au directeur général d'importer un modèle si besoin."}
             </p>
             <div className="flex items-center justify-center gap-2">
-              <Button variant="outline" onClick={() => setModelesOuvert(true)}>Voir les modèles</Button>
+              {estDirecteur && <Button variant="outline" onClick={() => setModelesOuvert(true)}>Voir les modèles</Button>}
               <Button onClick={openCreateBloc} className="gap-2"><Plus className="h-4 w-4" />Nouveau bloc</Button>
             </div>
           </CardContent>
@@ -342,7 +357,7 @@ const Formations = () => {
                   <span className="text-muted-foreground text-xs">
                     coef {m.coefficient}{m.volumeHoraire != null ? ` · ${m.volumeHoraire} h` : ''}
                   </span>
-                  <Button variant="ghost" size="icon" className="h-6 w-6 opacity-0 group-hover/row:opacity-100" onClick={() => openEditRow(bloc.id, { kind: m.type, row: m })}>
+                  <Button variant="ghost" size="icon" className="h-6 w-6 opacity-0 group-hover/row:opacity-100" aria-label={`Modifier ${m.name}`} onClick={() => openEditRow(bloc.id, { kind: m.type, row: m })}>
                     <Pencil className="h-3 w-3" />
                   </Button>
                   <Button
@@ -527,8 +542,18 @@ const Formations = () => {
 
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-2">
-                <Label>Coefficient *</Label>
-                <Input type="number" min="0.5" step="0.5" value={rowCoef} onChange={e => setRowCoef(e.target.value)} />
+                <Label htmlFor="row-coefficient" className="flex items-center gap-1.5">
+                  Coefficient *
+                  {!estDirecteur && <Lock className="h-3 w-3 text-muted-foreground" />}
+                </Label>
+                <Input
+                  id="row-coefficient" type="number" min="0.5" step="0.5" value={rowCoefEffectif}
+                  disabled={!estDirecteur}
+                  onChange={e => setRowCoef(e.target.value)}
+                />
+                {!estDirecteur && (
+                  <p className="text-xs text-muted-foreground">Réservé au directeur général.</p>
+                )}
               </div>
               {rowType !== 'choix' && (
                 <div className="space-y-2">
