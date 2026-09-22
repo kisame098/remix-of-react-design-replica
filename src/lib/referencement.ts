@@ -56,6 +56,8 @@ const PAGES_PRIVEES: [prefixe: string, titre: string][] = [
   ['/portail/profil',     'Mon profil'],
   ['/portail/filiere',    'Choix de filière'],
   ['/platform',           'Administration'],
+  ['/formation/formations', 'Formations'],
+  ['/formation',          'Formation professionnelle'],
 ];
 
 /**

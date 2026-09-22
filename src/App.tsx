@@ -21,6 +21,7 @@ import { BandeauHorsConnexion } from "./components/BandeauHorsConnexion";
 import { MiseAJourApplication } from "./components/MiseAJourApplication";
 import { Referencement } from "./components/Referencement";
 import ModeRoute from "./components/ModeRoute";
+import { FormationProProvider } from "./contexts/FormationProContext";
 import { SuiviActivite } from "@/components/SuiviActivite";
 import { SchoolYearProvider } from "./contexts/SchoolYearContext";
 import { SchoolProvider } from "./contexts/SchoolContext";
@@ -61,6 +62,7 @@ const SettingsPage          = lazy(() => import("./pages/Settings"));
 const AbonnementPage        = lazy(() => import("./pages/Abonnement"));
 const SubscriptionRequired  = lazy(() => import("./pages/SubscriptionRequired"));
 const FormationEnDeveloppement = lazy(() => import("./pages/formation/FormationEnDeveloppement"));
+const Formations = lazy(() => import("./pages/formation/Formations"));
 const PlatformStats         = lazy(() => import("./pages/platform/PlatformStats"));
 const PlatformSchools       = lazy(() => import("./pages/platform/PlatformSchools"));
 const PlatformSchoolDetail  = lazy(() => import("./pages/platform/PlatformSchoolDetail"));
@@ -87,6 +89,7 @@ const App = () => (
             <AttendanceProvider>
             <PaymentProvider>
             <PayrollProvider>
+            <FormationProProvider>
             <Toaster />
             <Sonner />
             <BandeauHorsConnexion />
@@ -162,7 +165,10 @@ const App = () => (
                     <Route path="/notes/:periodId/:classId/:subjectId/settings" element={<ModeRoute mode="classique"><RequirePermission permission="grades"><SubjectSettings /></RequirePermission></ModeRoute>} />
                     <Route path="/filieres" element={<ModeRoute mode="classique"><RequirePermission permission="grades"><Filieres /></RequirePermission></ModeRoute>} />
                     <Route path="/filieres/:filiereId" element={<ModeRoute mode="classique"><RequirePermission permission="grades"><FiliereEditor /></RequirePermission></ModeRoute>} />
-                    {["/formation", "/formation/formations", "/formation/promotions", "/formation/evaluations",
+                    <Route path="/formation/formations" element={
+                      <ModeRoute mode="formation_pro"><RequirePermission permission="grades"><Formations /></RequirePermission></ModeRoute>
+                    } />
+                    {["/formation", "/formation/promotions", "/formation/evaluations",
                       "/formation/examens", "/formation/stages", "/formation/documents"].map(chemin => (
                       <Route key={chemin} path={chemin} element={
                         <ModeRoute mode="formation_pro"><RequirePermission permission="grades"><FormationEnDeveloppement /></RequirePermission></ModeRoute>
@@ -183,6 +189,7 @@ const App = () => (
               </Routes>
               </Suspense>
             </BrowserRouter>
+            </FormationProProvider>
             </PayrollProvider>
             </PaymentProvider>
             </AttendanceProvider>

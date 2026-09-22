@@ -41,11 +41,11 @@ describe('menu par mode', () => {
     }
   });
 
-  it('chaque rubrique formation est annoncée « en développement » et a une description', () => {
-    for (const r of RUBRIQUES_FORMATION_PRO) {
-      expect(r.bientot).toBe(true);
-      expect(r.description.length).toBeGreaterThan(20);
-    }
+  it('chaque rubrique formation a une description ; « Formations » est développée, les autres encore « en dév. »', () => {
+    for (const r of RUBRIQUES_FORMATION_PRO) expect(r.description.length).toBeGreaterThan(20);
+    const parTitre = new Map(RUBRIQUES_FORMATION_PRO.map(r => [r.title, r]));
+    expect(parTitre.get('Formations')?.bientot).toBeUndefined();
+    for (const t of ['Promotions', 'Évaluations', 'Examens', 'Stages', 'Documents']) expect(parTitre.get(t)?.bientot).toBe(true);
   });
 
   it('adresses uniques, permissions valides', () => {
