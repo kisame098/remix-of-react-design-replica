@@ -1,10 +1,11 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
+import { useSchool } from '@/contexts/SchoolContext';
 import { estFormationPro } from '@/lib/modeGestion';
 import {
   type Formation, type Niveau, type MatiereCatalogue, type NiveauMatiere, type ChoixGroup, type ChoixOption,
-  type NiveauMatiereType, type NiveauMatiereNature,
+  type NiveauMatiereType, type NiveauMatiereNature, type Promotion, type RythmePromotion, type StatutPromotion,
 } from '@/lib/formationPro';
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -47,6 +48,10 @@ const mapOption = (r: any): ChoixOption & { choixId: string } => ({
 type DonneesFormation = { name: string; diplomaType?: string; duration?: string; entryLevel?: string; description?: string; active?: boolean };
 type DonneesNiveau = { name: string; description?: string };
 type DonneesNiveauMatiere = { type: NiveauMatiereType; coefficient: number; volumeHoraire?: number; nature: NiveauMatiereNature; categorie?: string };
+type DonneesPromotion = {
+  name: string; studentLimit: number; rythme: RythmePromotion;
+  startDate?: string; endDate?: string; status?: StatutPromotion; description?: string;
+};
 
 interface FormationProContextType {
   loading: boolean;
@@ -78,6 +83,14 @@ interface FormationProContextType {
   deleteChoixGroup: (id: string) => Promise<void>;
   addChoixOption: (choixId: string, subjectName: string) => Promise<void>;
   deleteChoixOption: (id: string) => Promise<void>;
+
+  promotions: Promotion[];
+  addPromotion: (niveauId: string, data: DonneesPromotion) => Promise<Promotion>;
+  updatePromotion: (id: string, data: Partial<DonneesPromotion>) => Promise<void>;
+  /** Refuse si la promotion a encore des élèves — comme la suppression d'une classe classique. */
+  deletePromotion: (id: string) => Promise<void>;
+  /** Nouvelle promotion sur le même niveau, sans élève ni note — jamais l'originale modifiée. */
+  duplicatePromotion: (sourceId: string, data: DonneesPromotion) => Promise<Promotion>;
 }
 
 const FormationProContext = createContext<FormationProContextType | null>(null);
@@ -87,34 +100,46 @@ export const FormationProProvider = ({ children }: { children: ReactNode }) => {
   const schoolId: string | null = school?.id ?? null;
   const actif = estFormationPro(school) && !isSchoolAccessBlocked;
 
+  // Une promotion possède une classe classique (nom, effectif) — le reste de
+  // ses champs (niveau, rythme, dates, statut) vit dans fp_promotions.
+  const { classes, addClass, updateClass, deleteClass, getStudentCountByClass } = useSchool();
+
   const [loading, setLoading] = useState(true);
   const [formations, setFormations] = useState<Formation[]>([]);
   const [niveaux, setNiveaux] = useState<Niveau[]>([]);
   const [catalogue, setCatalogue] = useState<MatiereCatalogue[]>([]);
   const [niveauMatieresBrut, setNiveauMatieresBrut] = useState<{ id: string; niveauId: string; matiereId: string; type: NiveauMatiereType; coefficient: number; volumeHoraire?: number; nature: NiveauMatiereNature; categorie?: string; ordering: number }[]>([]);
   const [choixGroups, setChoixGroups] = useState<ChoixGroup[]>([]);
+  const [promotionsBrut, setPromotionsBrut] = useState<{ id: string; niveauId: string; classId: string; rythme: RythmePromotion; startDate?: string; endDate?: string; status: StatutPromotion; description?: string; createdAt: string }[]>([]);
 
   useEffect(() => {
     let annule = false;
     if (!schoolId || !actif) {
-      setFormations([]); setNiveaux([]); setCatalogue([]); setNiveauMatieresBrut([]); setChoixGroups([]);
+      setFormations([]); setNiveaux([]); setCatalogue([]); setNiveauMatieresBrut([]); setChoixGroups([]); setPromotionsBrut([]);
       setLoading(false);
       return;
     }
     setLoading(true);
     (async () => {
-      const [fRes, nRes, mRes, nmRes, cRes, oRes] = await Promise.all([
+      const [fRes, nRes, mRes, nmRes, cRes, oRes, pRes] = await Promise.all([
         sb.from('fp_formations').select('*').eq('school_id', schoolId).order('ordering'),
         sb.from('fp_niveaux').select('*').eq('school_id', schoolId).order('ordering'),
         sb.from('fp_matieres').select('*').eq('school_id', schoolId).order('name'),
         sb.from('fp_niveau_matieres').select('*').eq('school_id', schoolId).order('ordering'),
         sb.from('fp_choix').select('*').eq('school_id', schoolId).order('ordering'),
         sb.from('fp_choix_options').select('*').eq('school_id', schoolId).order('ordering'),
+        sb.from('fp_promotions').select('*').eq('school_id', schoolId).order('created_at'),
       ]);
       if (annule) return;
       const options = (oRes.data ?? []).map(mapOption);
       setFormations((fRes.data ?? []).map(mapFormation));
       setNiveaux((nRes.data ?? []).map(mapNiveau));
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      setPromotionsBrut((pRes.data ?? []).map((r: any) => ({
+        id: r.id, niveauId: r.niveau_id, classId: r.class_id, rythme: r.rythme,
+        startDate: r.start_date ?? undefined, endDate: r.end_date ?? undefined,
+        status: r.status, description: r.description ?? undefined, createdAt: r.created_at,
+      })));
       setCatalogue((mRes.data ?? []).map(mapMatiereCatalogue));
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       setNiveauMatieresBrut((nmRes.data ?? []).map((r: any) => ({
@@ -138,11 +163,24 @@ export const FormationProProvider = ({ children }: { children: ReactNode }) => {
     return niveauMatieresBrut.map(m => ({ ...m, matiereName: noms.get(m.matiereId) ?? '(matière supprimée)' }));
   }, [niveauMatieresBrut, catalogue]);
 
+  // Nom et effectif viennent de la classe possédée — jamais dupliqués en base.
+  const promotions = useMemo<Promotion[]>(() => {
+    const parClassId = new Map(classes.map(c => [c.id, c]));
+    return promotionsBrut
+      .map(p => {
+        const cls = parClassId.get(p.classId);
+        if (!cls) return null;   // classe supprimée hors du flux normal : on masque plutôt que de planter
+        return { ...p, name: cls.name, studentLimit: cls.studentLimit };
+      })
+      .filter((p): p is Promotion => p !== null);
+  }, [promotionsBrut, classes]);
+
   const formationsRef = useRef(formations); formationsRef.current = formations;
   const niveauxRef = useRef(niveaux); niveauxRef.current = niveaux;
   const catalogueRef = useRef(catalogue); catalogueRef.current = catalogue;
   const niveauMatieresRef = useRef(niveauMatieresBrut); niveauMatieresRef.current = niveauMatieresBrut;
   const choixRef = useRef(choixGroups); choixRef.current = choixGroups;
+  const promotionsRef = useRef(promotionsBrut); promotionsRef.current = promotionsBrut;
 
   // ── Formations ─────────────────────────────────────────────────────────
   const addFormation = useCallback(async (data: DonneesFormation): Promise<Formation> => {
@@ -355,15 +393,91 @@ export const FormationProProvider = ({ children }: { children: ReactNode }) => {
     return nouvelleFormation;
   }, [addFormation, duplicateNiveau]);
 
+  // ── Promotions ─────────────────────────────────────────────────────────
+  const addPromotion = useCallback(async (niveauId: string, data: DonneesPromotion): Promise<Promotion> => {
+    if (!schoolId) throw new Error('Non connecté à une école');
+    // La classe d'abord (elle porte l'effectif que Paiements/Présences/Emploi
+    // du temps/Portail utilisent déjà) — la promotion la référence ensuite.
+    const cls = await addClass({ name: data.name, studentLimit: data.studentLimit });
+    const { data: row, error } = await sb.from('fp_promotions').insert({
+      school_id: schoolId, niveau_id: niveauId, class_id: cls.id, rythme: data.rythme,
+      start_date: data.startDate || null, end_date: data.endDate || null,
+      status: data.status ?? 'active', description: data.description?.trim() || null,
+    }).select().single();
+    if (error) {
+      // La classe est créée mais la promotion a échoué : on la retire plutôt
+      // que de laisser une classe fantôme, invisible dans Formation professionnelle.
+      await deleteClass(cls.id).catch(() => {});
+      throw error;
+    }
+    const promo: Promotion = {
+      id: row.id, niveauId: row.niveau_id, classId: row.class_id, name: cls.name, studentLimit: cls.studentLimit,
+      rythme: row.rythme, startDate: row.start_date ?? undefined, endDate: row.end_date ?? undefined,
+      status: row.status, description: row.description ?? undefined, createdAt: row.created_at,
+    };
+    setPromotionsBrut(prev => [...prev, {
+      id: promo.id, niveauId: promo.niveauId, classId: promo.classId, rythme: promo.rythme,
+      startDate: promo.startDate, endDate: promo.endDate, status: promo.status,
+      description: promo.description, createdAt: promo.createdAt,
+    }]);
+    return promo;
+  }, [schoolId, addClass, deleteClass]);
+
+  const updatePromotion = useCallback(async (id: string, data: Partial<DonneesPromotion>): Promise<void> => {
+    if (!schoolId) return;
+    const promo = promotionsRef.current.find(p => p.id === id);
+    if (!promo) return;
+
+    if (data.name !== undefined || data.studentLimit !== undefined) {
+      await updateClass(promo.classId, {
+        name: data.name ?? classes.find(c => c.id === promo.classId)?.name ?? '',
+        studentLimit: data.studentLimit ?? classes.find(c => c.id === promo.classId)?.studentLimit ?? 0,
+      });
+    }
+    const patch: Record<string, unknown> = { updated_at: new Date().toISOString() };
+    if (data.rythme !== undefined) patch.rythme = data.rythme;
+    if (data.startDate !== undefined) patch.start_date = data.startDate || null;
+    if (data.endDate !== undefined) patch.end_date = data.endDate || null;
+    if (data.status !== undefined) patch.status = data.status;
+    if (data.description !== undefined) patch.description = data.description.trim() || null;
+    const { error } = await sb.from('fp_promotions').update(patch).eq('id', id).eq('school_id', schoolId);
+    if (error) throw error;
+    setPromotionsBrut(prev => prev.map(p => p.id === id
+      ? { ...p, rythme: data.rythme ?? p.rythme, startDate: data.startDate ?? p.startDate, endDate: data.endDate ?? p.endDate, status: data.status ?? p.status, description: data.description ?? p.description }
+      : p));
+  }, [schoolId, updateClass, classes]);
+
+  const deletePromotion = useCallback(async (id: string): Promise<void> => {
+    if (!schoolId) return;
+    const promo = promotionsRef.current.find(p => p.id === id);
+    if (!promo) return;
+    if (getStudentCountByClass(promo.classId) > 0) {
+      throw new Error('Cette promotion contient encore des élèves : réaffectez-les avant de la supprimer.');
+    }
+    const { error } = await sb.from('fp_promotions').delete().eq('id', id).eq('school_id', schoolId);
+    if (error) throw error;
+    await deleteClass(promo.classId);
+    setPromotionsBrut(prev => prev.filter(p => p.id !== id));
+  }, [schoolId, getStudentCountByClass, deleteClass]);
+
+  const duplicatePromotion = useCallback(async (sourceId: string, data: DonneesPromotion): Promise<Promotion> => {
+    const source = promotionsRef.current.find(p => p.id === sourceId);
+    if (!source) throw new Error('Promotion source introuvable');
+    // Jamais les élèves, jamais les notes — seulement le niveau et les réglages.
+    return addPromotion(source.niveauId, data);
+  }, [addPromotion]);
+
   const value = useMemo<FormationProContextType>(() => ({
-    loading, formations, niveaux, catalogue, niveauMatieres, choixGroups,
+    loading, formations, niveaux, catalogue, niveauMatieres, choixGroups, promotions,
     addFormation, updateFormation, deleteFormation, duplicateFormation,
     addNiveau, updateNiveau, deleteNiveau, duplicateNiveau,
+    addPromotion, updatePromotion, deletePromotion, duplicatePromotion,
     addMatiereToNiveau, updateNiveauMatiere, deleteNiveauMatiere,
     addChoixGroup, updateChoixGroup, deleteChoixGroup, addChoixOption, deleteChoixOption,
-  }), [loading, formations, niveaux, catalogue, niveauMatieres, choixGroups,
+  }), [loading, formations, niveaux, catalogue, niveauMatieres, choixGroups, promotions,
       addFormation, updateFormation, deleteFormation, duplicateFormation,
       addNiveau, updateNiveau, deleteNiveau, duplicateNiveau,
+      addPromotion, updatePromotion, deletePromotion, duplicatePromotion,
       addMatiereToNiveau, updateNiveauMatiere, deleteNiveauMatiere,
       addChoixGroup, updateChoixGroup, deleteChoixGroup, addChoixOption, deleteChoixOption]);
 

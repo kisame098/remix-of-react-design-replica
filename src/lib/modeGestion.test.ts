@@ -46,7 +46,8 @@ describe('menu par mode', () => {
     for (const r of RUBRIQUES_FORMATION_PRO) expect(r.description.length).toBeGreaterThan(20);
     const parTitre = new Map(RUBRIQUES_FORMATION_PRO.map(r => [r.title, r]));
     expect(parTitre.get('Formations')?.bientot).toBeUndefined();
-    for (const t of ['Promotions', 'Évaluations', 'Examens', 'Stages', 'Documents']) expect(parTitre.get(t)?.bientot).toBe(true);
+    expect(parTitre.get('Promotions')?.bientot).toBeUndefined();
+    for (const t of ['Évaluations', 'Examens', 'Stages', 'Documents']) expect(parTitre.get(t)?.bientot).toBe(true);
   });
 
   it('adresses uniques, permissions valides', () => {

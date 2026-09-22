@@ -240,3 +240,98 @@ export const analyserImport = (brut: unknown): FormationExport | null => {
 // porte un coefficient — matière d'un niveau, créneau au choix, import qui en
 // fixe en bloc — est réservé au seul compte admin_school (directeur général).
 export const peutGererMatieres = (accountRole: string | null | undefined): boolean => accountRole === 'admin';
+
+// ═══════════════════════════════════════════════════════════════════════════
+// PROMOTIONS (étape 2)
+//
+// Une promotion représente les élèves qui suivent, ensemble, le programme
+// d'UN niveau. Plutôt que reconstruire à côté l'inscription, les paiements,
+// les présences, l'emploi du temps et le portail élève — qui marchent déjà
+// très bien sans rien savoir de Cursus, juste à partir d'une classe —, une
+// promotion EN CRÉE une et la possède (`classId`). C'est cette classe que ces
+// modules continuent d'utiliser, sans changement.
+// ═══════════════════════════════════════════════════════════════════════════
+
+export type RythmePromotion = 'jour' | 'soir';
+export type StatutPromotion = 'a_venir' | 'active' | 'terminee' | 'archivee';
+
+export const LIBELLES_RYTHME: Record<RythmePromotion, string> = { jour: 'Jour', soir: 'Soir' };
+
+export const LIBELLES_STATUT_PROMOTION: Record<StatutPromotion, string> = {
+  a_venir: 'À venir',
+  active: 'Active',
+  terminee: 'Terminée',
+  archivee: 'Archivée',
+};
+
+export interface Promotion {
+  id: string;
+  niveauId: string;
+  /** La classe qui porte réellement l'effectif, les paiements, les présences, l'emploi du temps. */
+  classId: string;
+  /** Dénormalisés à la lecture, pour l'affichage — jamais retapés à la main. */
+  name: string;
+  studentLimit: number;
+  rythme: RythmePromotion;
+  startDate?: string;
+  endDate?: string;
+  status: StatutPromotion;
+  description?: string;
+  createdAt: string;
+}
+
+export const nomPromotionValide = (name: string): boolean => name.trim() !== '';
+
+/** La fin ne peut pas précéder le début — silencieux si l'une des deux dates manque. */
+export const datesPromotionValides = (startDate?: string, endDate?: string): boolean =>
+  !startDate || !endDate || startDate <= endDate;
+
+const MOIS_COURTS = [
+  'janvier', 'février', 'mars', 'avril', 'mai', 'juin',
+  'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre',
+];
+
+/** « CAP 1 — Promo Septembre 2026 » à partir du niveau et d'une date de début — juste une suggestion, l'école la modifie. */
+export const suggererNomPromotion = (niveauName: string, startDate?: string): string => {
+  if (!startDate) return niveauName;
+  const m = /^(\d{4})-(\d{2})-\d{2}$/.exec(startDate);
+  if (!m) return niveauName;
+  const mois = MOIS_COURTS[Number(m[2]) - 1];
+  if (!mois) return niveauName;
+  return `${niveauName} — Promo ${mois.charAt(0).toUpperCase()}${mois.slice(1)} ${m[1]}`;
+};
+
+export const triPromotions = (promotions: Promotion[]): Promotion[] =>
+  [...promotions].sort((a, b) => (b.startDate ?? '').localeCompare(a.startDate ?? '') || a.name.localeCompare(b.name, 'fr'));
+
+// ─── Regroupement pour l'écran (formation → niveau → promotions) ──────────
+export interface GroupeNiveauPromotions {
+  niveau: Niveau;
+  promotions: Promotion[];
+}
+export interface GroupeFormationPromotions {
+  formation: Formation;
+  niveaux: GroupeNiveauPromotions[];
+}
+
+export const grouperPromotions = (
+  promotions: Promotion[], niveaux: Niveau[], formations: Formation[],
+): GroupeFormationPromotions[] => {
+  const parNiveauId = new Map<string, Promotion[]>();
+  for (const p of triPromotions(promotions)) {
+    parNiveauId.set(p.niveauId, [...(parNiveauId.get(p.niveauId) ?? []), p]);
+  }
+  const niveauxAvecPromotion = triNiveaux(niveaux.filter(n => parNiveauId.has(n.id)));
+
+  const parFormationId = new Map<string, Niveau[]>();
+  for (const n of niveauxAvecPromotion) {
+    parFormationId.set(n.formationId, [...(parFormationId.get(n.formationId) ?? []), n]);
+  }
+
+  return triFormations(formations.filter(f => parFormationId.has(f.id))).map(formation => ({
+    formation,
+    niveaux: (parFormationId.get(formation.id) ?? []).map(niveau => ({
+      niveau, promotions: parNiveauId.get(niveau.id) ?? [],
+    })),
+  }));
+};
