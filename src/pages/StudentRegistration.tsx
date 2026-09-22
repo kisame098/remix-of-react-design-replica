@@ -11,6 +11,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useSchool, Tutor } from '@/contexts/SchoolContext';
+import { useAuth } from '@/contexts/AuthContext';
+import { estFormationPro } from '@/lib/modeGestion';
 import { useSchoolYear } from '@/contexts/SchoolYearContext';
 import { useToast } from '@/hooks/use-toast';
 import { useFicheInscription } from '@/hooks/useFicheInscription';
@@ -228,6 +230,8 @@ const StudentRegistration = () => {
     generateStudentId, findStudentByUniqueId, reEnrollStudent,
     resolveFiliereChoice, setFacultativeActive,
   } = useSchool();
+  const { school } = useAuth();
+  const modeFormationPro = estFormationPro(school);
   const { currentYear } = useSchoolYear();
   const { toast } = useToast();
   const { montrerFiche, dialogueFiche } = useFicheInscription();
@@ -722,21 +726,27 @@ const StudentRegistration = () => {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <GraduationCap className="w-5 h-5 text-primary" />
-                Classe
+                {modeFormationPro ? 'Promotion' : 'Classe'}
               </CardTitle>
-              <CardDescription>Sélectionnez la classe de l'élève pour cette année</CardDescription>
+              <CardDescription>
+                {modeFormationPro ? "Sélectionnez la promotion de l'élève pour cette année" : "Sélectionnez la classe de l'élève pour cette année"}
+              </CardDescription>
             </CardHeader>
             <CardContent>
               {classes.length === 0 ? (
                 <div className="text-center py-8 text-muted-foreground">
                   <GraduationCap className="w-12 h-12 mx-auto mb-3 opacity-50" />
-                  <p>Aucune classe disponible pour cette année.</p>
-                  <p className="text-sm">Veuillez d'abord créer des classes dans "Gestion Classe".</p>
+                  <p>{modeFormationPro ? 'Aucune promotion disponible pour cette année.' : 'Aucune classe disponible pour cette année.'}</p>
+                  <p className="text-sm">
+                    {modeFormationPro
+                      ? 'Veuillez d\'abord créer une promotion dans « Formation professionnelle → Promotions ».'
+                      : 'Veuillez d\'abord créer des classes dans "Gestion Classe".'}
+                  </p>
                 </div>
               ) : availableClasses.length === 0 ? (
                 <div className="text-center py-8 text-muted-foreground">
                   <GraduationCap className="w-12 h-12 mx-auto mb-3 opacity-50" />
-                  <p>Toutes les classes sont pleines.</p>
+                  <p>{modeFormationPro ? 'Toutes les promotions sont pleines.' : 'Toutes les classes sont pleines.'}</p>
                 </div>
               ) : (
                 <Select
@@ -745,7 +755,7 @@ const StudentRegistration = () => {
                   disabled={isSubmitting}
                 >
                   <SelectTrigger className="w-full md:w-1/2">
-                    <SelectValue placeholder="Sélectionner une classe" />
+                    <SelectValue placeholder={modeFormationPro ? 'Sélectionner une promotion' : 'Sélectionner une classe'} />
                   </SelectTrigger>
                   <SelectContent>
                     {availableClasses.map(cls => {

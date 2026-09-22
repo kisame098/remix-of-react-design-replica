@@ -209,3 +209,140 @@ describe('garde-fous — sécurité entre écoles et isolation du module', () =>
     expect(sql).toMatch(/unique \(niveau_id, matiere_id\)/);
   });
 });
+
+// ════════════════════════════════════════════════════════════════════════════
+// PROMOTIONS (étape 2) — une promotion possède une classe classique (nom,
+// effectif) pour que Paiements/Présences/Emploi du temps/Portail continuent
+// de fonctionner sans rien savoir de Formation professionnelle.
+// ════════════════════════════════════════════════════════════════════════════
+
+import {
+  nomPromotionValide, datesPromotionValides, suggererNomPromotion, triPromotions, grouperPromotions,
+  LIBELLES_RYTHME, LIBELLES_STATUT_PROMOTION, type Promotion,
+} from './formationPro';
+
+const promotion = (o: Partial<Promotion> = {}): Promotion => ({
+  id: 'p1', niveauId: 'n1', classId: 'c1', name: 'CAP 1 — Promo Septembre 2026', studentLimit: 30,
+  rythme: 'jour', status: 'active', createdAt: '2026-01-01T00:00:00Z', ...o,
+});
+
+describe('validation de la promotion', () => {
+  it('le nom ne peut pas être vide', () => {
+    expect(nomPromotionValide('CAP 1A')).toBe(true);
+    expect(nomPromotionValide('  ')).toBe(false);
+  });
+
+  it('la fin ne peut pas précéder le début, mais une date manquante ne bloque rien', () => {
+    expect(datesPromotionValides('2026-09-01', '2027-06-30')).toBe(true);
+    expect(datesPromotionValides('2027-06-30', '2026-09-01')).toBe(false);
+    expect(datesPromotionValides(undefined, '2027-06-30')).toBe(true);
+    expect(datesPromotionValides('2026-09-01', undefined)).toBe(true);
+    expect(datesPromotionValides(undefined, undefined)).toBe(true);
+  });
+});
+
+describe('suggererNomPromotion — une suggestion, jamais une obligation', () => {
+  it('compose le niveau et le mois/année de la date de début', () => {
+    expect(suggererNomPromotion('CAP 1', '2026-09-01')).toBe('CAP 1 — Promo Septembre 2026');
+    expect(suggererNomPromotion('Cycle unique', '2027-01-15')).toBe('Cycle unique — Promo Janvier 2027');
+  });
+  it('sans date, ou avec une date illisible, on retombe sur le seul nom du niveau', () => {
+    expect(suggererNomPromotion('CAP 1', undefined)).toBe('CAP 1');
+    expect(suggererNomPromotion('CAP 1', 'pas-une-date')).toBe('CAP 1');
+  });
+});
+
+describe('triPromotions — la plus récente d\'abord', () => {
+  it('trie par date de début décroissante, puis par nom', () => {
+    const p = [
+      promotion({ id: 'a', startDate: '2025-09-01', name: 'CAP 1A' }),
+      promotion({ id: 'b', startDate: '2026-09-01', name: 'CAP 1A' }),
+      promotion({ id: 'c', startDate: '2026-09-01', name: 'CAP 1B' }),
+    ];
+    expect(triPromotions(p).map(x => x.id)).toEqual(['b', 'c', 'a']);
+  });
+});
+
+describe('grouperPromotions — formation → niveau → promotions, pour l\'écran', () => {
+  const formations = [
+    { id: 'f1', name: 'CAP Restauration', active: true, ordering: 0, createdAt: '' },
+    { id: 'f2', name: 'BEP Hôtellerie', active: true, ordering: 1, createdAt: '' },
+  ];
+  const niveaux = [
+    { id: 'n1', formationId: 'f1', name: 'CAP 1', ordering: 0, createdAt: '' },
+    { id: 'n2', formationId: 'f1', name: 'CAP 2', ordering: 1, createdAt: '' },
+    { id: 'n3', formationId: 'f2', name: 'BEP 1', ordering: 0, createdAt: '' },
+  ];
+
+  it('un niveau sans promotion n\'apparaît pas ; les formations sans promotion non plus', () => {
+    const groupes = grouperPromotions([promotion({ niveauId: 'n1' })], niveaux, formations);
+    expect(groupes).toHaveLength(1);
+    expect(groupes[0].formation.name).toBe('CAP Restauration');
+    expect(groupes[0].niveaux).toHaveLength(1);
+    expect(groupes[0].niveaux[0].niveau.name).toBe('CAP 1');
+  });
+
+  it('deux promotions du même niveau sont regroupées ensemble', () => {
+    const groupes = grouperPromotions(
+      [promotion({ id: 'a', niveauId: 'n1', name: 'CAP 1A' }), promotion({ id: 'b', niveauId: 'n1', name: 'CAP 1B' })],
+      niveaux, formations,
+    );
+    expect(groupes[0].niveaux[0].promotions.map(p => p.id)).toEqual(expect.arrayContaining(['a', 'b']));
+  });
+
+  it('deux formations différentes donnent deux groupes distincts', () => {
+    const groupes = grouperPromotions(
+      [promotion({ id: 'a', niveauId: 'n1' }), promotion({ id: 'b', niveauId: 'n3' })],
+      niveaux, formations,
+    );
+    expect(groupes.map(g => g.formation.name)).toEqual(['BEP Hôtellerie', 'CAP Restauration']);
+  });
+
+  it('aucune promotion → aucun groupe', () => {
+    expect(grouperPromotions([], niveaux, formations)).toEqual([]);
+  });
+});
+
+describe('libellés', () => {
+  it('rythme et statut ont un libellé pour chaque valeur', () => {
+    expect(LIBELLES_RYTHME.jour).toBe('Jour');
+    expect(LIBELLES_RYTHME.soir).toBe('Soir');
+    expect(Object.keys(LIBELLES_STATUT_PROMOTION)).toEqual(['a_venir', 'active', 'terminee', 'archivee']);
+  });
+});
+
+describe('garde-fous — promotions : isolation entre écoles et suppression sans perte', () => {
+  const sql = readFileSync('docs/sql/formation_pro_promotions.sql', 'utf8');
+  it('la table filtre par school_id (isolation entre écoles)', () => {
+    expect(sql).toContain('create table if not exists public.fp_promotions');
+    expect(sql).toContain('school_id = get_my_school_id()');
+  });
+  it('une promotion ne peut référencer qu\'une seule classe (unique), et un niveau utilisé ne se supprime pas', () => {
+    expect(sql).toMatch(/class_id\s+uuid not null unique/);
+    expect(sql).toMatch(/niveau_id\s+uuid not null references public\.fp_niveaux\(id\) on delete restrict/);
+  });
+  it('supprimer une promotion vérifie d\'abord qu\'elle n\'a plus d\'élève (comme une classe classique)', () => {
+    const contexte = readFileSync('src/contexts/FormationProContext.tsx', 'utf8');
+    expect(contexte).toContain('getStudentCountByClass(promo.classId) > 0');
+  });
+});
+
+describe('garde-fous — inscription des élèves adaptée au mode formation professionnelle', () => {
+  const source = readFileSync('src/pages/StudentRegistration.tsx', 'utf8');
+
+  it('utilise estFormationPro pour distinguer « classe » et « promotion », sans dupliquer la logique de mode', () => {
+    expect(source).toContain("import { estFormationPro } from '@/lib/modeGestion'");
+    expect(source).toContain('modeFormationPro');
+  });
+
+  it('le vocabulaire « promotion » apparaît pour l\'école en formation professionnelle', () => {
+    expect(source).toContain("'Formation professionnelle → Promotions'".replace(/'/g, '')); // tolère guillemets doubles
+    expect(source).toMatch(/formation professionnelle.*Promotions/i);
+  });
+
+  it('le formulaire reste un simple `classId` — aucune nouvelle branche d\'écriture en base pour la formation pro', () => {
+    // L'inscription elle-même n'a pas changé : une promotion EST une classe.
+    expect(source).toContain('formData.classId');
+    expect(source).not.toMatch(/promotionId/);
+  });
+});
