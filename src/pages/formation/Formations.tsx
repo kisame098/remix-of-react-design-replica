@@ -14,13 +14,14 @@ import {
   AlertDialogDescription, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import {
-  Plus, Trash2, Loader2, Pencil, GraduationCap, Copy, Download, Upload, Clock,
+  Plus, Trash2, Loader2, Pencil, GraduationCap, Copy, Download, Upload, Clock, Layers,
 } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import {
   type FormationBloc, type FormationMatiere, type FormationMatiereType, type FormationMatiereNature,
   NATURE_LABELS, totauxBloc, nomBlocValide, coefficientValide, volumeHoraireValide, nomMatiereDejaPris,
-  libelleBloc, triBlocs, construireExport, analyserImport, peutGererMatieres,
+  libelleBloc, construireExport, analyserImport, peutGererMatieres,
+  grouperBlocsParFormation, nomsDeMatieresConnus,
 } from '@/lib/formationPro';
 
 type RowKind = 'obligatoire' | 'facultative' | 'choix';
@@ -33,12 +34,16 @@ const Formations = () => {
   const estDirecteur = peutGererMatieres(accountRole);
   const {
     loading, blocs, matieres, choixGroups,
-    addBloc, updateBloc, deleteBloc, duplicateBloc,
+    addBloc, updateBloc, deleteBloc, duplicateBloc, duplicateFormation,
     addMatiere, updateMatiere, deleteMatiere,
     addChoixGroup, updateChoixGroup, deleteChoixGroup, addChoixOption, deleteChoixOption,
   } = useFormationPro();
 
-  const blocsTries = useMemo(() => triBlocs(blocs), [blocs]);
+  // Un bloc reste un bloc en base — c'est l'écran qui rassemble « CAP
+  // Restauration — Année 1/2/3 » sous un même intitulé, pour qu'une école à
+  // 7-10 formations garde une liste qu'on comprend d'un coup d'œil.
+  const groupes = useMemo(() => grouperBlocsParFormation(blocs), [blocs]);
+  const matieresConnues = useMemo(() => nomsDeMatieresConnus(matieres), [matieres]);
 
   // ── Export / import ──────────────────────────────────────────────────────
   const handleExport = () => {
@@ -62,7 +67,10 @@ const Formations = () => {
     for (const b of data.blocs) {
       const cle = `${b.formationName.trim().toLowerCase()}::${b.anneeLabel.trim().toLowerCase()}`;
       if (existants.has(cle)) continue;   // bloc déjà présent : on ne l'écrase jamais
-      const nouveau = await addBloc({ formationName: b.formationName, anneeLabel: b.anneeLabel, diplome: b.diplome, duree: b.duree, description: b.description });
+      const nouveau = await addBloc({
+        formationName: b.formationName, anneeLabel: b.anneeLabel, diplome: b.diplome, duree: b.duree,
+        niveauEntree: b.niveauEntree, description: b.description,
+      });
       nbBlocs++;
       for (const m of b.matieres) {
         await addMatiere(nouveau.id, { type: m.type, name: m.name, coefficient: m.coefficient, volumeHoraire: m.volumeHoraire, nature: m.nature });
@@ -116,46 +124,72 @@ const Formations = () => {
     }
   };
 
-  // ── Créer / modifier / dupliquer un bloc ─────────────────────────────────
-  type BlocDialogState = { kind: 'create' } | { kind: 'edit'; blocId: string } | { kind: 'duplicate'; sourceId: string };
+  // ── Créer / modifier / dupliquer un bloc, ou dupliquer toute une formation ──
+  type BlocDialogState =
+    | { kind: 'create' } | { kind: 'edit'; blocId: string } | { kind: 'duplicate'; sourceId: string }
+    | { kind: 'duplicate-formation'; sourceFormationName: string; nbBlocs: number };
   const [blocDialog, setBlocDialog] = useState<BlocDialogState | null>(null);
   const [formationName, setFormationName] = useState('');
   const [anneeLabel, setAnneeLabel] = useState('');
   const [diplome, setDiplome] = useState('');
   const [duree, setDuree] = useState('');
+  const [niveauEntree, setNiveauEntree] = useState('');
   const [description, setDescription] = useState('');
   const [isSavingBloc, setIsSavingBloc] = useState(false);
 
-  const resetBlocForm = () => { setFormationName(''); setAnneeLabel(''); setDiplome(''); setDuree(''); setDescription(''); setBlocDialog(null); };
-  const openCreateBloc = () => { setFormationName(''); setAnneeLabel(''); setDiplome(''); setDuree(''); setDescription(''); setBlocDialog({ kind: 'create' }); };
-  const openEditBloc = (bloc: FormationBloc) => {
-    setFormationName(bloc.formationName); setAnneeLabel(bloc.anneeLabel);
-    setDiplome(bloc.diplome ?? ''); setDuree(bloc.duree ?? ''); setDescription(bloc.description ?? '');
-    setBlocDialog({ kind: 'edit', blocId: bloc.id });
+  const remplirFormulaireBloc = (b?: Partial<FormationBloc>) => {
+    setFormationName(b?.formationName ?? ''); setAnneeLabel(b?.anneeLabel ?? '');
+    setDiplome(b?.diplome ?? ''); setDuree(b?.duree ?? ''); setNiveauEntree(b?.niveauEntree ?? ''); setDescription(b?.description ?? '');
   };
+  const resetBlocForm = () => { remplirFormulaireBloc(); setBlocDialog(null); };
+  const openCreateBloc = () => { remplirFormulaireBloc(); setBlocDialog({ kind: 'create' }); };
+  const openEditBloc = (bloc: FormationBloc) => { remplirFormulaireBloc(bloc); setBlocDialog({ kind: 'edit', blocId: bloc.id }); };
   const openDuplicateBloc = (bloc: FormationBloc) => {
-    setFormationName(bloc.formationName); setAnneeLabel('');
-    setDiplome(bloc.diplome ?? ''); setDuree(bloc.duree ?? ''); setDescription(bloc.description ?? '');
+    remplirFormulaireBloc({ ...bloc, anneeLabel: '' });
     setBlocDialog({ kind: 'duplicate', sourceId: bloc.id });
+  };
+  /** Copie CAP 1/2/3 vers DAP 1/2/3 en un clic — les libellés d'année ne changent pas. */
+  const openDuplicateFormation = (formationDeReference: FormationBloc, nbBlocs: number) => {
+    remplirFormulaireBloc({ ...formationDeReference, anneeLabel: '' });
+    setBlocDialog({ kind: 'duplicate-formation', sourceFormationName: formationDeReference.formationName, nbBlocs });
   };
 
   const handleSaveBloc = async () => {
-    if (!blocDialog || !nomBlocValide(formationName, anneeLabel)) {
-      toast({ title: 'Erreur', description: 'Le nom de la formation et le libellé de l\'année sont obligatoires.', variant: 'destructive' });
+    if (!blocDialog) return;
+    const estFormationEntiere = blocDialog.kind === 'duplicate-formation';
+    if (estFormationEntiere ? !formationName.trim() : !nomBlocValide(formationName, anneeLabel)) {
+      toast({
+        title: 'Erreur',
+        description: estFormationEntiere ? 'Le nom de la nouvelle formation est obligatoire.' : "Le nom de la formation et le libellé de l'année sont obligatoires.",
+        variant: 'destructive',
+      });
       return;
     }
     setIsSavingBloc(true);
     try {
-      const data = { formationName: formationName.trim(), anneeLabel: anneeLabel.trim(), diplome: diplome.trim() || undefined, duree: duree.trim() || undefined, description: description.trim() || undefined };
+      const data = {
+        formationName: formationName.trim(), anneeLabel: anneeLabel.trim(),
+        diplome: diplome.trim() || undefined, duree: duree.trim() || undefined,
+        niveauEntree: niveauEntree.trim() || undefined, description: description.trim() || undefined,
+      };
       if (blocDialog.kind === 'create') {
         await addBloc(data);
         toast({ title: 'Bloc créé', description: libelleBloc(data) });
       } else if (blocDialog.kind === 'edit') {
         await updateBloc(blocDialog.blocId, data);
         toast({ title: 'Bloc modifié' });
-      } else {
+      } else if (blocDialog.kind === 'duplicate') {
         const nouveau = await duplicateBloc(blocDialog.sourceId, data);
         toast({ title: 'Bloc dupliqué', description: `« ${libelleBloc(nouveau)} » créé avec le même contenu — l'original n'a pas changé.` });
+      } else {
+        const crees = await duplicateFormation(blocDialog.sourceFormationName, {
+          formationName: data.formationName, diplome: data.diplome, duree: data.duree,
+          niveauEntree: data.niveauEntree, description: data.description,
+        });
+        toast({
+          title: 'Formation dupliquée',
+          description: `« ${data.formationName} » créée avec ${crees.length} niveau${crees.length > 1 ? 'x' : ''} (${crees.map(c => c.anneeLabel).join(', ')}) — « ${blocDialog.sourceFormationName} » n'a pas changé.`,
+        });
       }
       resetBlocForm();
     } catch (err) {
@@ -317,7 +351,7 @@ const Formations = () => {
         <div className="flex items-center justify-center py-16 text-muted-foreground gap-2">
           <Loader2 className="h-5 w-5 animate-spin" />Chargement…
         </div>
-      ) : blocsTries.length === 0 ? (
+      ) : blocs.length === 0 ? (
         <Card className="border-dashed">
           <CardContent className="py-16 text-center">
             <GraduationCap className="w-16 h-16 mx-auto mb-4 text-muted-foreground/50" />
@@ -334,8 +368,28 @@ const Formations = () => {
           </CardContent>
         </Card>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          {blocsTries.map(bloc => {
+        <div className="space-y-8">
+          {groupes.map(groupe => {
+            const reference = groupe.blocs[0];
+            return (
+            <section key={groupe.formationName}>
+              <div className="flex items-center justify-between gap-3 mb-3 flex-wrap">
+                <div className="flex items-baseline gap-2 flex-wrap min-w-0">
+                  <h2 className="text-base font-semibold text-foreground truncate">{groupe.formationName}</h2>
+                  <span className="text-xs text-muted-foreground">
+                    {groupe.blocs.length} niveau{groupe.blocs.length > 1 ? 'x' : ''}
+                    {reference.diplome ? ` · ${reference.diplome}` : ''}
+                    {reference.niveauEntree ? ` · Entrée : ${reference.niveauEntree}` : ''}
+                  </span>
+                </div>
+                {estDirecteur && (
+                  <Button variant="ghost" size="sm" className="gap-1.5 flex-shrink-0" onClick={() => openDuplicateFormation(reference, groupe.blocs.length)}>
+                    <Layers className="h-3.5 w-3.5" />Dupliquer toute la formation
+                  </Button>
+                )}
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              {groupe.blocs.map(bloc => {
             const mats = matieres.filter(m => m.blocId === bloc.id).sort((a, b) => a.ordering - b.ordering);
             const choix = choixGroups.filter(c => c.blocId === bloc.id).sort((a, b) => a.ordering - b.ordering);
             const totaux = totauxBloc(mats, choix);
@@ -377,8 +431,8 @@ const Formations = () => {
                 <CardHeader className="pb-3">
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0">
-                      <CardTitle className="text-base truncate">{bloc.formationName}</CardTitle>
-                      <p className="text-xs text-muted-foreground mt-0.5">{bloc.anneeLabel}{bloc.diplome ? ` · ${bloc.diplome}` : ''}</p>
+                      <CardTitle className="text-base truncate">{bloc.anneeLabel}</CardTitle>
+                      {bloc.niveauEntree && <p className="text-xs text-muted-foreground mt-0.5 truncate">Entrée : {bloc.niveauEntree}</p>}
                     </div>
                     <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 flex-shrink-0">
                       <Button variant="ghost" size="icon" className="h-6 w-6" title="Modifier" onClick={() => openEditBloc(bloc)}>
@@ -462,47 +516,71 @@ const Formations = () => {
                 </CardContent>
               </Card>
             );
+              })}
+              </div>
+            </section>
+            );
           })}
         </div>
       )}
 
-      {/* ── Créer / modifier / dupliquer un bloc ── */}
+      {/* ── Créer / modifier / dupliquer un bloc, ou toute une formation ── */}
       <Dialog open={blocDialog !== null} onOpenChange={(open) => !open && resetBlocForm()}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>
-              {blocDialog?.kind === 'edit' ? 'Modifier le bloc' : blocDialog?.kind === 'duplicate' ? 'Dupliquer le bloc' : 'Nouveau bloc'}
+              {blocDialog?.kind === 'edit' ? 'Modifier le bloc'
+                : blocDialog?.kind === 'duplicate' ? 'Dupliquer le bloc'
+                : blocDialog?.kind === 'duplicate-formation' ? 'Dupliquer toute la formation'
+                : 'Nouveau bloc'}
             </DialogTitle>
             {blocDialog?.kind === 'duplicate' && (
               <DialogDescription>Copie les matières et créneaux au choix du bloc d'origine — celui-ci n'est pas modifié.</DialogDescription>
             )}
+            {blocDialog?.kind === 'duplicate-formation' && (
+              <DialogDescription>
+                Copie les {blocDialog.nbBlocs} niveau{blocDialog.nbBlocs > 1 ? 'x' : ''} de « {blocDialog.sourceFormationName} »
+                (matières, coefficients, créneaux au choix) vers une formation neuve, sous les mêmes libellés d'année —
+                « {blocDialog.sourceFormationName} » n'est pas modifiée.
+              </DialogDescription>
+            )}
           </DialogHeader>
           <div className="space-y-4 pt-2">
             <div className="space-y-2">
-              <Label>Formation *</Label>
-              <Input placeholder="Ex : CAP Restauration" value={formationName} onChange={e => setFormationName(e.target.value)} />
+              <Label htmlFor="bloc-formation">
+                {blocDialog?.kind === 'duplicate-formation' ? 'Nom de la nouvelle formation *' : 'Formation *'}
+              </Label>
+              <Input id="bloc-formation" placeholder="Ex : CAP Restauration" value={formationName} onChange={e => setFormationName(e.target.value)} />
             </div>
-            <div className="space-y-2">
-              <Label>Année / cycle *</Label>
-              <Input placeholder="Ex : Année 1, Cycle unique…" value={anneeLabel} onChange={e => setAnneeLabel(e.target.value)} />
-            </div>
+            {blocDialog?.kind !== 'duplicate-formation' && (
+              <div className="space-y-2">
+                <Label htmlFor="bloc-annee">Année / cycle *</Label>
+                <Input id="bloc-annee" placeholder="Ex : Année 1, Cycle unique…" value={anneeLabel} onChange={e => setAnneeLabel(e.target.value)} />
+              </div>
+            )}
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-2">
-                <Label>Diplôme (optionnel)</Label>
-                <Input placeholder="Ex : Diplôme d'État" value={diplome} onChange={e => setDiplome(e.target.value)} />
+                <Label htmlFor="bloc-diplome">Diplôme (optionnel)</Label>
+                <Input id="bloc-diplome" placeholder="Ex : Diplôme d'État" value={diplome} onChange={e => setDiplome(e.target.value)} />
               </div>
               <div className="space-y-2">
-                <Label>Durée (optionnel)</Label>
-                <Input placeholder="Ex : 3 ans, 6 mois…" value={duree} onChange={e => setDuree(e.target.value)} />
+                <Label htmlFor="bloc-duree">Durée (optionnel)</Label>
+                <Input id="bloc-duree" placeholder="Ex : 3 ans, 6 mois…" value={duree} onChange={e => setDuree(e.target.value)} />
               </div>
             </div>
             <div className="space-y-2">
-              <Label>Description (optionnel)</Label>
-              <Textarea placeholder="Ex : coefficients confirmés par le relevé DECPC 2022…" value={description} onChange={e => setDescription(e.target.value)} rows={2} />
+              <Label htmlFor="bloc-niveau-entree">Niveau d'entrée (optionnel)</Label>
+              <Input id="bloc-niveau-entree" placeholder="Ex : CM2 à 4e secondaire, BFEM requis…" value={niveauEntree} onChange={e => setNiveauEntree(e.target.value)} />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="bloc-description">Description (optionnel)</Label>
+              <Textarea id="bloc-description" placeholder="Ex : coefficients confirmés par le relevé DECPC 2022…" value={description} onChange={e => setDescription(e.target.value)} rows={2} />
             </div>
             <Button onClick={handleSaveBloc} className="w-full" disabled={isSavingBloc}>
               {isSavingBloc && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-              {blocDialog?.kind === 'edit' ? 'Enregistrer' : blocDialog?.kind === 'duplicate' ? 'Dupliquer' : 'Créer'}
+              {blocDialog?.kind === 'edit' ? 'Enregistrer'
+                : blocDialog?.kind === 'duplicate' || blocDialog?.kind === 'duplicate-formation' ? 'Dupliquer'
+                : 'Créer'}
             </Button>
           </div>
         </DialogContent>
@@ -546,8 +624,17 @@ const Formations = () => {
             </RadioGroup>
 
             <div className="space-y-2">
-              <Label>{rowType === 'choix' ? 'Libellé du créneau (ex : LV2)' : 'Nom de la matière'} *</Label>
-              <Input value={rowName} onChange={e => setRowName(e.target.value)} placeholder={rowType === 'choix' ? 'Ex : Option' : 'Ex : TP Cuisine'} />
+              <Label htmlFor="row-name">{rowType === 'choix' ? 'Libellé du créneau (ex : LV2)' : 'Nom de la matière'} *</Label>
+              <Input
+                id="row-name" value={rowName} onChange={e => setRowName(e.target.value)}
+                placeholder={rowType === 'choix' ? 'Ex : Option' : 'Ex : TP Cuisine'}
+                list={rowType === 'choix' ? undefined : 'matieres-connues'}
+              />
+              {rowType !== 'choix' && (
+                <datalist id="matieres-connues">
+                  {matieresConnues.map(n => <option key={n} value={n} />)}
+                </datalist>
+              )}
             </div>
 
             <div className="grid grid-cols-2 gap-3">
@@ -654,12 +741,12 @@ const Formations = () => {
 // coefficients du CAP sont confirmés par un relevé de notes officiel DECPC
 // (session 2022) — signalé dans la description, jamais dans un calcul.
 const MODELES_IFHO: {
-  formationName: string; anneeLabel: string; diplome?: string; duree?: string; description: string;
+  formationName: string; anneeLabel: string; diplome?: string; duree?: string; niveauEntree?: string; description: string;
   matieres: { type: FormationMatiereType; name: string; coefficient: number; volumeHoraire?: number; nature: FormationMatiereNature }[];
   choixGroups: { label: string; coefficient: number; options: string[] }[];
 }[] = [
   {
-    formationName: 'CAP Restauration', anneeLabel: 'Année 1', diplome: "Diplôme d'État", duree: '3 ans',
+    formationName: 'CAP Restauration', anneeLabel: 'Année 1', diplome: "Diplôme d'État", duree: '3 ans', niveauEntree: 'CM2 à 4e secondaire',
     description: 'Coefficients confirmés par un relevé de notes officiel DECPC (session 2022).',
     matieres: [
       { type: 'obligatoire', name: 'Français', coefficient: 1, volumeHoraire: 60, nature: 'theorique' },
@@ -676,7 +763,7 @@ const MODELES_IFHO: {
     choixGroups: [],
   },
   {
-    formationName: 'BEP Hôtellerie-Restauration', anneeLabel: 'Année 1', diplome: "Diplôme d'État", duree: '2 ans',
+    formationName: 'BEP Hôtellerie-Restauration', anneeLabel: 'Année 1', diplome: "Diplôme d'État", duree: '2 ans', niveauEntree: 'BFEM requis',
     description: "Coefficients en partie confirmés par un bulletin IFHO transmis ; les autres sont proposés, à valider auprès de la DECPC. Le total d'heures indicatif transmis (1 035 h) diffère légèrement de la somme des matières.",
     matieres: [
       { type: 'obligatoire', name: 'Français / Communication', coefficient: 1, volumeHoraire: 60, nature: 'theorique' },
@@ -700,7 +787,7 @@ const MODELES_IFHO: {
     choixGroups: [],
   },
   {
-    formationName: 'BT Hôtellerie-Tourisme', anneeLabel: 'Année 1', diplome: "Diplôme d'État", duree: '2 ans',
+    formationName: 'BT Hôtellerie-Tourisme', anneeLabel: 'Année 1', diplome: "Diplôme d'État", duree: '2 ans', niveauEntree: 'BAC requis',
     description: "Coefficients proposés (maquette interne), à valider auprès de la DECPC.",
     matieres: [
       { type: 'obligatoire', name: 'Français', coefficient: 2, volumeHoraire: 60, nature: 'theorique' },
@@ -727,7 +814,7 @@ const MODELES_IFHO: {
     choixGroups: [],
   },
   {
-    formationName: 'DTS Gestion Hôtelière', anneeLabel: 'Année 1', diplome: 'Diplôme de l\'établissement', duree: '2 ans',
+    formationName: 'DTS Gestion Hôtelière', anneeLabel: 'Année 1', diplome: 'Diplôme de l\'établissement', duree: '2 ans', niveauEntree: 'Terminale',
     description: "Coefficients proposés (maquette interne), à valider auprès de la DECPC. Le total d'heures indicatif transmis (1 525 h) diffère légèrement de la somme des matières.",
     matieres: [
       { type: 'obligatoire', name: 'Communication professionnelle', coefficient: 2, volumeHoraire: 60, nature: 'theorique' },
