@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import {
   menuPourMode, modeDeLEcole, estFormationPro, RUBRIQUES_FORMATION_PRO, URLS_CLASSIQUES_MASQUEES,
+  urlMenuActive,
 } from './modeGestion';
 import { ALL_PERMISSION_KEYS } from './permissions';
 
@@ -79,5 +80,30 @@ describe('garde-fous — routes', () => {
     // aucune autre page ne l'écrit, en particulier pas par updateSchoolSettings
     const AUTRES = ['src/pages/Settings.tsx', 'src/contexts/AuthContext.tsx'];
     for (const f of AUTRES) expect(readFileSync(f, 'utf8')).not.toMatch(/management_mode\s*[:=]\s*['"]/);
+  });
+});
+
+describe('urlMenuActive — une seule rubrique allumée, même quand deux URLs se chevauchent', () => {
+  const formation = menuPourMode('formation_pro');
+
+  it('sur une page profonde du module Formations, seule « Formations » s\'allume (pas « Vue d\'ensemble »)', () => {
+    // /formation/formations/f1/niveaux/n1 matche par préfixe à la fois
+    // « Vue d'ensemble » (/formation) et « Formations » (/formation/formations) :
+    // avant ce correctif, les DEUX s'allumaient en même temps.
+    expect(urlMenuActive(formation, '/formation/formations/f1/niveaux/n1')).toBe('/formation/formations');
+    expect(urlMenuActive(formation, '/formation/formations')).toBe('/formation/formations');
+  });
+
+  it('sur /formation seul (Vue d\'ensemble), c\'est bien elle qui s\'allume', () => {
+    expect(urlMenuActive(formation, '/formation')).toBe('/formation');
+  });
+
+  it('une sous-page garde sa rubrique allumée (comportement déjà correct, préservé)', () => {
+    const classique = menuPourMode('classique');
+    expect(urlMenuActive(classique, '/notes/p1/c1')).toBe('/notes');
+  });
+
+  it('adresse hors menu → rien d\'allumé', () => {
+    expect(urlMenuActive(menuPourMode('classique'), '/autre-chose')).toBeNull();
   });
 });

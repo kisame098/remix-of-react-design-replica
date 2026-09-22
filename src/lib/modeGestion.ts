@@ -93,3 +93,15 @@ export const menuPourMode = (mode: ModeGestion): ItemMenu[] => {
     GESTION_CLASSE, GESTION_NOTES, CURSUS, EMPLOIS, PRESENCES, PAIEMENTS, SALAIRES, IDENTIFIANTS,
   ];
 };
+
+// ─── Rubrique active du menu ────────────────────────────────────────────────
+// Deux rubriques peuvent se chevaucher par préfixe (« Vue d'ensemble » sur
+// /formation, « Formations » sur /formation/formations) : sur une page comme
+// /formation/formations/f1/niveaux/n1, TOUTES deux matchent par préfixe et
+// s'allumaient en même temps. Seule la plus précise (l'URL la plus longue qui
+// matche) doit s'allumer.
+export const urlMenuActive = (menu: ItemMenu[], pathname: string): string | null => {
+  const correspondances = menu.filter(item => pathname === item.url || pathname.startsWith(`${item.url}/`));
+  if (correspondances.length === 0) return null;
+  return correspondances.reduce((plusLongue, item) => item.url.length > plusLongue.url.length ? item : plusLongue).url;
+};

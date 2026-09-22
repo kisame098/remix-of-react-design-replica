@@ -48,9 +48,9 @@ describe('NiveauProgramme — matières groupées par catégorie et totaux', () 
     expect(screen.getByText('Anglais')).toBeInTheDocument();
     expect(screen.getByText('TP Cuisine')).toBeInTheDocument();
     expect(screen.getByText('Spécialité')).toBeInTheDocument();
-    expect(screen.getByText('3 matières')).toBeInTheDocument();          // 2 matières + 1 créneau au choix
-    expect(screen.getByText('7')).toBeInTheDocument();                    // coefficient total : 1 + 4 + 2
-    expect(screen.getByText(/195 h/)).toBeInTheDocument();                // 45 + 150
+    expect(screen.getByText('Matières').nextElementSibling).toHaveTextContent('3');   // 2 matières + 1 créneau au choix
+    expect(screen.getByText('Coefficient total').nextElementSibling).toHaveTextContent('7');   // 1 + 4 + 2
+    expect(screen.getByText(/Volume horaire/).nextElementSibling).toHaveTextContent('195 h');   // 45 + 150
   });
 
   it('le personnel (staff) voit tout, mais ne peut ni ajouter ni modifier ni supprimer une matière', () => {
