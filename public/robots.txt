@@ -24,6 +24,7 @@ Disallow: /abonnement
 Disallow: /caisse
 Disallow: /portail
 Disallow: /platform
+Disallow: /formation
 Disallow: /reset-password
 
 Sitemap: https://senclass.com/sitemap.xml

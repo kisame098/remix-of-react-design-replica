@@ -26,7 +26,8 @@ describe('DashboardSidebar selon le mode', () => {
     rendre();
     for (const t of ['Formations', 'Promotions', 'Évaluations', 'Examens', 'Stages', 'Documents']) expect(screen.getByText(t)).toBeInTheDocument();
     expect(screen.getByText('Formation professionnelle')).toBeInTheDocument();
-    expect(screen.getAllByText('En dév.')).toHaveLength(7);
+    expect(screen.getAllByText('En dév.')).toHaveLength(6);
+    expect(screen.getByText('Formations')).toBeInTheDocument();
     for (const t of ['Gestion Classe', 'Gestion Notes', 'Cursus']) expect(screen.queryByText(t)).not.toBeInTheDocument();
     // les outils partagés restent
     for (const t of ['Gestion Élèves', 'Gestion Paiements', 'Gestion Présences']) expect(screen.getByText(t)).toBeInTheDocument();

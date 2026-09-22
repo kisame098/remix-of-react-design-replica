@@ -63,7 +63,7 @@ const IDENTIFIANTS: ItemMenu = { title: 'Gestion Identifiants', url: '/identifia
 export const RUBRIQUES_FORMATION_PRO: (ItemMenu & { description: string })[] = [
   { title: "Vue d'ensemble", url: '/formation', icon: 'apercu', permission: 'grades', bientot: true, groupe: 'formation_pro',
     description: "Effectifs par formation et par promotion, stages en cours, examens à venir." },
-  { title: 'Formations', url: '/formation/formations', icon: 'formations', permission: 'grades', bientot: true, groupe: 'formation_pro',
+  { title: 'Formations', url: '/formation/formations', icon: 'formations', permission: 'grades', groupe: 'formation_pro',
     description: "Le catalogue de l'école : formations, années, options et matières avec coefficients et volumes horaires. Modèles hôtellerie-restauration fournis." },
   { title: 'Promotions', url: '/formation/promotions', icon: 'promotions', permission: 'grades', bientot: true, groupe: 'formation_pro',
     description: "Les groupes d'élèves d'une formation, avec leurs dates de début et de fin, en cours du jour ou du soir." },
