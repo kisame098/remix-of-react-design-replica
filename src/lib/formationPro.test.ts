@@ -346,3 +346,210 @@ describe('garde-fous — inscription des élèves adaptée au mode formation pro
     expect(source).not.toMatch(/promotionId/);
   });
 });
+
+// ════════════════════════════════════════════════════════════════════════════
+// ÉVALUATIONS (étape 3) — calcul à trois étages : catégorie → matière →
+// moyenne générale. Une note absente/non évaluée n'est JAMAIS un 0.
+// ════════════════════════════════════════════════════════════════════════════
+
+import {
+  nomCategorieValide, pourcentageValide, sommeBareme, baremeComplet,
+  nomPeriodeValide, titreEvaluationValide, baremeValide, poidsValide,
+  convertirSur20, moyenneCategorie, moyenneMatiere, moyenneGenerale, resumeEvaluation,
+  triEvaluations, triPeriodes,
+  type BaremeCategorie, type Evaluation, type Note, type MoyenneParMatiere,
+} from './formationPro';
+
+const categorie = (o: Partial<BaremeCategorie> = {}): BaremeCategorie =>
+  ({ id: 'cc', formationId: 'f1', name: 'Contrôle continu', pourcentage: 30, ordering: 0, ...o });
+const evaluation = (o: Partial<Evaluation> = {}): Evaluation => ({
+  id: 'e1', promotionId: 'p1', niveauMatiereId: 'nm1', periodeId: 'per1', categorieId: 'cc',
+  type: 'Devoir', title: 'Devoir 1', date: '2026-09-18', bareme: 20, poids: 1, createdAt: '', ...o,
+});
+const note = (o: Partial<Note> = {}): Note => ({ id: 'n1', evaluationId: 'e1', studentEnrollmentId: 's1', valeur: 15, statut: 'note', ...o });
+
+describe('validation du barème et des évaluations', () => {
+  it('un nom de catégorie ne peut pas être vide', () => {
+    expect(nomCategorieValide('Contrôle continu')).toBe(true);
+    expect(nomCategorieValide('  ')).toBe(false);
+  });
+  it('le pourcentage doit être entre 0 (exclu) et 100 (inclus)', () => {
+    expect(pourcentageValide(30)).toBe(true);
+    expect(pourcentageValide(100)).toBe(true);
+    expect(pourcentageValide(0)).toBe(false);
+    expect(pourcentageValide(101)).toBe(false);
+    expect(pourcentageValide(-5)).toBe(false);
+  });
+  it('sommeBareme et baremeComplet — le barème IFHO (30/30/10/30) fait bien 100', () => {
+    const bareme = [
+      categorie({ id: 'cc', name: 'Contrôle continu', pourcentage: 30 }),
+      categorie({ id: 'tp', name: 'TP', pourcentage: 30 }),
+      categorie({ id: 'eb', name: 'Examen blanc', pourcentage: 10 }),
+      categorie({ id: 'ef', name: 'Examen final', pourcentage: 30 }),
+    ];
+    expect(sommeBareme(bareme)).toBe(100);
+    expect(baremeComplet(bareme)).toBe(true);
+  });
+  it('un barème incomplet ou vide n\'est jamais considéré complet', () => {
+    expect(baremeComplet([categorie({ pourcentage: 30 }), categorie({ id: 'tp', pourcentage: 30 })])).toBe(false);
+    expect(baremeComplet([])).toBe(false);
+  });
+  it('nom de période, titre, barème, poids', () => {
+    expect(nomPeriodeValide('Semestre 1')).toBe(true);
+    expect(nomPeriodeValide('')).toBe(false);
+    expect(titreEvaluationValide('Contrôle pratique n°1')).toBe(true);
+    expect(titreEvaluationValide(' ')).toBe(false);
+    expect(baremeValide(20)).toBe(true);
+    expect(baremeValide(0)).toBe(false);
+    expect(poidsValide(1)).toBe(true);
+    expect(poidsValide(-1)).toBe(false);
+  });
+});
+
+describe('convertirSur20 — ramener n\'importe quel barème sur 20', () => {
+  it('convertit proportionnellement', () => {
+    expect(convertirSur20(15, 20)).toBe(15);
+    expect(convertirSur20(8, 10)).toBe(16);
+    expect(convertirSur20(75, 100)).toBe(15);
+    expect(convertirSur20(4, 5)).toBe(16);
+  });
+});
+
+describe('moyenneCategorie — pondérée par le poids de chaque évaluation, absents exclus', () => {
+  it('deux évaluations de poids égal : moyenne simple', () => {
+    const evals = [evaluation({ id: 'e1' }), evaluation({ id: 'e2', title: 'Devoir 2' })];
+    const notes = [note({ id: 'n1', evaluationId: 'e1', valeur: 12 }), note({ id: 'n2', evaluationId: 'e2', valeur: 16 })];
+    expect(moyenneCategorie(evals, notes, 'cc', 's1')).toBe(14);
+  });
+
+  it('un projet de poids 2 pèse deux fois plus qu\'un contrôle de poids 1', () => {
+    const evals = [evaluation({ id: 'e1', poids: 1 }), evaluation({ id: 'e2', title: 'Projet', poids: 2 })];
+    const notes = [note({ id: 'n1', evaluationId: 'e1', valeur: 10 }), note({ id: 'n2', evaluationId: 'e2', valeur: 16 })];
+    // (10×1 + 16×2) / (1+2) = 42/3 = 14
+    expect(moyenneCategorie(evals, notes, 'cc', 's1')).toBe(14);
+  });
+
+  it('une note sur un barème différent (/10) est ramenée sur 20 avant la moyenne', () => {
+    const evals = [evaluation({ id: 'e1', bareme: 20 }), evaluation({ id: 'e2', bareme: 10 })];
+    const notes = [note({ id: 'n1', evaluationId: 'e1', valeur: 10 }), note({ id: 'n2', evaluationId: 'e2', valeur: 8 })];
+    // e1: 10/20; e2: 8/10 -> 16/20 ; moyenne (10+16)/2 = 13
+    expect(moyenneCategorie(evals, notes, 'cc', 's1')).toBe(13);
+  });
+
+  it('un absent n\'est PAS compté comme 0 — il est exclu, la moyenne se fait sur ce qui reste', () => {
+    const evals = [evaluation({ id: 'e1' }), evaluation({ id: 'e2' })];
+    const notes = [note({ id: 'n1', evaluationId: 'e1', valeur: 16 }), note({ id: 'n2', evaluationId: 'e2', valeur: undefined, statut: 'absent' })];
+    expect(moyenneCategorie(evals, notes, 'cc', 's1')).toBe(16);
+  });
+
+  it('aucune note dans la catégorie → null, jamais 0', () => {
+    expect(moyenneCategorie([evaluation()], [], 'cc', 's1')).toBeNull();
+    expect(moyenneCategorie([evaluation()], [note({ statut: 'non_evalue', valeur: undefined })], 'cc', 's1')).toBeNull();
+  });
+
+  it('n\'agrège que les évaluations de LA catégorie demandée', () => {
+    const evals = [evaluation({ id: 'e1', categorieId: 'cc' }), evaluation({ id: 'e2', categorieId: 'tp' })];
+    const notes = [note({ id: 'n1', evaluationId: 'e1', valeur: 10 }), note({ id: 'n2', evaluationId: 'e2', valeur: 20 })];
+    expect(moyenneCategorie(evals, notes, 'cc', 's1')).toBe(10);
+    expect(moyenneCategorie(evals, notes, 'tp', 's1')).toBe(20);
+  });
+});
+
+describe('moyenneMatiere — pondérée par le barème, catégorie non notée jamais comptée 0', () => {
+  const bareme = [
+    categorie({ id: 'cc', name: 'Contrôle continu', pourcentage: 30 }),
+    categorie({ id: 'tp', name: 'TP', pourcentage: 30 }),
+    categorie({ id: 'eb', name: 'Examen blanc', pourcentage: 10 }),
+    categorie({ id: 'ef', name: 'Examen final', pourcentage: 30 }),
+  ];
+
+  it('les quatre catégories notées, exemple à la main', () => {
+    const evals = [
+      evaluation({ id: 'e-cc', categorieId: 'cc' }), evaluation({ id: 'e-tp', categorieId: 'tp' }),
+      evaluation({ id: 'e-eb', categorieId: 'eb' }), evaluation({ id: 'e-ef', categorieId: 'ef' }),
+    ];
+    const notes = [
+      note({ id: 'n1', evaluationId: 'e-cc', valeur: 14 }), note({ id: 'n2', evaluationId: 'e-tp', valeur: 16 }),
+      note({ id: 'n3', evaluationId: 'e-eb', valeur: 10 }), note({ id: 'n4', evaluationId: 'e-ef', valeur: 12 }),
+    ];
+    // (14×30 + 16×30 + 10×10 + 12×30) / 100 = (420+480+100+360)/100 = 1360/100 = 13.6
+    expect(moyenneMatiere(bareme, evals, notes, 's1')).toBeCloseTo(13.6, 10);
+  });
+
+  it('l\'examen final pas encore passé : ignoré et redistribué, jamais compté 0', () => {
+    const evals = [evaluation({ id: 'e-cc', categorieId: 'cc' }), evaluation({ id: 'e-tp', categorieId: 'tp' })];
+    const notes = [note({ id: 'n1', evaluationId: 'e-cc', valeur: 14 }), note({ id: 'n2', evaluationId: 'e-tp', valeur: 16 })];
+    // seules cc et tp ont des notes, pourcentages 30+30=60 : (14×30 + 16×30)/60 = 900/60 = 15
+    expect(moyenneMatiere(bareme, evals, notes, 's1')).toBe(15);
+  });
+
+  it('rien de noté du tout → null', () => {
+    expect(moyenneMatiere(bareme, [], [], 's1')).toBeNull();
+  });
+});
+
+describe('moyenneGenerale — pondérée par le coefficient de chaque matière', () => {
+  it('deux matières notées, coefficients différents', () => {
+    const m: MoyenneParMatiere[] = [
+      { niveauMatiereId: 'nm1', coefficient: 1, moyenne: 12 },
+      { niveauMatiereId: 'nm2', coefficient: 4, moyenne: 16 },
+    ];
+    // (12×1 + 16×4)/5 = (12+64)/5 = 15.2
+    expect(moyenneGenerale(m)).toBeCloseTo(15.2, 10);
+  });
+
+  it('une matière pas encore notée est ignorée, pas comptée 0', () => {
+    const m: MoyenneParMatiere[] = [
+      { niveauMatiereId: 'nm1', coefficient: 1, moyenne: 12 },
+      { niveauMatiereId: 'nm2', coefficient: 4, moyenne: null },
+    ];
+    expect(moyenneGenerale(m)).toBe(12);
+  });
+
+  it('aucune matière notée → null', () => {
+    expect(moyenneGenerale([{ niveauMatiereId: 'nm1', coefficient: 4, moyenne: null }])).toBeNull();
+    expect(moyenneGenerale([])).toBeNull();
+  });
+});
+
+describe('resumeEvaluation — la carte de la liste (effectif, notes saisies, absents, moyenne)', () => {
+  it('compte les notes saisies, les absents, et calcule la moyenne sur les seuls présents notés', () => {
+    const ev = evaluation({ bareme: 20 });
+    const notes = [
+      note({ id: 'n1', studentEnrollmentId: 's1', valeur: 15 }),
+      note({ id: 'n2', studentEnrollmentId: 's2', valeur: 17 }),
+      note({ id: 'n3', studentEnrollmentId: 's3', valeur: undefined, statut: 'absent' }),
+    ];
+    const r = resumeEvaluation(ev, notes, 28);
+    expect(r).toEqual({ nbAttendus: 28, nbNotes: 3, nbAbsents: 1, moyenne: 16 });
+  });
+  it('aucune note saisie → moyenne null, pas 0', () => {
+    expect(resumeEvaluation(evaluation(), [], 28).moyenne).toBeNull();
+  });
+});
+
+describe('tri', () => {
+  it('triEvaluations : la plus récente d\'abord', () => {
+    const e = [evaluation({ id: 'a', date: '2026-09-01' }), evaluation({ id: 'b', date: '2026-09-18' })];
+    expect(triEvaluations(e).map(x => x.id)).toEqual(['b', 'a']);
+  });
+  it('triPeriodes : dans l\'ordre de création', () => {
+    const p = [{ id: 'a', promotionId: 'p1', name: 'Semestre 2', ordering: 1 }, { id: 'b', promotionId: 'p1', name: 'Semestre 1', ordering: 0 }];
+    expect(triPeriodes(p).map(x => x.id)).toEqual(['b', 'a']);
+  });
+});
+
+describe('garde-fous — évaluations : isolation, catégorie du barème, historique', () => {
+  const sql = readFileSync('docs/sql/formation_pro_evaluations.sql', 'utf8');
+  it('chaque table filtre par school_id (isolation entre écoles)', () => {
+    for (const t of ['fp_bareme_categories', 'fp_periodes', 'fp_evaluations', 'fp_notes', 'fp_notes_historique']) {
+      expect(sql, t).toContain(`school_id`);
+    }
+  });
+  it('une évaluation ne peut référencer qu\'une catégorie du barème de la formation (jamais une note orpheline)', () => {
+    expect(sql).toContain('categorie_id      uuid not null references public.fp_bareme_categories(id) on delete restrict');
+  });
+  it('une note « absente » ou « non évaluée » n\'a jamais de valeur — la contrainte l\'empêche en base', () => {
+    expect(sql).toContain("check ((statut = 'note') = (valeur is not null))");
+  });
+});

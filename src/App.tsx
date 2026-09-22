@@ -64,6 +64,7 @@ const SubscriptionRequired  = lazy(() => import("./pages/SubscriptionRequired"))
 const FormationEnDeveloppement = lazy(() => import("./pages/formation/FormationEnDeveloppement"));
 const Formations = lazy(() => import("./pages/formation/Formations"));
 const Promotions = lazy(() => import("./pages/formation/Promotions"));
+const Evaluations = lazy(() => import("./pages/formation/Evaluations"));
 const FormationDetail = lazy(() => import("./pages/formation/FormationDetail"));
 const NiveauProgramme = lazy(() => import("./pages/formation/NiveauProgramme"));
 const PlatformStats         = lazy(() => import("./pages/platform/PlatformStats"));
@@ -180,7 +181,10 @@ const App = () => (
                     <Route path="/formation/promotions" element={
                       <ModeRoute mode="formation_pro"><RequirePermission permission="grades"><Promotions /></RequirePermission></ModeRoute>
                     } />
-                    {["/formation", "/formation/evaluations",
+                    <Route path="/formation/evaluations" element={
+                      <ModeRoute mode="formation_pro"><RequirePermission permission="grades"><Evaluations /></RequirePermission></ModeRoute>
+                    } />
+                    {["/formation",
                       "/formation/examens", "/formation/stages", "/formation/documents"].map(chemin => (
                       <Route key={chemin} path={chemin} element={
                         <ModeRoute mode="formation_pro"><RequirePermission permission="grades"><FormationEnDeveloppement /></RequirePermission></ModeRoute>

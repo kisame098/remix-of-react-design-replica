@@ -335,3 +335,186 @@ export const grouperPromotions = (
     })),
   }));
 };
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ÉVALUATIONS (étape 3)
+//
+// Une évaluation est une activité notée (« Contrôle pratique n°1 », /20, le
+// 18/09/2026) — jamais un seul chiffre agrégé par catégorie : un professeur
+// donne plusieurs contrôles dans l'année, chacun garde son titre et sa date.
+//
+// Le calcul se fait à trois étages, jamais recalculé à la main :
+//   1. dans une catégorie   : moyenne des évaluations, pondérée par leur poids
+//   2. entre catégories     : pondérée par le pourcentage du barème
+//   3. entre matières       : pondérée par le coefficient de la matière
+//
+// À chaque étage, ce qui n'a pas encore de note n'est jamais compté comme 0 :
+// on ignore et on redistribue le poids sur ce qui est effectivement noté —
+// exactement comme la moyenne pondérée du système classique
+// (src/pages/portal/portalHelpers.ts::weightedAvg).
+// ═══════════════════════════════════════════════════════════════════════════
+
+export interface BaremeCategorie {
+  id: string;
+  formationId: string;
+  name: string;
+  pourcentage: number;
+  ordering: number;
+}
+
+export const nomCategorieValide = (name: string): boolean => name.trim() !== '';
+export const pourcentageValide = (v: number): boolean => Number.isFinite(v) && v > 0 && v <= 100;
+
+export const sommeBareme = (categories: BaremeCategorie[]): number =>
+  Math.round(categories.reduce((s, c) => s + c.pourcentage, 0) * 100) / 100;
+
+/** `true` si les pourcentages du barème font exactement 100 (tolérance d'arrondi). */
+export const baremeComplet = (categories: BaremeCategorie[]): boolean =>
+  categories.length > 0 && Math.abs(sommeBareme(categories) - 100) < 0.01;
+
+export interface Periode {
+  id: string;
+  promotionId: string;
+  name: string;
+  startDate?: string;
+  endDate?: string;
+  ordering: number;
+}
+
+export const nomPeriodeValide = (name: string): boolean => name.trim() !== '';
+
+export type StatutNote = 'note' | 'absent' | 'absent_justifie' | 'non_evalue';
+
+export const LIBELLES_STATUT_NOTE: Record<StatutNote, string> = {
+  note: 'Note',
+  absent: 'Absent',
+  absent_justifie: 'Absent justifié',
+  non_evalue: 'Non évalué',
+};
+
+export interface Evaluation {
+  id: string;
+  promotionId: string;
+  niveauMatiereId: string;
+  periodeId: string;
+  categorieId: string;
+  type: string;
+  title: string;
+  date: string;
+  bareme: number;
+  poids: number;
+  description?: string;
+  createdAt: string;
+}
+
+export const TYPES_EVALUATION_SUGGERES = [
+  'Contrôle continu', 'Devoir', 'Interrogation', 'TP / Évaluation pratique', 'Projet', 'Oral', 'Test', 'Autre',
+] as const;
+
+export const titreEvaluationValide = (title: string): boolean => title.trim() !== '';
+export const baremeValide = (v: number): boolean => Number.isFinite(v) && v > 0;
+export const poidsValide = (v: number): boolean => Number.isFinite(v) && v > 0;
+
+export interface Note {
+  id: string;
+  evaluationId: string;
+  studentEnrollmentId: string;
+  /** `undefined` sauf si `statut === 'note'` — jamais un 0 qui se lirait comme une vraie note. */
+  valeur?: number;
+  statut: StatutNote;
+  observation?: string;
+}
+
+/** Ramène une note sur 20, quel que soit le barème de l'évaluation (/10, /5, /100…). */
+export const convertirSur20 = (valeur: number, bareme: number): number => bareme > 0 ? (valeur * 20) / bareme : 0;
+
+// ─── Le calcul, à trois étages ──────────────────────────────────────────────
+
+/**
+ * Moyenne (sur 20) d'un élève dans UNE catégorie, pour une matière et une
+ * période : moyenne des évaluations de cette catégorie, pondérée par leur
+ * poids. Les notes « absent »/« non évalué » sont exclues, pas comptées 0.
+ * `null` si l'élève n'a encore aucune note notée dans cette catégorie.
+ */
+export const moyenneCategorie = (
+  evaluations: Evaluation[], notes: Note[], categorieId: string, studentEnrollmentId: string,
+): number | null => {
+  const evalsCategorie = evaluations.filter(e => e.categorieId === categorieId);
+  let total = 0, poidsTotal = 0;
+  for (const ev of evalsCategorie) {
+    const note = notes.find(n => n.evaluationId === ev.id && n.studentEnrollmentId === studentEnrollmentId);
+    if (!note || note.statut !== 'note' || note.valeur == null) continue;
+    total += convertirSur20(note.valeur, ev.bareme) * ev.poids;
+    poidsTotal += ev.poids;
+  }
+  return poidsTotal > 0 ? total / poidsTotal : null;
+};
+
+/**
+ * Moyenne (sur 20) d'un élève dans UNE matière, pour une période : moyenne
+ * des catégories du barème, pondérée par leur pourcentage — une catégorie
+ * sans aucune note (l'examen final pas encore passé, par exemple) est
+ * ignorée, son poids redistribué sur les catégories déjà notées, jamais
+ * comptée 0. `null` si rien n'est encore noté du tout.
+ */
+export const moyenneMatiere = (
+  categories: BaremeCategorie[], evaluations: Evaluation[], notes: Note[], studentEnrollmentId: string,
+): number | null => {
+  let total = 0, pourcentageTotal = 0;
+  for (const cat of categories) {
+    const moyenne = moyenneCategorie(evaluations, notes, cat.id, studentEnrollmentId);
+    if (moyenne === null) continue;
+    total += moyenne * cat.pourcentage;
+    pourcentageTotal += cat.pourcentage;
+  }
+  return pourcentageTotal > 0 ? total / pourcentageTotal : null;
+};
+
+export interface MoyenneParMatiere {
+  niveauMatiereId: string;
+  coefficient: number;
+  moyenne: number | null;
+}
+
+/**
+ * Moyenne générale (sur 20) d'un élève pour une promotion et une période :
+ * moyenne des matières, pondérée par leur coefficient — même règle : une
+ * matière pas encore notée n'est jamais comptée 0, elle est simplement
+ * ignorée tant qu'elle n'a rien.
+ */
+export const moyenneGenerale = (moyennesMatieres: MoyenneParMatiere[]): number | null => {
+  let total = 0, coefTotal = 0;
+  for (const m of moyennesMatieres) {
+    if (m.moyenne === null || m.coefficient <= 0) continue;
+    total += m.moyenne * m.coefficient;
+    coefTotal += m.coefficient;
+  }
+  return coefTotal > 0 ? total / coefTotal : null;
+};
+
+// ─── Résumé d'une évaluation (pour sa carte dans la liste) ─────────────────
+export interface ResumeEvaluation {
+  nbAttendus: number;
+  nbNotes: number;
+  nbAbsents: number;
+  moyenne: number | null;
+}
+
+export const resumeEvaluation = (evaluation: Evaluation, notes: Note[], effectif: number): ResumeEvaluation => {
+  const notesDeLEvaluation = notes.filter(n => n.evaluationId === evaluation.id);
+  const notees = notesDeLEvaluation.filter(n => n.statut === 'note' && n.valeur != null);
+  const absents = notesDeLEvaluation.filter(n => n.statut === 'absent' || n.statut === 'absent_justifie');
+  const total20 = notees.reduce((s, n) => s + convertirSur20(n.valeur as number, evaluation.bareme), 0);
+  return {
+    nbAttendus: effectif,
+    nbNotes: notesDeLEvaluation.length,
+    nbAbsents: absents.length,
+    moyenne: notees.length > 0 ? total20 / notees.length : null,
+  };
+};
+
+export const triEvaluations = (evaluations: Evaluation[]): Evaluation[] =>
+  [...evaluations].sort((a, b) => b.date.localeCompare(a.date) || a.title.localeCompare(b.title, 'fr'));
+
+export const triPeriodes = (periodes: Periode[]): Periode[] =>
+  [...periodes].sort((a, b) => a.ordering - b.ordering);

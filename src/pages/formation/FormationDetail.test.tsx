@@ -13,11 +13,14 @@ const ctx = {
   catalogue: [],
   niveauMatieres: [{ id: 'nm1', niveauId: 'n1', matiereId: 'm1', matiereName: 'TP Cuisine', type: 'obligatoire' as const, coefficient: 4, volumeHoraire: 150, nature: 'pratique' as const, ordering: 0 }],
   choixGroups: [],
+  baremeCategories: [],
   addNiveau: vi.fn().mockResolvedValue({ id: 'nnew' }),
   updateNiveau: vi.fn(), deleteNiveau: vi.fn(),
   duplicateNiveau: vi.fn().mockResolvedValue({ id: 'ndup', name: 'CAP 2' }),
+  addBaremeCategorie: vi.fn(), updateBaremeCategorie: vi.fn(), deleteBaremeCategorie: vi.fn(),
 };
 vi.mock('@/contexts/FormationProContext', () => ({ useFormationPro: () => ctx }));
+vi.mock('@/contexts/AuthContext', () => ({ useAuth: () => ({ accountRole: 'admin' }) }));
 vi.mock('@/hooks/use-toast', () => ({ toast: vi.fn() }));
 
 import FormationDetail from './FormationDetail';

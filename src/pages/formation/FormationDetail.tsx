@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useFormationPro } from '@/contexts/FormationProContext';
+import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -11,9 +12,12 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { ArrowLeft, Plus, Trash2, Loader2, Pencil, Layers, Copy, Clock, ShieldAlert } from 'lucide-react';
+import { ArrowLeft, Plus, Trash2, Loader2, Pencil, Layers, Copy, Clock, ShieldAlert, Percent } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
-import { type Niveau, nomNiveauValide, triNiveaux, totauxNiveau } from '@/lib/formationPro';
+import {
+  type Niveau, type BaremeCategorie, nomNiveauValide, triNiveaux, totauxNiveau,
+  peutGererMatieres, nomCategorieValide, pourcentageValide, sommeBareme, baremeComplet,
+} from '@/lib/formationPro';
 
 /**
  * Page 2 du module Formations : les niveaux d'UNE formation (« CAP 1 »,
@@ -23,9 +27,12 @@ import { type Niveau, nomNiveauValide, triNiveaux, totauxNiveau } from '@/lib/fo
 const FormationDetail = () => {
   const { formationId } = useParams<{ formationId: string }>();
   const navigate = useNavigate();
+  const { accountRole } = useAuth();
+  const estDirecteur = peutGererMatieres(accountRole);
   const {
-    loading, formations, niveaux, niveauMatieres, choixGroups,
+    loading, formations, niveaux, niveauMatieres, choixGroups, baremeCategories,
     addNiveau, updateNiveau, deleteNiveau, duplicateNiveau,
+    addBaremeCategorie, updateBaremeCategorie, deleteBaremeCategorie,
   } = useFormationPro();
 
   const formation = formations.find(f => f.id === formationId);
@@ -33,6 +40,59 @@ const FormationDetail = () => {
     () => triNiveaux(niveaux.filter(n => n.formationId === formationId)),
     [niveaux, formationId],
   );
+  const bareme = useMemo(
+    () => baremeCategories.filter(c => c.formationId === formationId).sort((a, b) => a.ordering - b.ordering),
+    [baremeCategories, formationId],
+  );
+
+  // ── Barème d'évaluation (catégories, réservé au directeur) ────────────────
+  type DialogBareme = { kind: 'create' } | { kind: 'edit'; categorieId: string };
+  const [dialogBareme, setDialogBareme] = useState<DialogBareme | null>(null);
+  const [catName, setCatName] = useState('');
+  const [catPourcentage, setCatPourcentage] = useState('');
+  const [isSavingCat, setIsSavingCat] = useState(false);
+  const [confirmDeleteCatId, setConfirmDeleteCatId] = useState<string | null>(null);
+
+  const resetCatForm = () => { setCatName(''); setCatPourcentage(''); setDialogBareme(null); };
+  const openCreateCat = () => { setCatName(''); setCatPourcentage(''); setDialogBareme({ kind: 'create' }); };
+  const openEditCat = (c: BaremeCategorie) => { setCatName(c.name); setCatPourcentage(String(c.pourcentage)); setDialogBareme({ kind: 'edit', categorieId: c.id }); };
+
+  const handleSaveCat = async () => {
+    const pourcentage = Number(catPourcentage);
+    if (!dialogBareme || !formationId || !nomCategorieValide(catName) || !pourcentageValide(pourcentage)) {
+      toast({ title: 'Erreur', description: 'Le nom et un pourcentage entre 1 et 100 sont obligatoires.', variant: 'destructive' });
+      return;
+    }
+    setIsSavingCat(true);
+    try {
+      if (dialogBareme.kind === 'create') {
+        await addBaremeCategorie(formationId, { name: catName.trim(), pourcentage });
+        toast({ title: 'Catégorie ajoutée', description: catName });
+      } else {
+        await updateBaremeCategorie(dialogBareme.categorieId, { name: catName.trim(), pourcentage });
+        toast({ title: 'Catégorie modifiée' });
+      }
+      resetCatForm();
+    } catch (err) {
+      toast({ title: 'Erreur', description: String(err), variant: 'destructive' });
+    } finally {
+      setIsSavingCat(false);
+    }
+  };
+
+  const handleDeleteCat = async (id: string) => {
+    try {
+      await deleteBaremeCategorie(id);
+      toast({ title: 'Catégorie supprimée' });
+    } catch (err) {
+      toast({ title: 'Erreur', description: String(err), variant: 'destructive' });
+    } finally {
+      setConfirmDeleteCatId(null);
+    }
+  };
+
+  const somme = sommeBareme(bareme);
+  const complet = baremeComplet(bareme);
 
   // ── Créer / modifier / dupliquer un niveau ───────────────────────────────
   type DialogState = { kind: 'create' } | { kind: 'edit'; niveauId: string } | { kind: 'duplicate'; sourceId: string; sourceName: string };
@@ -175,6 +235,95 @@ const FormationDetail = () => {
           })}
         </div>
       )}
+
+      {/* ── Formule d'évaluation : réservée au directeur ── */}
+      {estDirecteur && (
+        <Card>
+          <CardHeader className="pb-3">
+            <div className="flex items-start justify-between gap-2 flex-wrap">
+              <div>
+                <CardTitle className="text-base flex items-center gap-2"><Percent className="h-4 w-4" />Formule d'évaluation</CardTitle>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Les catégories de notes de cette formation (contrôle continu, TP, examen…) et leur poids dans la moyenne. Réservé au directeur.
+                </p>
+              </div>
+              <Button size="sm" variant="outline" className="gap-2" onClick={openCreateCat}>
+                <Plus className="h-3.5 w-3.5" />Ajouter une catégorie
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent>
+            {bareme.length === 0 ? (
+              <p className="text-sm text-muted-foreground">Aucune catégorie définie — les moyennes ne peuvent pas encore être calculées.</p>
+            ) : (
+              <div className="space-y-2">
+                {bareme.map(c => (
+                  <div key={c.id} className="group flex items-center justify-between gap-2 rounded-md border px-3 py-2">
+                    <span className="text-sm font-medium">{c.name}</span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm text-muted-foreground">{c.pourcentage} %</span>
+                      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100">
+                        <Button variant="ghost" size="icon" className="h-6 w-6" title="Modifier" onClick={() => openEditCat(c)}>
+                          <Pencil className="h-3 w-3" />
+                        </Button>
+                        <Button
+                          variant="ghost" size="icon" className="h-6 w-6 text-destructive hover:text-destructive" title="Supprimer"
+                          onClick={() => setConfirmDeleteCatId(c.id)}
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+                <p className={`text-xs pt-1 ${complet ? 'text-muted-foreground' : 'text-destructive'}`}>
+                  Total : {somme} % {complet ? '' : '— doit faire 100 % pour que les moyennes soient justes'}
+                </p>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      <Dialog open={dialogBareme !== null} onOpenChange={(open) => !open && resetCatForm()}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{dialogBareme?.kind === 'edit' ? 'Modifier la catégorie' : 'Nouvelle catégorie'}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 pt-2">
+            <div className="space-y-2">
+              <Label htmlFor="cat-name">Nom *</Label>
+              <Input id="cat-name" placeholder="Ex : Contrôle continu, TP, Examen final…" value={catName} onChange={e => setCatName(e.target.value)} />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="cat-pourcentage">Pourcentage dans la moyenne *</Label>
+              <Input id="cat-pourcentage" type="number" min={1} max={100} value={catPourcentage} onChange={e => setCatPourcentage(e.target.value)} />
+            </div>
+            <Button onClick={handleSaveCat} className="w-full" disabled={isSavingCat}>
+              {isSavingCat && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              {dialogBareme?.kind === 'edit' ? 'Enregistrer' : 'Créer'}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <AlertDialog open={!!confirmDeleteCatId} onOpenChange={(open) => !open && setConfirmDeleteCatId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Supprimer cette catégorie ?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Les évaluations déjà créées dans cette catégorie ne peuvent pas être supprimées par cette action —
+              si des évaluations l'utilisent encore, la suppression sera refusée.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="flex justify-end gap-2">
+            <AlertDialogCancel>Annuler</AlertDialogCancel>
+            <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={() => confirmDeleteCatId && void handleDeleteCat(confirmDeleteCatId)}>
+              Supprimer
+            </AlertDialogAction>
+          </div>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* ── Créer / modifier / dupliquer un niveau ── */}
       <Dialog open={dialog !== null} onOpenChange={(open) => !open && resetForm()}>
