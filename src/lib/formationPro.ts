@@ -365,6 +365,20 @@ export interface BaremeCategorie {
 export const nomCategorieValide = (name: string): boolean => name.trim() !== '';
 export const pourcentageValide = (v: number): boolean => Number.isFinite(v) && v > 0 && v <= 100;
 
+/**
+ * Formule par défaut appliquée à toute nouvelle formation — jamais un barème
+ * vide à définir de zéro. Reprend la répartition la plus courante en
+ * hôtellerie-restauration (contrôle continu / TP / examen blanc / examen
+ * final) ; le directeur la personnalise ensuite si besoin, formation par
+ * formation — jamais un barème partagé entre formations.
+ */
+export const DEFAUT_BAREME_CATEGORIES: readonly { name: string; pourcentage: number }[] = [
+  { name: 'Contrôle continu', pourcentage: 30 },
+  { name: 'TP', pourcentage: 30 },
+  { name: 'Examen blanc', pourcentage: 10 },
+  { name: 'Examen final', pourcentage: 30 },
+];
+
 export const sommeBareme = (categories: BaremeCategorie[]): number =>
   Math.round(categories.reduce((s, c) => s + c.pourcentage, 0) * 100) / 100;
 

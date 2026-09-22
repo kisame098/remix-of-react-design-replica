@@ -18,6 +18,7 @@ const ctx = {
   updateNiveau: vi.fn(), deleteNiveau: vi.fn(),
   duplicateNiveau: vi.fn().mockResolvedValue({ id: 'ndup', name: 'CAP 2' }),
   addBaremeCategorie: vi.fn(), updateBaremeCategorie: vi.fn(), deleteBaremeCategorie: vi.fn(),
+  appliquerBaremeParDefaut: vi.fn(),
 };
 vi.mock('@/contexts/FormationProContext', () => ({ useFormationPro: () => ctx }));
 vi.mock('@/contexts/AuthContext', () => ({ useAuth: () => ({ accountRole: 'admin' }) }));

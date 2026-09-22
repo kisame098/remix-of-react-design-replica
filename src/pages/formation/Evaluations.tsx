@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { useFormationPro } from '@/contexts/FormationProContext';
 import { useSchool } from '@/contexts/SchoolContext';
@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Badge } from '@/components/ui/badge';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
@@ -16,7 +16,9 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { ClipboardList, Plus, Loader2, Trash2, Pencil, Users } from 'lucide-react';
+import {
+  ClipboardList, Plus, Loader2, Trash2, Users, ChevronRight, ArrowLeft, Check, AlertCircle, Search, GraduationCap,
+} from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import {
   triPromotions, grouperPromotions, triPeriodes, triEvaluations, resumeEvaluation,
@@ -26,17 +28,15 @@ import {
 } from '@/lib/formationPro';
 
 /**
- * Page Évaluations : liste des évaluations d'une promotion (filtrée dans le
- * sélecteur), création d'une évaluation (matière → période → catégorie du
- * barème → titre/date/barème/poids), et saisie des notes élève par élève.
- * Les moyennes ne sont pas encore affichées ici — cette page couvre la
- * saisie ; les moyennes viendront avec les bulletins (Examens + Évaluations).
+ * Page Évaluations : même langage visuel que Gestion des Notes (classique) —
+ * panneau gauche (périodes → évaluations), panneau droit (tableau de saisie
+ * avec sauvegarde automatique), plutôt qu'une suite de formulaires modaux.
  */
 const Evaluations = () => {
   const {
     loading, promotions, formations, niveaux, niveauMatieres, baremeCategories,
     periodes, evaluations, notes,
-    addPeriode, addEvaluation, deleteEvaluation, saisirNote,
+    addPeriode, deletePeriode, addEvaluation, deleteEvaluation, saisirNote,
   } = useFormationPro();
   const { students } = useSchool();
 
@@ -68,7 +68,11 @@ const Evaluations = () => {
     [students, promotion],
   );
 
-  // ── Créer une période à la volée (pas de calendrier partagé) ─────────────
+  const [evaluationId, setEvaluationId] = useState<string | null>(null);
+  useEffect(() => { setEvaluationId(null); }, [promotionId]);
+  const evaluationSelectionnee = evaluations.find(e => e.id === evaluationId) ?? null;
+
+  // ── Créer une période ──────────────────────────────────────────────────
   const [dialogPeriode, setDialogPeriode] = useState(false);
   const [periodeName, setPeriodeName] = useState('');
   const [isSavingPeriode, setIsSavingPeriode] = useState(false);
@@ -89,6 +93,19 @@ const Evaluations = () => {
     }
   };
 
+  const [confirmDeletePeriodeId, setConfirmDeletePeriodeId] = useState<string | null>(null);
+  const handleDeletePeriode = async (id: string) => {
+    try {
+      await deletePeriode(id);
+      toast({ title: 'Période supprimée' });
+      if (evaluationsDeLaPromotion.some(e => e.periodeId === id && e.id === evaluationId)) setEvaluationId(null);
+    } catch (err) {
+      toast({ title: 'Erreur', description: String(err), variant: 'destructive' });
+    } finally {
+      setConfirmDeletePeriodeId(null);
+    }
+  };
+
   // ── Créer une évaluation ──────────────────────────────────────────────────
   const [dialogEval, setDialogEval] = useState(false);
   const [niveauMatiereId, setNiveauMatiereId] = useState('');
@@ -102,10 +119,10 @@ const Evaluations = () => {
   const [description, setDescription] = useState('');
   const [isSavingEval, setIsSavingEval] = useState(false);
 
-  const resetEvalForm = () => {
-    setNiveauMatiereId(''); setPeriodeId(''); setCategorieId(''); setType(TYPES_EVALUATION_SUGGERES[0] as string);
-    setTitle(''); setDate(new Date().toISOString().slice(0, 10)); setBareme('20'); setPoids('1'); setDescription('');
-    setDialogEval(false);
+  const ouvrirDialogEval = (periodeIdPreselectionnee?: string) => {
+    setNiveauMatiereId(''); setPeriodeId(periodeIdPreselectionnee ?? ''); setCategorieId('');
+    setType(TYPES_EVALUATION_SUGGERES[0] as string); setTitle(''); setDate(new Date().toISOString().slice(0, 10));
+    setBareme('20'); setPoids('1'); setDescription(''); setDialogEval(true);
   };
 
   const handleCreateEval = async () => {
@@ -117,12 +134,13 @@ const Evaluations = () => {
     }
     setIsSavingEval(true);
     try {
-      await addEvaluation({
+      const ev = await addEvaluation({
         promotionId: promotion.id, niveauMatiereId, periodeId, categorieId, type, title: title.trim(),
         date, bareme: baremeNum, poids: poidsNum, description: description.trim() || undefined,
       });
       toast({ title: 'Évaluation créée', description: title });
-      resetEvalForm();
+      setDialogEval(false);
+      setEvaluationId(ev.id);
     } catch (err) {
       toast({ title: 'Erreur', description: String(err), variant: 'destructive' });
     } finally {
@@ -130,57 +148,77 @@ const Evaluations = () => {
     }
   };
 
-  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [confirmDeleteEvalId, setConfirmDeleteEvalId] = useState<string | null>(null);
   const handleDeleteEval = async (id: string) => {
     try {
       await deleteEvaluation(id);
       toast({ title: 'Évaluation supprimée' });
+      if (evaluationId === id) setEvaluationId(null);
     } catch (err) {
       toast({ title: 'Erreur', description: String(err), variant: 'destructive' });
     } finally {
-      setConfirmDeleteId(null);
+      setConfirmDeleteEvalId(null);
     }
   };
 
-  // ── Saisie des notes d'une évaluation ─────────────────────────────────────
-  const [saisieEvalId, setSaisieEvalId] = useState<string | null>(null);
-  const evaluationEnSaisie = evaluations.find(e => e.id === saisieEvalId) ?? null;
-  const notesEnSaisie = useMemo(
-    () => notes.filter(n => saisieEvalId && n.evaluationId === saisieEvalId),
-    [notes, saisieEvalId],
-  );
-  const [brouillon, setBrouillon] = useState<Record<string, { valeur: string; statut: StatutNote }>>({});
+  // ── Saisie des notes : tableau inline, sauvegarde automatique ─────────────
+  type Brouillon = { valeur: string; statut: StatutNote };
+  const [entries, setEntries] = useState<Record<string, Brouillon>>({});
+  const [search, setSearch] = useState('');
+  const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  const dirtyRef = useRef<Set<string>>(new Set());
+  const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const ouvrirSaisie = (evalId: string) => {
-    const initial: Record<string, { valeur: string; statut: StatutNote }> = {};
+  useEffect(() => {
+    const initial: Record<string, Brouillon> = {};
     for (const s of elevesDeLaPromotion) {
-      const n = notes.find(x => x.evaluationId === evalId && x.studentEnrollmentId === s.id);
+      const n = notes.find(x => evaluationId && x.evaluationId === evaluationId && x.studentEnrollmentId === s.id);
       initial[s.id] = { valeur: n?.valeur != null ? String(n.valeur) : '', statut: n?.statut ?? 'note' };
     }
-    setBrouillon(initial);
-    setSaisieEvalId(evalId);
-  };
+    setEntries(initial);
+    setSaveState('idle');
+    dirtyRef.current = new Set();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [evaluationId]);
 
-  const [isSavingNotes, setIsSavingNotes] = useState(false);
-  const handleSaveNotes = async () => {
-    if (!evaluationEnSaisie) return;
-    setIsSavingNotes(true);
+  const flushSave = useCallback(async (evId: string, snapshot: Record<string, Brouillon>, dirtyIds: Set<string>) => {
+    setSaveState('saving');
     try {
-      for (const s of elevesDeLaPromotion) {
-        const b = brouillon[s.id];
+      for (const studentId of dirtyIds) {
+        const b = snapshot[studentId];
         if (!b) continue;
         const valeur = b.statut === 'note' ? Number(b.valeur) : undefined;
-        if (b.statut === 'note' && (!Number.isFinite(valeur) || valeur === undefined)) continue;
-        await saisirNote(evaluationEnSaisie.id, s.id, { valeur, statut: b.statut });
+        if (b.statut === 'note' && (!Number.isFinite(valeur) || b.valeur === '')) continue;
+        await saisirNote(evId, studentId, { valeur, statut: b.statut });
       }
-      toast({ title: 'Notes enregistrées' });
-      setSaisieEvalId(null);
-    } catch (err) {
-      toast({ title: 'Erreur', description: String(err), variant: 'destructive' });
-    } finally {
-      setIsSavingNotes(false);
+      setSaveState('saved');
+    } catch {
+      setSaveState('error');
+      toast({ title: 'Erreur de sauvegarde', description: 'Une note n\'a pas pu être enregistrée.', variant: 'destructive' });
     }
+  }, [saisirNote]);
+
+  const updateEntry = (studentId: string, patch: Partial<Brouillon>) => {
+    if (!evaluationId) return;
+    const nextEntries = { ...entries, [studentId]: { ...entries[studentId], ...patch } };
+    setEntries(nextEntries);
+    dirtyRef.current.add(studentId);
+    setSaveState('saving');
+    if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+    saveTimeoutRef.current = setTimeout(() => {
+      const dirtyIds = dirtyRef.current;
+      dirtyRef.current = new Set();
+      void flushSave(evaluationId, nextEntries, dirtyIds);
+    }, 800);
   };
+
+  useEffect(() => () => { if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current); }, []);
+
+  const elevesFiltres = useMemo(() => {
+    if (!search.trim()) return elevesDeLaPromotion;
+    const q = search.toLowerCase();
+    return elevesDeLaPromotion.filter(s => `${s.firstName} ${s.lastName}`.toLowerCase().includes(q));
+  }, [elevesDeLaPromotion, search]);
 
   if (loading) {
     return <div className="p-6 flex items-center gap-2 text-muted-foreground"><Loader2 className="h-5 w-5 animate-spin" />Chargement…</div>;
@@ -202,99 +240,277 @@ const Evaluations = () => {
     );
   }
 
-  return (
-    <div className="p-6 space-y-6">
-      <div className="flex items-start justify-between gap-4 flex-wrap">
-        <h1 className="text-2xl font-bold text-foreground">Évaluations</h1>
-      </div>
-
-      <div className="max-w-md space-y-2">
-        <Label htmlFor="promo-select">Promotion</Label>
-        <Select value={promotionId ?? undefined} onValueChange={setPromotionId}>
-          <SelectTrigger id="promo-select"><SelectValue placeholder="Choisir une promotion…" /></SelectTrigger>
-          <SelectContent>
-            {groupes.map(gf => gf.niveaux.map(gn => gn.promotions.map(p => (
-              <SelectItem key={p.id} value={p.id}>{gf.formation.name} — {gn.niveau.name} — {p.name}</SelectItem>
-            ))))}
-          </SelectContent>
-        </Select>
-      </div>
-
-      {promotion && (
-        <>
-          {categoriesDeLaFormation.length === 0 && (
-            <Card className="border-dashed">
-              <CardContent className="py-6 text-sm text-muted-foreground flex items-center gap-2">
-                Aucune formule d'évaluation définie pour « {formation?.name} ». Le directeur doit d'abord créer les
-                catégories (contrôle continu, TP, examen…) sur la page{' '}
-                <Link to={`/formation/formations/${formation?.id}`} className="text-primary hover:underline">de la formation</Link>.
-              </CardContent>
-            </Card>
-          )}
-
-          <div className="flex items-center justify-between gap-4 flex-wrap">
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-sm text-muted-foreground">Périodes :</span>
-              {periodesDeLaPromotion.length === 0 && <span className="text-sm text-muted-foreground italic">aucune</span>}
-              {periodesDeLaPromotion.map(p => <Badge key={p.id} variant="secondary">{p.name}</Badge>)}
-              <Button variant="ghost" size="sm" className="gap-1 h-7" onClick={() => setDialogPeriode(true)}>
-                <Plus className="h-3 w-3" />Période
-              </Button>
+  // ── Étape 1 : choisir une promotion (même grille que Gestion des Notes) ──
+  if (!promotion) {
+    return (
+      <div className="h-full flex flex-col">
+        <div className="px-6 py-4 border-b flex-shrink-0">
+          <h1 className="text-2xl font-bold text-foreground">Évaluations</h1>
+          <p className="text-sm text-muted-foreground mt-0.5">Choisissez une promotion</p>
+        </div>
+        <div className="flex-1 overflow-y-auto p-6 space-y-8">
+          {groupes.map(gf => (
+            <div key={gf.formation.id} className="space-y-4">
+              <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">{gf.formation.name}</h2>
+              {gf.niveaux.map(gn => (
+                <div key={gn.niveau.id} className="space-y-3">
+                  <p className="text-xs font-medium text-muted-foreground">{gn.niveau.name}</p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                    {gn.promotions.map(p => {
+                      const nbEval = evaluations.filter(e => e.promotionId === p.id).length;
+                      return (
+                        <button key={p.id} onClick={() => setPromotionId(p.id)} className="text-left group">
+                          <Card className="hover:shadow-md hover:border-primary/40 transition-all h-full cursor-pointer">
+                            <CardContent className="p-4">
+                              <div className="flex items-start justify-between mb-3">
+                                <div className="p-2 rounded-lg bg-primary/10 text-primary">
+                                  <GraduationCap className="h-5 w-5" />
+                                </div>
+                                <ChevronRight className="h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors mt-1" />
+                              </div>
+                              <h3 className="font-semibold text-foreground mb-2">{p.name}</h3>
+                              <div className="flex items-center justify-between text-xs text-muted-foreground">
+                                <span className="flex items-center gap-1"><Users className="h-3 w-3" />{p.studentLimit} places max</span>
+                                <span className="flex items-center gap-1"><ClipboardList className="h-3 w-3" />{nbEval} évaluation{nbEval !== 1 ? 's' : ''}</span>
+                              </div>
+                            </CardContent>
+                          </Card>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
             </div>
-            <Button
-              size="sm" className="gap-2" disabled={categoriesDeLaFormation.length === 0 || matieresDuNiveau.length === 0}
-              onClick={() => setDialogEval(true)}
-            >
-              <Plus className="h-3.5 w-3.5" />Nouvelle évaluation
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  // ── Étape 2 : périodes/évaluations (gauche) + saisie (droite) ────────────
+  return (
+    <div className="h-full flex flex-col">
+      <div className="px-6 py-4 border-b flex items-center justify-between flex-shrink-0 gap-3 flex-wrap">
+        <div className="flex items-start gap-3">
+          <Button variant="ghost" size="icon" className="flex-shrink-0 mt-0.5" onClick={() => setPromotionId(null)}>
+            <ArrowLeft className="h-5 w-5" />
+          </Button>
+          <div>
+            <div className="flex items-center gap-1.5 text-sm text-muted-foreground mb-1">
+              <button onClick={() => setPromotionId(null)} className="hover:text-foreground transition-colors">Évaluations</button>
+              <ChevronRight className="h-3.5 w-3.5" />
+              <span className="font-medium text-foreground">{promotion.name}</span>
+            </div>
+            <h1 className="text-2xl font-bold text-foreground">{promotion.name}</h1>
+          </div>
+        </div>
+      </div>
+
+      {categoriesDeLaFormation.length === 0 && (
+        <div className="mx-6 mt-4 rounded-md border border-dashed p-3 text-sm text-muted-foreground flex-shrink-0">
+          Aucune formule d'évaluation définie pour « {formation?.name} ». Le directeur doit d'abord définir les
+          catégories (contrôle continu, TP, examen…) sur la{' '}
+          <Link to={`/formation/formations/${formation?.id}`} className="text-primary hover:underline">page de la formation</Link>.
+        </div>
+      )}
+
+      <div className="flex-1 min-h-0 flex">
+        {/* LEFT PANEL — Périodes et évaluations */}
+        <div className="w-64 border-r flex-shrink-0 flex flex-col bg-muted/10">
+          <div className="p-3 border-b bg-background flex-shrink-0 flex items-center justify-between">
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Périodes</p>
+            <Button variant="ghost" size="icon" className="h-6 w-6" title="Nouvelle période" onClick={() => setDialogPeriode(true)}>
+              <Plus className="h-3.5 w-3.5" />
             </Button>
           </div>
-
-          {evaluationsDeLaPromotion.length === 0 ? (
-            <Card className="border-dashed">
-              <CardContent className="py-16 text-center">
-                <ClipboardList className="w-14 h-14 mx-auto mb-4 text-muted-foreground/50" />
-                <h3 className="text-lg font-semibold text-foreground mb-2">Aucune évaluation créée</h3>
-                <p className="text-muted-foreground">Ajoutez une évaluation pour commencer la saisie des notes.</p>
-              </CardContent>
-            </Card>
-          ) : (
-            <div className="space-y-2">
-              {evaluationsDeLaPromotion.map(ev => {
-                const matiere = niveauMatieres.find(m => m.id === ev.niveauMatiereId);
-                const categorie = baremeCategories.find(c => c.id === ev.categorieId);
-                const periode = periodes.find(p => p.id === ev.periodeId);
-                const resume = resumeEvaluation(ev, notes.filter(n => n.evaluationId === ev.id), elevesDeLaPromotion.length);
+          <div className="flex-1 overflow-y-auto p-2 space-y-3">
+            {periodesDeLaPromotion.length === 0 ? (
+              <div className="text-center py-8 text-muted-foreground text-sm px-3">
+                <ClipboardList className="h-8 w-8 mx-auto mb-2 opacity-40" />
+                <p>Aucune période</p>
+                <p className="text-xs mt-1">Une CAP de 3 ans et une formation de 6 mois n'ont pas le même rythme.</p>
+              </div>
+            ) : (
+              periodesDeLaPromotion.map(per => {
+                const evalsDePeriode = evaluationsDeLaPromotion.filter(e => e.periodeId === per.id);
                 return (
-                  <Card key={ev.id} className="group">
-                    <CardContent className="py-3 flex items-center justify-between gap-4 flex-wrap">
-                      <div>
-                        <p className="text-sm font-medium">{ev.title}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {matiere?.matiereName ?? '—'} · {categorie?.name ?? '—'} · {periode?.name ?? '—'} · {ev.type} · {ev.date} · /{ev.bareme}
-                          {ev.poids !== 1 && ` · poids ${ev.poids}`}
-                        </p>
-                      </div>
-                      <div className="flex items-center gap-3">
-                        <span className="text-xs text-muted-foreground flex items-center gap-1">
-                          <Users className="h-3 w-3" />{resume.nbNotes}/{resume.nbAttendus}
-                          {resume.moyenne !== null && ` · moy. ${resume.moyenne.toFixed(1)}/20`}
-                        </span>
-                        <Button variant="outline" size="sm" onClick={() => ouvrirSaisie(ev.id)}>Saisir les notes</Button>
-                        <Button
-                          variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive opacity-0 group-hover:opacity-100"
-                          title="Supprimer" onClick={() => setConfirmDeleteId(ev.id)}
+                  <div key={per.id}>
+                    <div className="group flex items-center justify-between px-2 py-1">
+                      <p className="text-xs font-medium text-foreground truncate">{per.name}</p>
+                      <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 flex-shrink-0">
+                        <button
+                          className="p-1 rounded hover:bg-muted text-muted-foreground" title="Nouvelle évaluation"
+                          onClick={() => ouvrirDialogEval(per.id)}
                         >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </Button>
+                          <Plus className="h-3 w-3" />
+                        </button>
+                        <button
+                          className="p-1 rounded hover:bg-destructive/10 text-destructive" title="Supprimer la période"
+                          onClick={() => setConfirmDeletePeriodeId(per.id)}
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </button>
                       </div>
+                    </div>
+                    <div className="space-y-0.5">
+                      {evalsDePeriode.length === 0 ? (
+                        <p className="text-xs text-muted-foreground/70 px-3 py-1 italic">Aucune évaluation</p>
+                      ) : evalsDePeriode.map(ev => {
+                        const isActive = ev.id === evaluationId;
+                        const matiere = niveauMatieres.find(m => m.id === ev.niveauMatiereId);
+                        const resume = resumeEvaluation(ev, notes.filter(n => n.evaluationId === ev.id), elevesDeLaPromotion.length);
+                        return (
+                          <button
+                            key={ev.id}
+                            onClick={() => setEvaluationId(ev.id)}
+                            className={`w-full text-left flex items-center gap-2 px-2.5 py-2 rounded-lg transition-all text-sm ${
+                              isActive ? 'bg-primary text-primary-foreground font-medium shadow-sm' : 'hover:bg-muted text-foreground'
+                            }`}
+                          >
+                            <div className={`w-2 h-2 rounded-full flex-shrink-0 ${
+                              resume.nbNotes > 0
+                                ? isActive ? 'bg-primary-foreground' : 'bg-green-500'
+                                : isActive ? 'bg-primary-foreground/40' : 'bg-muted-foreground/30'
+                            }`} />
+                            <div className="min-w-0 flex-1">
+                              <p className="truncate">{ev.title}</p>
+                              <p className={`text-xs truncate ${isActive ? 'text-primary-foreground/70' : 'text-muted-foreground'}`}>
+                                {matiere?.matiereName ?? '—'}
+                              </p>
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </div>
+
+        {/* RIGHT PANEL — Saisie des notes */}
+        <div className="flex-1 min-w-0 overflow-y-auto p-6">
+          {!evaluationSelectionnee ? (
+            <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
+              <ClipboardList className="h-14 w-14 mb-4 opacity-30" />
+              <p className="font-medium">Sélectionnez une évaluation</p>
+              <p className="text-sm mt-1 opacity-70 mb-4">Ou créez-en une nouvelle pour commencer la saisie</p>
+              <Button
+                size="sm" className="gap-2" disabled={categoriesDeLaFormation.length === 0 || matieresDuNiveau.length === 0 || periodesDeLaPromotion.length === 0}
+                onClick={() => ouvrirDialogEval()}
+              >
+                <Plus className="h-3.5 w-3.5" />Nouvelle évaluation
+              </Button>
+            </div>
+          ) : (() => {
+            const ev = evaluationSelectionnee;
+            const matiere = niveauMatieres.find(m => m.id === ev.niveauMatiereId);
+            const categorie = baremeCategories.find(c => c.id === ev.categorieId);
+            const periode = periodes.find(p => p.id === ev.periodeId);
+            return (
+              <>
+                <div className="flex items-start justify-between gap-3 mb-5 flex-wrap">
+                  <div>
+                    <div className="flex items-center gap-1.5 text-sm text-muted-foreground mb-1 flex-wrap">
+                      <span>{matiere?.matiereName ?? '—'}</span>
+                      <ChevronRight className="h-3.5 w-3.5" />
+                      <span>{periode?.name ?? '—'}</span>
+                    </div>
+                    <h2 className="text-xl font-bold">{ev.title}</h2>
+                    <p className="text-sm text-muted-foreground mt-0.5">
+                      {categorie?.name ?? '—'} · {ev.type} · {ev.date} · /{ev.bareme}{ev.poids !== 1 && ` · poids ${ev.poids}`}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    <span className="text-sm text-muted-foreground min-w-[110px] text-right">
+                      {saveState === 'saving' && <span className="animate-pulse">Enregistrement…</span>}
+                      {saveState === 'saved' && <span className="flex items-center gap-1 justify-end text-green-600"><Check className="h-3.5 w-3.5" />Enregistré</span>}
+                      {saveState === 'error' && <span className="flex items-center gap-1 justify-end text-destructive"><AlertCircle className="h-3.5 w-3.5" />Erreur</span>}
+                    </span>
+                    <Button
+                      variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive" title="Supprimer l'évaluation"
+                      onClick={() => setConfirmDeleteEvalId(ev.id)}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+
+                {elevesDeLaPromotion.length === 0 ? (
+                  <Card className="border-dashed">
+                    <CardContent className="flex flex-col items-center justify-center py-14">
+                      <Users className="h-12 w-12 text-muted-foreground/40 mb-3" />
+                      <p className="text-muted-foreground">Aucun élève dans cette promotion</p>
                     </CardContent>
                   </Card>
-                );
-              })}
-            </div>
-          )}
-        </>
-      )}
+                ) : (
+                  <Card>
+                    <CardHeader className="pb-3">
+                      <div className="flex items-center justify-between flex-wrap gap-3">
+                        <CardTitle className="text-base">{elevesDeLaPromotion.length} élève{elevesDeLaPromotion.length !== 1 ? 's' : ''}</CardTitle>
+                        <div className="relative">
+                          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                          <Input placeholder="Rechercher un élève…" value={search} onChange={(e) => setSearch(e.target.value)} className="pl-8 w-48 h-8 text-sm" />
+                        </div>
+                      </div>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="overflow-x-auto">
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead className="min-w-[160px]">Élève</TableHead>
+                              <TableHead className="min-w-[170px]">Statut</TableHead>
+                              <TableHead className="min-w-[100px] text-center">Note /{ev.bareme}</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {elevesFiltres.length === 0 ? (
+                              <TableRow><TableCell colSpan={3} className="text-center py-8 text-muted-foreground text-sm">Aucun élève trouvé pour « {search} »</TableCell></TableRow>
+                            ) : elevesFiltres.map(s => {
+                              const entry = entries[s.id] ?? { valeur: '', statut: 'note' as StatutNote };
+                              return (
+                                <TableRow key={s.id}>
+                                  <TableCell>
+                                    <div className="font-medium text-sm leading-tight">{s.lastName}</div>
+                                    <div className="text-xs text-muted-foreground">{s.firstName}</div>
+                                  </TableCell>
+                                  <TableCell>
+                                    <Select value={entry.statut} onValueChange={(v) => updateEntry(s.id, { statut: v as StatutNote })}>
+                                      <SelectTrigger className="h-8 text-xs w-full"><SelectValue /></SelectTrigger>
+                                      <SelectContent>
+                                        {Object.entries(LIBELLES_STATUT_NOTE).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}
+                                      </SelectContent>
+                                    </Select>
+                                  </TableCell>
+                                  <TableCell>
+                                    <Input
+                                      type="number" min={0} max={ev.bareme} step="0.25" className="w-20 text-center mx-auto h-8"
+                                      disabled={entry.statut !== 'note'} value={entry.valeur} placeholder="-"
+                                      onChange={(e) => updateEntry(s.id, { valeur: e.target.value })}
+                                    />
+                                  </TableCell>
+                                </TableRow>
+                              );
+                            })}
+                          </TableBody>
+                        </Table>
+                      </div>
+                      {search && elevesFiltres.length < elevesDeLaPromotion.length && (
+                        <p className="text-xs text-muted-foreground mt-3 text-center">
+                          {elevesFiltres.length} résultat{elevesFiltres.length !== 1 ? 's' : ''} sur {elevesDeLaPromotion.length} élèves
+                        </p>
+                      )}
+                    </CardContent>
+                  </Card>
+                )}
+              </>
+            );
+          })()}
+        </div>
+      </div>
 
       {/* ── Nouvelle période ── */}
       <Dialog open={dialogPeriode} onOpenChange={setDialogPeriode}>
@@ -303,7 +519,7 @@ const Evaluations = () => {
           <div className="space-y-4 pt-2">
             <div className="space-y-2">
               <Label htmlFor="periode-name">Nom *</Label>
-              <Input id="periode-name" placeholder="Ex : Semestre 1, Trimestre 1…" value={periodeName} onChange={e => setPeriodeName(e.target.value)} />
+              <Input id="periode-name" placeholder="Ex : Semestre 1, Trimestre 1…" value={periodeName} onChange={e => setPeriodeName(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleCreatePeriode()} />
             </div>
             <Button onClick={handleCreatePeriode} className="w-full" disabled={isSavingPeriode}>
               {isSavingPeriode && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}Créer
@@ -312,8 +528,23 @@ const Evaluations = () => {
         </DialogContent>
       </Dialog>
 
+      <AlertDialog open={!!confirmDeletePeriodeId} onOpenChange={(open) => !open && setConfirmDeletePeriodeId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Supprimer cette période ?</AlertDialogTitle>
+            <AlertDialogDescription>Toutes ses évaluations et les notes saisies seront supprimées. Cette action ne peut pas être défaite.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="flex justify-end gap-2">
+            <AlertDialogCancel>Annuler</AlertDialogCancel>
+            <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={() => confirmDeletePeriodeId && void handleDeletePeriode(confirmDeletePeriodeId)}>
+              Supprimer
+            </AlertDialogAction>
+          </div>
+        </AlertDialogContent>
+      </AlertDialog>
+
       {/* ── Nouvelle évaluation ── */}
-      <Dialog open={dialogEval} onOpenChange={(open) => !open && resetEvalForm()}>
+      <Dialog open={dialogEval} onOpenChange={setDialogEval}>
         <DialogContent className="max-w-lg">
           <DialogHeader><DialogTitle>Nouvelle évaluation</DialogTitle></DialogHeader>
           <div className="space-y-4 pt-2">
@@ -384,8 +615,7 @@ const Evaluations = () => {
         </DialogContent>
       </Dialog>
 
-      {/* ── Suppression d'une évaluation ── */}
-      <AlertDialog open={!!confirmDeleteId} onOpenChange={(open) => !open && setConfirmDeleteId(null)}>
+      <AlertDialog open={!!confirmDeleteEvalId} onOpenChange={(open) => !open && setConfirmDeleteEvalId(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Supprimer cette évaluation ?</AlertDialogTitle>
@@ -393,46 +623,12 @@ const Evaluations = () => {
           </AlertDialogHeader>
           <div className="flex justify-end gap-2">
             <AlertDialogCancel>Annuler</AlertDialogCancel>
-            <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={() => confirmDeleteId && void handleDeleteEval(confirmDeleteId)}>
+            <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={() => confirmDeleteEvalId && void handleDeleteEval(confirmDeleteEvalId)}>
               Supprimer
             </AlertDialogAction>
           </div>
         </AlertDialogContent>
       </AlertDialog>
-
-      {/* ── Saisie des notes ── */}
-      <Dialog open={!!evaluationEnSaisie} onOpenChange={(open) => !open && setSaisieEvalId(null)}>
-        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>{evaluationEnSaisie?.title} — saisie des notes (/{evaluationEnSaisie?.bareme})</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-2 pt-2">
-            {elevesDeLaPromotion.length === 0 ? (
-              <p className="text-sm text-muted-foreground">Aucun élève inscrit dans cette promotion.</p>
-            ) : elevesDeLaPromotion.map(s => {
-              const b = brouillon[s.id] ?? { valeur: '', statut: 'note' as StatutNote };
-              return (
-                <div key={s.id} className="flex items-center gap-3 py-1.5 border-b last:border-0">
-                  <span className="text-sm flex-1 truncate">{s.firstName} {s.lastName}</span>
-                  <Select value={b.statut} onValueChange={(v) => setBrouillon(prev => ({ ...prev, [s.id]: { ...b, statut: v as StatutNote } }))}>
-                    <SelectTrigger className="w-44 h-8 text-xs"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      {Object.entries(LIBELLES_STATUT_NOTE).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                  <Input
-                    type="number" min={0} className="w-20 h-8" disabled={b.statut !== 'note'}
-                    value={b.valeur} onChange={(e) => setBrouillon(prev => ({ ...prev, [s.id]: { ...b, valeur: e.target.value } }))}
-                  />
-                </div>
-              );
-            })}
-            <Button onClick={handleSaveNotes} className="w-full" disabled={isSavingNotes || elevesDeLaPromotion.length === 0}>
-              {isSavingNotes && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}Enregistrer les notes
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 };
