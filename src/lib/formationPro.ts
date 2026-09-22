@@ -89,6 +89,16 @@ export const coefficientValide = (v: number): boolean => Number.isFinite(v) && v
 export const volumeHoraireValide = (v: number | undefined): boolean =>
   v === undefined || (Number.isFinite(v) && v >= 0);
 
+// ─── Coefficients : réservés au directeur général ──────────────────────────
+// À la demande d'IFHO : n'importe quel membre du personnel ayant accès à
+// Formations (permission « Notes ») peut créer des matières et organiser le
+// programme, mais SEUL le compte admin_school (directeur général) peut fixer
+// ou modifier un coefficient — celui d'une matière comme d'un créneau au
+// choix. Un import (fichier ou modèle) fixe aussi des coefficients : il est
+// donc réservé au même titre, pour qu'un import ne serve pas à contourner la
+// restriction du formulaire.
+export const peutModifierCoefficients = (accountRole: string | null | undefined): boolean => accountRole === 'admin';
+
 /** Deux matières ne peuvent pas porter le même nom dans le même bloc (insensible à la casse/aux espaces). */
 export const nomMatiereDejaPris = (
   matieres: FormationMatiere[], name: string, blocId: string, excludeId?: string,
