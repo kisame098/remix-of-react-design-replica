@@ -63,6 +63,8 @@ const AbonnementPage        = lazy(() => import("./pages/Abonnement"));
 const SubscriptionRequired  = lazy(() => import("./pages/SubscriptionRequired"));
 const FormationEnDeveloppement = lazy(() => import("./pages/formation/FormationEnDeveloppement"));
 const Formations = lazy(() => import("./pages/formation/Formations"));
+const FormationDetail = lazy(() => import("./pages/formation/FormationDetail"));
+const NiveauProgramme = lazy(() => import("./pages/formation/NiveauProgramme"));
 const PlatformStats         = lazy(() => import("./pages/platform/PlatformStats"));
 const PlatformSchools       = lazy(() => import("./pages/platform/PlatformSchools"));
 const PlatformSchoolDetail  = lazy(() => import("./pages/platform/PlatformSchoolDetail"));
@@ -167,6 +169,12 @@ const App = () => (
                     <Route path="/filieres/:filiereId" element={<ModeRoute mode="classique"><RequirePermission permission="grades"><FiliereEditor /></RequirePermission></ModeRoute>} />
                     <Route path="/formation/formations" element={
                       <ModeRoute mode="formation_pro"><RequirePermission permission="grades"><Formations /></RequirePermission></ModeRoute>
+                    } />
+                    <Route path="/formation/formations/:formationId" element={
+                      <ModeRoute mode="formation_pro"><RequirePermission permission="grades"><FormationDetail /></RequirePermission></ModeRoute>
+                    } />
+                    <Route path="/formation/formations/:formationId/niveaux/:niveauId" element={
+                      <ModeRoute mode="formation_pro"><RequirePermission permission="grades"><NiveauProgramme /></RequirePermission></ModeRoute>
                     } />
                     {["/formation", "/formation/promotions", "/formation/evaluations",
                       "/formation/examens", "/formation/stages", "/formation/documents"].map(chemin => (
