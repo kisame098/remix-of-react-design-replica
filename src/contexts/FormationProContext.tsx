@@ -6,7 +6,7 @@ import { estFormationPro } from '@/lib/modeGestion';
 import {
   type Formation, type Niveau, type MatiereCatalogue, type NiveauMatiere, type ChoixGroup, type ChoixOption,
   type NiveauMatiereType, type NiveauMatiereNature, type Promotion, type RythmePromotion, type StatutPromotion,
-  type BaremeCategorie, type Periode, type Evaluation, type Note, type StatutNote,
+  type BaremeCategorie, type Periode, type Evaluation, type Note, type StatutNote, DEFAUT_BAREME_CATEGORIES,
 } from '@/lib/formationPro';
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -82,6 +82,18 @@ const mapNote = (r: any): Note => ({
   valeur: r.valeur == null ? undefined : Number(r.valeur), statut: r.statut, observation: r.observation ?? undefined,
 });
 
+/** Insère d'un coup les catégories du barème d'une formation — jamais un formulaire vide à remplir une par une. */
+const seedBaremeCategories = async (
+  schoolId: string, formationId: string, categories: readonly { name: string; pourcentage: number }[],
+): Promise<BaremeCategorie[]> => {
+  if (categories.length === 0) return [];
+  const { data, error } = await sb.from('fp_bareme_categories').insert(
+    categories.map((c, i) => ({ school_id: schoolId, formation_id: formationId, name: c.name, pourcentage: c.pourcentage, ordering: i })),
+  ).select();
+  if (error) throw error;
+  return (data ?? []).map(mapBaremeCategorie);
+};
+
 interface FormationProContextType {
   loading: boolean;
   formations: Formation[];
@@ -125,6 +137,8 @@ interface FormationProContextType {
   addBaremeCategorie: (formationId: string, data: DonneesBaremeCategorie) => Promise<BaremeCategorie>;
   updateBaremeCategorie: (id: string, data: Partial<DonneesBaremeCategorie>) => Promise<void>;
   deleteBaremeCategorie: (id: string) => Promise<void>;
+  /** Rattrapage pour une formation créée avant l'introduction de la formule par défaut. */
+  appliquerBaremeParDefaut: (formationId: string) => Promise<void>;
 
   periodes: Periode[];
   addPeriode: (promotionId: string, data: DonneesPeriode) => Promise<Periode>;
@@ -247,7 +261,11 @@ export const FormationProProvider = ({ children }: { children: ReactNode }) => {
   const notesRef = useRef(notes); notesRef.current = notes;
 
   // ── Formations ─────────────────────────────────────────────────────────
-  const addFormation = useCallback(async (data: DonneesFormation): Promise<Formation> => {
+  // Par défaut, une formation neuve reçoit tout de suite une formule
+  // d'évaluation (jamais un barème vide à construire de zéro) — le directeur
+  // la personnalise ensuite. `avecBaremeParDefaut: false` sert à
+  // `duplicateFormation`, qui copie le barème de la formation source à la place.
+  const addFormation = useCallback(async (data: DonneesFormation, opts?: { avecBaremeParDefaut?: boolean }): Promise<Formation> => {
     if (!schoolId) throw new Error('Non connecté à une école');
     const ordering = formationsRef.current.length;
     const { data: row, error } = await sb.from('fp_formations').insert({
@@ -258,6 +276,10 @@ export const FormationProProvider = ({ children }: { children: ReactNode }) => {
     if (error) throw error;
     const formation = mapFormation(row);
     setFormations(prev => [...prev, formation]);
+    if (opts?.avecBaremeParDefaut !== false) {
+      const cats = await seedBaremeCategories(schoolId, formation.id, DEFAUT_BAREME_CATEGORIES);
+      setBaremeCategories(prev => [...prev, ...cats]);
+    }
     return formation;
   }, [schoolId]);
 
@@ -447,7 +469,14 @@ export const FormationProProvider = ({ children }: { children: ReactNode }) => {
   }, [addNiveau, addMatiereToNiveau, addChoixGroup, addChoixOption]);
 
   const duplicateFormation = useCallback(async (sourceFormationId: string, data: DonneesFormation): Promise<Formation> => {
-    const nouvelleFormation = await addFormation(data);
+    const nouvelleFormation = await addFormation(data, { avecBaremeParDefaut: false });
+    if (schoolId) {
+      const baremeSource = baremeCategoriesRef.current.filter(c => c.formationId === sourceFormationId).sort((a, b) => a.ordering - b.ordering);
+      if (baremeSource.length > 0) {
+        const cats = await seedBaremeCategories(schoolId, nouvelleFormation.id, baremeSource.map(c => ({ name: c.name, pourcentage: c.pourcentage })));
+        setBaremeCategories(prev => [...prev, ...cats]);
+      }
+    }
     const niveauxSource = niveauxRef.current.filter(n => n.formationId === sourceFormationId).sort((a, b) => a.ordering - b.ordering);
     // Séquentiel : chaque duplicateNiveau lit les refs par effet de bord —
     // les paralléliser mélangerait les `ordering`.
@@ -455,7 +484,7 @@ export const FormationProProvider = ({ children }: { children: ReactNode }) => {
       await duplicateNiveau(n.id, nouvelleFormation.id, { name: n.name, description: n.description });
     }
     return nouvelleFormation;
-  }, [addFormation, duplicateNiveau]);
+  }, [addFormation, duplicateNiveau, schoolId]);
 
   // ── Promotions ─────────────────────────────────────────────────────────
   const addPromotion = useCallback(async (niveauId: string, data: DonneesPromotion): Promise<Promotion> => {
@@ -559,6 +588,12 @@ export const FormationProProvider = ({ children }: { children: ReactNode }) => {
     const { error } = await sb.from('fp_bareme_categories').delete().eq('id', id).eq('school_id', schoolId);
     if (error) throw error;
     setBaremeCategories(prev => prev.filter(c => c.id !== id));
+  }, [schoolId]);
+
+  const appliquerBaremeParDefaut = useCallback(async (formationId: string): Promise<void> => {
+    if (!schoolId) return;
+    const cats = await seedBaremeCategories(schoolId, formationId, DEFAUT_BAREME_CATEGORIES);
+    setBaremeCategories(prev => [...prev, ...cats]);
   }, [schoolId]);
 
   // ── Périodes (par promotion) ──────────────────────────────────────────────
@@ -672,7 +707,7 @@ export const FormationProProvider = ({ children }: { children: ReactNode }) => {
     addPromotion, updatePromotion, deletePromotion, duplicatePromotion,
     addMatiereToNiveau, updateNiveauMatiere, deleteNiveauMatiere,
     addChoixGroup, updateChoixGroup, deleteChoixGroup, addChoixOption, deleteChoixOption,
-    baremeCategories, addBaremeCategorie, updateBaremeCategorie, deleteBaremeCategorie,
+    baremeCategories, addBaremeCategorie, updateBaremeCategorie, deleteBaremeCategorie, appliquerBaremeParDefaut,
     periodes, addPeriode, updatePeriode, deletePeriode,
     evaluations, addEvaluation, updateEvaluation, deleteEvaluation,
     notes, saisirNote,
@@ -682,7 +717,7 @@ export const FormationProProvider = ({ children }: { children: ReactNode }) => {
       addPromotion, updatePromotion, deletePromotion, duplicatePromotion,
       addMatiereToNiveau, updateNiveauMatiere, deleteNiveauMatiere,
       addChoixGroup, updateChoixGroup, deleteChoixGroup, addChoixOption, deleteChoixOption,
-      baremeCategories, addBaremeCategorie, updateBaremeCategorie, deleteBaremeCategorie,
+      baremeCategories, addBaremeCategorie, updateBaremeCategorie, deleteBaremeCategorie, appliquerBaremeParDefaut,
       periodes, addPeriode, updatePeriode, deletePeriode,
       evaluations, addEvaluation, updateEvaluation, deleteEvaluation,
       notes, saisirNote]);

@@ -353,7 +353,7 @@ describe('garde-fous — inscription des élèves adaptée au mode formation pro
 // ════════════════════════════════════════════════════════════════════════════
 
 import {
-  nomCategorieValide, pourcentageValide, sommeBareme, baremeComplet,
+  nomCategorieValide, pourcentageValide, sommeBareme, baremeComplet, DEFAUT_BAREME_CATEGORIES,
   nomPeriodeValide, titreEvaluationValide, baremeValide, poidsValide,
   convertirSur20, moyenneCategorie, moyenneMatiere, moyenneGenerale, resumeEvaluation,
   triEvaluations, triPeriodes,
@@ -380,6 +380,10 @@ describe('validation du barème et des évaluations', () => {
     expect(pourcentageValide(101)).toBe(false);
     expect(pourcentageValide(-5)).toBe(false);
   });
+  it('la formule par défaut appliquée à toute nouvelle formation fait bien 100 %', () => {
+    expect(DEFAUT_BAREME_CATEGORIES.reduce((s, c) => s + c.pourcentage, 0)).toBe(100);
+  });
+
   it('sommeBareme et baremeComplet — le barème IFHO (30/30/10/30) fait bien 100', () => {
     const bareme = [
       categorie({ id: 'cc', name: 'Contrôle continu', pourcentage: 30 }),

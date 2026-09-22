@@ -32,7 +32,7 @@ const FormationDetail = () => {
   const {
     loading, formations, niveaux, niveauMatieres, choixGroups, baremeCategories,
     addNiveau, updateNiveau, deleteNiveau, duplicateNiveau,
-    addBaremeCategorie, updateBaremeCategorie, deleteBaremeCategorie,
+    addBaremeCategorie, updateBaremeCategorie, deleteBaremeCategorie, appliquerBaremeParDefaut,
   } = useFormationPro();
 
   const formation = formations.find(f => f.id === formationId);
@@ -93,6 +93,19 @@ const FormationDetail = () => {
 
   const somme = sommeBareme(bareme);
   const complet = baremeComplet(bareme);
+
+  const [isApplyingDefaut, setIsApplyingDefaut] = useState(false);
+  const handleAppliquerDefaut = async () => {
+    if (!formationId) return;
+    setIsApplyingDefaut(true);
+    try {
+      await appliquerBaremeParDefaut(formationId);
+    } catch (err) {
+      toast({ title: 'Erreur', description: String(err), variant: 'destructive' });
+    } finally {
+      setIsApplyingDefaut(false);
+    }
+  };
 
   // ── Créer / modifier / dupliquer un niveau ───────────────────────────────
   type DialogState = { kind: 'create' } | { kind: 'edit'; niveauId: string } | { kind: 'duplicate'; sourceId: string; sourceName: string };
@@ -254,7 +267,15 @@ const FormationDetail = () => {
           </CardHeader>
           <CardContent>
             {bareme.length === 0 ? (
-              <p className="text-sm text-muted-foreground">Aucune catégorie définie — les moyennes ne peuvent pas encore être calculées.</p>
+              <div className="text-center py-4">
+                <p className="text-sm text-muted-foreground mb-3">
+                  Aucune catégorie définie — les moyennes ne peuvent pas encore être calculées.
+                </p>
+                <Button size="sm" variant="outline" className="gap-2" disabled={isApplyingDefaut} onClick={handleAppliquerDefaut}>
+                  {isApplyingDefaut && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                  Utiliser la formule courante (contrôle continu 30 % · TP 30 % · examen blanc 10 % · examen final 30 %)
+                </Button>
+              </div>
             ) : (
               <div className="space-y-2">
                 {bareme.map(c => (
