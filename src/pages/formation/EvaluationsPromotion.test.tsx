@@ -29,8 +29,8 @@ const ctxInitial = () => ({
   baremeCategories: [
     { id: 'cc', formationId: 'f1', name: 'Contrôle continu', pourcentage: 30, ordering: 0 },
     { id: 'tp', formationId: 'f1', name: 'TP', pourcentage: 30, ordering: 1 },
-    { id: 'eb', formationId: 'f1', name: 'Examen blanc', pourcentage: 10, ordering: 2 },
-    { id: 'ef', formationId: 'f1', name: 'Examen final', pourcentage: 30, ordering: 3 },
+    { id: 'eb', formationId: 'f1', name: 'Examen blanc', pourcentage: 10, ordering: 2, sourceExamen: 'blanc' as const },
+    { id: 'ef', formationId: 'f1', name: 'Examen final', pourcentage: 30, ordering: 3, sourceExamen: 'officiel' as const },
   ],
   promotions: [{ id: 'p1', niveauId: 'n1', classId: 'c1', name: 'CAP 1 — Promo Septembre 2026', studentLimit: 30, rythme: 'jour' as const, startDate: '2026-09-01', endDate: '2027-06-30', status: 'active' as const, createdAt: '' }],
   periodes: [{ id: 'per1', promotionId: 'p1', name: 'Semestre 1', ordering: 0 }] as { id: string; promotionId: string; name: string; ordering: number }[],
@@ -54,6 +54,17 @@ const ctxInitial = () => ({
 });
 let ctx = ctxInitial();
 vi.mock('@/contexts/FormationProContext', () => ({ useFormationPro: () => ctx }));
+
+// L'examen final du Semestre 1 : TP Cuisine (épreuve rattachée à nm1), Diop 20/20.
+const examensInitial = () => ({
+  loading: false,
+  examens: [{ id: 'x1', promotionId: 'p1', name: 'Examen final', type: 'officiel' as const, periodeId: 'per1', seuilAdmission: 10, verrouille: false, createdAt: '2026-06-01T00:00:00Z' }],
+  tours: [{ id: 't1', examenId: 'x1', name: 'Pratique', ordering: 0 }],
+  epreuves: [{ id: 'ep1', tourId: 't1', niveauMatiereId: 'nm1', nom: 'TP Cuisine', coefficient: 1, bareme: 20, ordering: 0 }],
+  notes: [{ id: 'xn1', epreuveId: 'ep1', studentEnrollmentId: 's1', valeur: 20, statut: 'note' as const }],
+});
+let examens = examensInitial();
+vi.mock('@/contexts/ExamensContext', () => ({ useExamens: () => examens }));
 vi.mock('@/contexts/SchoolContext', () => ({
   useSchool: () => ({
     students: [
@@ -75,18 +86,32 @@ const attendreSauvegarde = () => act(() => new Promise(resolve => setTimeout(res
 const caseDe = (evaluation: string, eleve: string) => screen.getByLabelText(`${evaluation} — ${eleve}`);
 
 describe('EvaluationsPromotion — une grille par matière, catégories en colonnes', () => {
-  beforeEach(() => { ctx = ctxInitial(); });
+  beforeEach(() => { ctx = ctxInitial(); examens = examensInitial(); });
 
-  it('ouvre directement la première matière : toutes les catégories en colonnes, notes et moyenne visibles', () => {
+  it('ouvre directement la première matière : seules les catégories saisies ici ont des colonnes', () => {
+    examens.notes = [];
     rendre();
     expect(screen.getByRole('heading', { name: 'CAP 1 — Promo Septembre 2026' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: /TP Cuisine/ })).toBeInTheDocument();
-    for (const cat of ['Contrôle continu', 'TP', 'Examen blanc', 'Examen final']) {
+    for (const cat of ['Contrôle continu', 'TP']) {
       expect(screen.getByRole('columnheader', { name: new RegExp(`^${cat} ·`) })).toBeInTheDocument();
     }
+    // Examen blanc et Examen final : plus de colonne ici, seulement rappelés dans la formule.
+    expect(screen.queryByRole('columnheader', { name: /^Examen blanc/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('columnheader', { name: /^Examen final/ })).not.toBeInTheDocument();
+    expect(screen.getByText('Examen final 30 %')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /Saisir les examens/ })).toHaveAttribute('href', '/formation/examens/p1');
     expect(caseDe('Devoir 1', 'Diop Awa')).toHaveValue('14');
     const ligneAwa = screen.getByText('Diop').closest('tr')!;
     expect(within(ligneAwa).getAllByText('14').length).toBeGreaterThan(0);   // moyenne de la matière
+  });
+
+  it('la moyenne compte l\'examen final saisi dans la rubrique Examens — sans le ressaisir', () => {
+    rendre();
+    const ligneAwa = screen.getByText('Diop').closest('tr')!;
+    // Contrôle continu 14 (30 %) + Examen final 20 (30 %) → 17
+    expect(within(ligneAwa).getByText('17')).toBeInTheDocument();
+    expect(screen.getByText(/examens inclus/)).toBeInTheDocument();
   });
 
   it('plus de formulaire « Nouvelle évaluation » : « + » dans l\'en-tête de la catégorie crée la colonne directement', async () => {
@@ -166,8 +191,8 @@ describe('EvaluationsPromotion — une grille par matière, catégories en colon
     rendre();
     await user.click(screen.getByRole('button', { name: /Récapitulatif/ }));
     const ligneAwa = screen.getByText('Diop').closest('tr')!;
-    // (14×4 + 8×2) / 6 = 12
-    expect(within(ligneAwa).getByText('12')).toBeInTheDocument();
+    // TP Cuisine : CC 14 et examen final 20 → 17 ; Français 8 → (17×4 + 8×2) / 6 = 14
+    expect(within(ligneAwa).getByText('14')).toBeInTheDocument();
     const ligneMoussa = screen.getByText('Fall').closest('tr')!;
     expect(within(ligneMoussa).getAllByText('1').length).toBeGreaterThan(0);   // 16 : premier
     expect(within(ligneAwa).getByText('2')).toBeInTheDocument();

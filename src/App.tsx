@@ -185,14 +185,16 @@ const App = () => (
                     <Route path="/formation/promotions" element={
                       <ModeRoute mode="formation_pro"><RequirePermission permission="grades"><Promotions /></RequirePermission></ModeRoute>
                     } />
-                    <Route path="/formation/evaluations" element={
-                      <ModeRoute mode="formation_pro"><RequirePermission permission="grades"><Evaluations /></RequirePermission></ModeRoute>
-                    } />
-                    <Route path="/formation/evaluations/:promotionId" element={
-                      <ModeRoute mode="formation_pro"><RequirePermission permission="grades"><EvaluationsPromotion /></RequirePermission></ModeRoute>
-                    } />
-                    {/* Les données des examens ne se chargent que sur ces deux pages. */}
+                    {/* Les données des examens ne se chargent que sur ces pages :
+                        Évaluations en a besoin aussi, les examens alimentant
+                        la formule (catégories Examen blanc / Examen final). */}
                     <Route element={<ExamensProvider />}>
+                      <Route path="/formation/evaluations" element={
+                        <ModeRoute mode="formation_pro"><RequirePermission permission="grades"><Evaluations /></RequirePermission></ModeRoute>
+                      } />
+                      <Route path="/formation/evaluations/:promotionId" element={
+                        <ModeRoute mode="formation_pro"><RequirePermission permission="grades"><EvaluationsPromotion /></RequirePermission></ModeRoute>
+                      } />
                       <Route path="/formation/examens" element={
                         <ModeRoute mode="formation_pro"><RequirePermission permission="grades"><Examens /></RequirePermission></ModeRoute>
                       } />

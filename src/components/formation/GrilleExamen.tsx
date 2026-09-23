@@ -13,7 +13,7 @@ import {
 import { Plus, Loader2, Trash2, Search, ArrowUpDown } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import {
-  type Examen, type ExamenEpreuve, type ExamenNote, type ExamenTour, type Decision, type Mention,
+  type Examen, type ExamenEpreuve, type ExamenNote, type ExamenTour, type Decision, type Mention, type NiveauMatiere,
   analyserSaisieNoteExamen, texteDeLaNote, etatCandidat, propositionJury, decisionRetenue, mentionRetenue,
   triEpreuves, LIBELLES_DECISION, LIBELLES_MENTION, nomEpreuveValide, baremeValide, coefficientValide, seuilEliminatoireValide,
   nomTourValide,
@@ -31,6 +31,8 @@ interface Props {
   examen: Examen;
   tours: ExamenTour[];
   candidats: Student[];
+  /** Le programme du niveau : une épreuve rattachée à une matière compte dans sa moyenne (Évaluations). */
+  matieres: NiveauMatiere[];
   sauvegarde: SauvegardeNotes;
   estDirecteur: boolean;
 }
@@ -42,7 +44,7 @@ interface Props {
  * le jury la retient ou la change dans la case. Une fois l'examen verrouillé,
  * tout passe en lecture seule et affiche les valeurs figées.
  */
-export const GrilleExamen = ({ examen, tours, candidats, sauvegarde, estDirecteur }: Props) => {
+export const GrilleExamen = ({ examen, tours, candidats, matieres, sauvegarde, estDirecteur }: Props) => {
   const { epreuves, notes, resultats, addEpreuve, choisirDecision } = useExamens();
   const { brouillons, modifierCase } = sauvegarde;
   const verrouille = examen.verrouille;
@@ -186,7 +188,7 @@ export const GrilleExamen = ({ examen, tours, candidats, sauvegarde, estDirecteu
               ) : eps.map((ep, i) => (
                 <th key={ep.id} className={`px-1 py-1 border-b text-center min-w-[90px] ${i === 0 ? 'border-l' : ''}`}>
                   <EnTeteEpreuve
-                    epreuve={ep} modifiable={modifiable}
+                    epreuve={ep} modifiable={modifiable} matieres={matieres}
                     ouvrirDemande={epreuveAOuvrir === ep.id} onOuvert={() => setEpreuveAOuvrir(null)}
                   />
                 </th>
@@ -293,12 +295,14 @@ export const GrilleExamen = ({ examen, tours, candidats, sauvegarde, estDirecteu
 };
 
 /** Titre d'une colonne d'épreuve — le directeur y règle nom, coefficient, barème, note éliminatoire, date et salle. */
-const EnTeteEpreuve = ({ epreuve: ep, modifiable, ouvrirDemande, onOuvert }: {
-  epreuve: ExamenEpreuve; modifiable: boolean; ouvrirDemande: boolean; onOuvert: () => void;
+const SANS_MATIERE = '__sans';
+
+const EnTeteEpreuve = ({ epreuve: ep, modifiable, matieres, ouvrirDemande, onOuvert }: {
+  epreuve: ExamenEpreuve; modifiable: boolean; matieres: NiveauMatiere[]; ouvrirDemande: boolean; onOuvert: () => void;
 }) => {
   const { notes, updateEpreuve, deleteEpreuve } = useExamens();
   const [ouvert, setOuvert] = useState(false);
-  const [f, setF] = useState({ nom: '', coefficient: '', bareme: '', seuil: '', date: '', heure: '', salle: '', examinateurs: '' });
+  const [f, setF] = useState({ nom: '', matiere: SANS_MATIERE, coefficient: '', bareme: '', seuil: '', date: '', heure: '', salle: '', examinateurs: '' });
   const [enregistrement, setEnregistrement] = useState(false);
   const [confirmer, setConfirmer] = useState(false);
   const notesSaisies = notes.filter(n => n.epreuveId === ep.id);
@@ -306,7 +310,7 @@ const EnTeteEpreuve = ({ epreuve: ep, modifiable, ouvrirDemande, onOuvert }: {
   const ouvrir = (o: boolean) => {
     if (o) {
       setF({
-        nom: ep.nom, coefficient: String(ep.coefficient), bareme: String(ep.bareme),
+        nom: ep.nom, matiere: ep.niveauMatiereId ?? SANS_MATIERE, coefficient: String(ep.coefficient), bareme: String(ep.bareme),
         seuil: ep.seuilEliminatoire == null ? '' : String(ep.seuilEliminatoire),
         date: ep.date ?? '', heure: ep.heure ?? '', salle: ep.salle ?? '', examinateurs: ep.examinateurs ?? '',
       });
@@ -340,6 +344,7 @@ const EnTeteEpreuve = ({ epreuve: ep, modifiable, ouvrirDemande, onOuvert }: {
     try {
       await updateEpreuve(ep.id, {
         nom: f.nom.trim(), coefficient, bareme, seuilEliminatoire: seuil,
+        niveauMatiereId: f.matiere === SANS_MATIERE ? undefined : f.matiere,
         date: f.date || undefined, heure: f.heure || undefined, salle: f.salle, examinateurs: f.examinateurs,
       });
       setOuvert(false);
@@ -357,6 +362,7 @@ const EnTeteEpreuve = ({ epreuve: ep, modifiable, ouvrirDemande, onOuvert }: {
         ×{ep.coefficient} · /{ep.bareme}
         {ep.seuilEliminatoire != null && <span className="text-red-600"> · élim. &lt;{ep.seuilEliminatoire}</span>}
       </div>
+      {!ep.niveauMatiereId && <div className="text-[10px] font-normal italic text-muted-foreground/80" title="Rattachée à aucune matière : ne compte pas dans les moyennes d'Évaluations">hors moyenne</div>}
     </>
   );
   if (!modifiable) return <div className="px-1 py-0.5 text-center">{resume}</div>;
@@ -371,6 +377,24 @@ const EnTeteEpreuve = ({ epreuve: ep, modifiable, ouvrirDemande, onOuvert }: {
           <div className="space-y-1.5">
             <Label htmlFor={`nom-${ep.id}`}>Nom de l'épreuve</Label>
             <Input id={`nom-${ep.id}`} value={f.nom} onChange={e => setF({ ...f, nom: e.target.value })} />
+          </div>
+          <div className="space-y-1.5">
+            <Label>Matière du programme</Label>
+            <Select
+              value={f.matiere}
+              onValueChange={v => {
+                // Choisir une matière reprend son nom et son coefficient si l'épreuve n'a pas encore été nommée.
+                const m = matieres.find(x => x.id === v);
+                setF(prev => ({ ...prev, matiere: v, ...(m && /^Épreuve \d+$/.test(prev.nom) ? { nom: m.matiereName, coefficient: String(m.coefficient) } : {}) }));
+              }}
+            >
+              <SelectTrigger aria-label="Matière du programme"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {matieres.map(m => <SelectItem key={m.id} value={m.id}>{m.matiereName}</SelectItem>)}
+                <SelectItem value={SANS_MATIERE}>Aucune (hors moyenne)</SelectItem>
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">La note de l'épreuve entre dans la moyenne de cette matière, dans Évaluations.</p>
           </div>
           <div className="grid grid-cols-3 gap-2">
             <div className="space-y-1.5">

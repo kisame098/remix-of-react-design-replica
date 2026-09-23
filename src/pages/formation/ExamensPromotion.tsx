@@ -16,7 +16,7 @@ import {
 import { toast } from '@/hooks/use-toast';
 import {
   triExamens, triTours, triEpreuves, epreuvesDepuisProgramme, etatCandidat, propositionJury, decisionRetenue, mentionRetenue,
-  bilanExamen, analyserSaisieNoteExamen, peutGererMatieres, LIBELLES_TYPE_EXAMEN, type Decision, type StatutNoteExamen,
+  bilanExamen, analyserSaisieNoteExamen, peutGererMatieres, LIBELLES_TYPE_EXAMEN, triPeriodes, type Decision, type StatutNoteExamen,
 } from '@/lib/formationPro';
 import { GrilleExamen } from '@/components/formation/GrilleExamen';
 import { DialogExamen } from '@/components/formation/DialogExamen';
@@ -43,7 +43,7 @@ const ExamensPromotion = () => {
   const navigate = useNavigate();
   const { accountRole } = useAuth();
   const estDirecteur = peutGererMatieres(accountRole);
-  const { loading: chargementFp, promotions, formations, niveaux, niveauMatieres } = useFormationPro();
+  const { loading: chargementFp, promotions, formations, niveaux, niveauMatieres, periodes, baremeCategories } = useFormationPro();
   const ex = useExamens();
   const { students } = useSchool();
 
@@ -67,6 +67,15 @@ const ExamensPromotion = () => {
     return triEpreuves(ex.epreuves.filter(e => ids.has(e.tourId)));
   }, [ex.epreuves, tours]);
 
+  const matieresNiveau = useMemo(
+    () => niveauMatieres.filter(m => niveau && m.niveauId === niveau.id).sort((a, b) => a.ordering - b.ordering),
+    [niveauMatieres, niveau],
+  );
+  const periodesPromo = useMemo(() => triPeriodes(periodes.filter(p => p.promotionId === promotionId)), [periodes, promotionId]);
+  const categoriesFormation = useMemo(
+    () => baremeCategories.filter(c => formation && c.formationId === formation.id).sort((a, b) => a.ordering - b.ordering),
+    [baremeCategories, formation],
+  );
   const programme = useMemo(
     () => epreuvesDepuisProgramme(niveauMatieres.filter(m => niveau && m.niveauId === niveau.id)),
     [niveauMatieres, niveau],
@@ -260,6 +269,11 @@ const ExamensPromotion = () => {
                   {examen.reference && <> · {examen.reference}</>}
                   {' '}· admis à partir de {String(examen.seuilAdmission).replace('.', ',')}/20
                 </p>
+                <CompteDans
+                  periode={periodesPromo.find(p => p.id === examen.periodeId)}
+                  categorie={categoriesFormation.find(c => c.sourceExamen === examen.type)}
+                  promotionId={promotion.id}
+                />
                 <p className="flex items-center gap-1 text-xs">
                   <CalendarRange className="h-3 w-3" />
                   {examen.dateDebut || examen.dateFin ? `${dateFr(examen.dateDebut) ?? '…'} → ${dateFr(examen.dateFin) ?? '…'}` : 'Dates non définies'}
@@ -306,7 +320,10 @@ const ExamensPromotion = () => {
                 </CardContent>
               </Card>
             ) : (
-              <GrilleExamen examen={examen} tours={tours} candidats={candidats} sauvegarde={sauvegarde} estDirecteur={estDirecteur} />
+              <GrilleExamen
+                examen={examen} tours={tours} candidats={candidats} matieres={matieresNiveau}
+                sauvegarde={sauvegarde} estDirecteur={estDirecteur}
+              />
             )}
           </div>
         </>
@@ -317,6 +334,8 @@ const ExamensPromotion = () => {
         onOpenChange={o => !o && setDialogExamen(null)}
         examen={dialogExamen === 'edit' ? examen ?? undefined : undefined}
         nbExistants={examensPromo.length}
+        periodes={periodesPromo}
+        categories={categoriesFormation}
         resumeProgramme={dialogExamen === 'create' ? resumeProgramme : ''}
         onValider={async (data, depuisProgramme) => {
           if (dialogExamen === 'edit' && examen) {
@@ -368,6 +387,21 @@ const ExamensPromotion = () => {
       </AlertDialog>
     </div>
   );
+};
+
+/** Où comptent les notes de l'examen dans les moyennes d'Évaluations — dit clairement, jamais deviné. */
+const CompteDans = ({ periode, categorie, promotionId }: {
+  periode?: { name: string }; categorie?: { name: string; pourcentage: number }; promotionId: string;
+}) => {
+  if (periode && categorie) {
+    return (
+      <p className="text-xs">
+        Compte pour <span className="font-medium text-foreground">{categorie.name} ({categorie.pourcentage} %)</span> dans la moyenne de{' '}
+        <Link to={`/formation/evaluations/${promotionId}`} className="text-primary hover:underline">{periode.name}</Link>
+      </p>
+    );
+  }
+  return <p className="text-xs text-amber-700">Ne compte dans aucune moyenne{!periode ? ' (aucune période choisie — Modifier l\'examen)' : ' (la formule n\'a pas de catégorie pour ce type d\'examen)'}</p>;
 };
 
 export default ExamensPromotion;

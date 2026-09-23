@@ -360,7 +360,23 @@ export interface BaremeCategorie {
   name: string;
   pourcentage: number;
   ordering: number;
+  /**
+   * `undefined` : notes saisies dans Évaluations (contrôle continu, TP…).
+   * Sinon : notes reprises des examens de ce type (rubrique Examens) — jamais
+   * saisies deux fois.
+   */
+  sourceExamen?: TypeExamen;
 }
+
+/** D'où viennent les notes d'une catégorie de la formule. */
+export const LIBELLES_SOURCE_CATEGORIE = {
+  saisie: 'Saisie dans Évaluations',
+  blanc: 'Notes des examens blancs',
+  officiel: 'Notes des examens finaux',
+} as const;
+
+/** Les catégories qu'on saisit dans Évaluations (les autres viennent des examens). */
+export const categoriesSaisies = (categories: BaremeCategorie[]): BaremeCategorie[] => categories.filter(c => !c.sourceExamen);
 
 export const nomCategorieValide = (name: string): boolean => name.trim() !== '';
 export const pourcentageValide = (v: number): boolean => Number.isFinite(v) && v > 0 && v <= 100;
@@ -372,11 +388,11 @@ export const pourcentageValide = (v: number): boolean => Number.isFinite(v) && v
  * final) ; le directeur la personnalise ensuite si besoin, formation par
  * formation — jamais un barème partagé entre formations.
  */
-export const DEFAUT_BAREME_CATEGORIES: readonly { name: string; pourcentage: number }[] = [
+export const DEFAUT_BAREME_CATEGORIES: readonly { name: string; pourcentage: number; sourceExamen?: TypeExamen }[] = [
   { name: 'Contrôle continu', pourcentage: 30 },
   { name: 'TP', pourcentage: 30 },
-  { name: 'Examen blanc', pourcentage: 10 },
-  { name: 'Examen final', pourcentage: 30 },
+  { name: 'Examen blanc', pourcentage: 10, sourceExamen: 'blanc' },
+  { name: 'Examen final', pourcentage: 30, sourceExamen: 'officiel' },
 ];
 
 export const sommeBareme = (categories: BaremeCategorie[]): number =>
@@ -634,7 +650,7 @@ export const recapitulatifPeriode = (
 // ═══════════════════════════════════════════════════════════════════════════
 
 export type TypeExamen = 'blanc' | 'officiel';
-export const LIBELLES_TYPE_EXAMEN: Record<TypeExamen, string> = { blanc: 'Examen blanc', officiel: 'Examen officiel' };
+export const LIBELLES_TYPE_EXAMEN: Record<TypeExamen, string> = { blanc: 'Examen blanc', officiel: 'Examen final' };
 
 export type Decision = 'admis' | 'ajourne' | 'refuse';
 export const LIBELLES_DECISION: Record<Decision, string> = { admis: 'Admis', ajourne: 'Ajourné', refuse: 'Refusé' };
@@ -650,6 +666,8 @@ export interface Examen {
   name: string;
   type: TypeExamen;
   reference?: string;
+  /** Période (semestre…) dans laquelle ses notes comptent pour la moyenne. `undefined` : n'entre dans aucune moyenne. */
+  periodeId?: string;
   seuilAdmission: number;
   dateDebut?: string;
   dateFin?: string;
@@ -831,4 +849,70 @@ export const epreuvesDepuisProgramme = (
     { tour: 'Écrit', epreuves: ecrit.map(m => ({ niveauMatiereId: m.id, nom: m.matiereName, coefficient: m.coefficient })) },
     { tour: 'Pratique', epreuves: pratique.map(m => ({ niveauMatiereId: m.id, nom: m.matiereName, coefficient: m.coefficient })) },
   ].filter(t => t.epreuves.length > 0);
+};
+
+// ─── Les examens alimentent la formule d'évaluation ─────────────────────────
+/**
+ * Transforme les épreuves d'examen en « évaluations » de la catégorie qui
+ * leur correspond (Examen blanc, Examen final…), pour que le calcul de
+ * moyenne existant les compte SANS qu'on les saisisse une seconde fois.
+ *
+ * Une épreuve n'y entre que si :
+ *   - son examen appartient à la promotion et indique une période ;
+ *   - la formule a une catégorie alimentée par ce type d'examen ;
+ *   - l'épreuve est rattachée à une matière du programme.
+ * Plusieurs épreuves d'une même matière (écrit + oral) se combinent selon
+ * leur coefficient d'épreuve.
+ */
+export const evaluationsDepuisExamens = (
+  promotionId: string,
+  categories: BaremeCategorie[],
+  examens: Examen[],
+  tours: ExamenTour[],
+  epreuves: ExamenEpreuve[],
+  notes: ExamenNote[],
+): { evaluations: Evaluation[]; notes: Note[] } => {
+  const evaluations: Evaluation[] = [];
+  const idsEpreuves = new Set<string>();
+  for (const ex of examens) {
+    if (ex.promotionId !== promotionId || !ex.periodeId) continue;
+    const categorie = categories.find(c => c.sourceExamen === ex.type);
+    if (!categorie) continue;
+    const idsTours = new Set(tours.filter(t => t.examenId === ex.id).map(t => t.id));
+    for (const ep of epreuves) {
+      if (!idsTours.has(ep.tourId) || !ep.niveauMatiereId) continue;
+      idsEpreuves.add(ep.id);
+      evaluations.push({
+        id: `examen:${ep.id}`, promotionId, niveauMatiereId: ep.niveauMatiereId, periodeId: ex.periodeId,
+        categorieId: categorie.id, type: LIBELLES_TYPE_EXAMEN[ex.type], title: `${ex.name} — ${ep.nom}`,
+        date: ep.date ?? ex.dateDebut ?? ex.createdAt.slice(0, 10), bareme: ep.bareme, poids: ep.coefficient,
+        createdAt: ex.createdAt,
+      });
+    }
+  }
+  return {
+    evaluations,
+    notes: notes.filter(n => idsEpreuves.has(n.epreuveId)).map(n => ({
+      id: `examen:${n.id}`, evaluationId: `examen:${n.epreuveId}`, studentEnrollmentId: n.studentEnrollmentId,
+      valeur: n.valeur, statut: n.statut,
+    })),
+  };
+};
+
+/**
+ * Tout ce qui compte dans la moyenne d'une promotion : les évaluations des
+ * catégories saisies (CC, TP…) + les épreuves d'examen des catégories
+ * alimentées par les examens. Une ancienne évaluation tapée à la main dans une
+ * catégorie désormais alimentée par les examens n'est plus comptée : jamais
+ * deux sources pour une même catégorie.
+ */
+export const evaluationsDeLaFormule = (
+  evaluationsSaisies: Evaluation[], notesSaisies: Note[], categories: BaremeCategorie[],
+  depuisExamens: { evaluations: Evaluation[]; notes: Note[] },
+): { evaluations: Evaluation[]; notes: Note[] } => {
+  const idsSaisies = new Set(categoriesSaisies(categories).map(c => c.id));
+  return {
+    evaluations: [...evaluationsSaisies.filter(e => idsSaisies.has(e.categorieId)), ...depuisExamens.evaluations],
+    notes: [...notesSaisies, ...depuisExamens.notes],
+  };
 };

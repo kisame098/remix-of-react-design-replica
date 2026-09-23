@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
@@ -17,6 +18,7 @@ import { toast } from '@/hooks/use-toast';
 import {
   type Niveau, type BaremeCategorie, nomNiveauValide, triNiveaux, totauxNiveau,
   peutGererMatieres, nomCategorieValide, pourcentageValide, sommeBareme, baremeComplet,
+  LIBELLES_SOURCE_CATEGORIE, type TypeExamen,
 } from '@/lib/formationPro';
 
 /**
@@ -50,12 +52,17 @@ const FormationDetail = () => {
   const [dialogBareme, setDialogBareme] = useState<DialogBareme | null>(null);
   const [catName, setCatName] = useState('');
   const [catPourcentage, setCatPourcentage] = useState('');
+  // D'où viennent les notes : saisies dans Évaluations, ou reprises des examens.
+  const [catSource, setCatSource] = useState<'saisie' | TypeExamen>('saisie');
   const [isSavingCat, setIsSavingCat] = useState(false);
   const [confirmDeleteCatId, setConfirmDeleteCatId] = useState<string | null>(null);
 
-  const resetCatForm = () => { setCatName(''); setCatPourcentage(''); setDialogBareme(null); };
-  const openCreateCat = () => { setCatName(''); setCatPourcentage(''); setDialogBareme({ kind: 'create' }); };
-  const openEditCat = (c: BaremeCategorie) => { setCatName(c.name); setCatPourcentage(String(c.pourcentage)); setDialogBareme({ kind: 'edit', categorieId: c.id }); };
+  const resetCatForm = () => { setCatName(''); setCatPourcentage(''); setCatSource('saisie'); setDialogBareme(null); };
+  const openCreateCat = () => { setCatName(''); setCatPourcentage(''); setCatSource('saisie'); setDialogBareme({ kind: 'create' }); };
+  const openEditCat = (c: BaremeCategorie) => {
+    setCatName(c.name); setCatPourcentage(String(c.pourcentage)); setCatSource(c.sourceExamen ?? 'saisie');
+    setDialogBareme({ kind: 'edit', categorieId: c.id });
+  };
 
   const handleSaveCat = async () => {
     const pourcentage = Number(catPourcentage);
@@ -63,13 +70,20 @@ const FormationDetail = () => {
       toast({ title: 'Erreur', description: 'Le nom et un pourcentage entre 1 et 100 sont obligatoires.', variant: 'destructive' });
       return;
     }
+    const sourceExamen = catSource === 'saisie' ? null : catSource;
+    // Une seule catégorie par type d'examen : sinon on ne saurait pas où ranger ses notes.
+    const doublon = sourceExamen && bareme.find(c => c.sourceExamen === sourceExamen && (dialogBareme.kind === 'create' || c.id !== dialogBareme.categorieId));
+    if (doublon) {
+      toast({ title: 'Déjà utilisé', description: `« ${doublon.name} » reprend déjà ces notes d'examen : une seule catégorie par type d'examen.`, variant: 'destructive' });
+      return;
+    }
     setIsSavingCat(true);
     try {
       if (dialogBareme.kind === 'create') {
-        await addBaremeCategorie(formationId, { name: catName.trim(), pourcentage });
+        await addBaremeCategorie(formationId, { name: catName.trim(), pourcentage, sourceExamen });
         toast({ title: 'Catégorie ajoutée', description: catName });
       } else {
-        await updateBaremeCategorie(dialogBareme.categorieId, { name: catName.trim(), pourcentage });
+        await updateBaremeCategorie(dialogBareme.categorieId, { name: catName.trim(), pourcentage, sourceExamen });
         toast({ title: 'Catégorie modifiée' });
       }
       resetCatForm();
@@ -293,7 +307,12 @@ const FormationDetail = () => {
               <div className="space-y-2">
                 {bareme.map(c => (
                   <div key={c.id} className="group flex items-center justify-between gap-2 rounded-md border px-3 py-2">
-                    <span className="text-sm font-medium">{c.name}</span>
+                    <div className="min-w-0">
+                      <span className="text-sm font-medium">{c.name}</span>
+                      <span className={`block text-xs ${c.sourceExamen ? 'text-primary' : 'text-muted-foreground'}`}>
+                        {LIBELLES_SOURCE_CATEGORIE[c.sourceExamen ?? 'saisie']}
+                      </span>
+                    </div>
                     <div className="flex items-center gap-2">
                       <span className="text-sm text-muted-foreground">{c.pourcentage} %</span>
                       <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100">
@@ -332,6 +351,20 @@ const FormationDetail = () => {
             <div className="space-y-2">
               <Label htmlFor="cat-pourcentage">Pourcentage dans la moyenne *</Label>
               <Input id="cat-pourcentage" type="number" min={1} max={100} value={catPourcentage} onChange={e => setCatPourcentage(e.target.value)} />
+            </div>
+            <div className="space-y-2">
+              <Label>Les notes viennent de</Label>
+              <Select value={catSource} onValueChange={v => setCatSource(v as 'saisie' | TypeExamen)}>
+                <SelectTrigger aria-label="Source des notes"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {(Object.keys(LIBELLES_SOURCE_CATEGORIE) as ('saisie' | TypeExamen)[]).map(k => (
+                    <SelectItem key={k} value={k}>{LIBELLES_SOURCE_CATEGORIE[k]}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                Une catégorie reprise des examens n'a pas de colonne dans Évaluations : ses notes se saisissent une seule fois, dans la rubrique Examens.
+              </p>
             </div>
             <Button onClick={handleSaveCat} className="w-full" disabled={isSavingCat}>
               {isSavingCat && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}

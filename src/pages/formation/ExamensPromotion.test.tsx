@@ -24,6 +24,14 @@ const fp = {
     { id: 'nm1', niveauId: 'n1', matiereId: 'm1', matiereName: 'Français', type: 'obligatoire' as const, coefficient: 2, nature: 'theorique' as const, ordering: 0 },
     { id: 'nm2', niveauId: 'n1', matiereId: 'm2', matiereName: 'TP Cuisine', type: 'obligatoire' as const, coefficient: 4, nature: 'pratique' as const, ordering: 1 },
   ],
+  periodes: [
+    { id: 'per1', promotionId: 'p1', name: 'Semestre 1', ordering: 0 },
+    { id: 'per2', promotionId: 'p1', name: 'Semestre 2', ordering: 1 },
+  ],
+  baremeCategories: [
+    { id: 'cc', formationId: 'f1', name: 'Contrôle continu', pourcentage: 30, ordering: 0 },
+    { id: 'eb', formationId: 'f1', name: 'Examen blanc', pourcentage: 10, ordering: 1, sourceExamen: 'blanc' as const },
+  ],
 };
 
 const exInitial = () => ({
@@ -169,17 +177,35 @@ describe('ExamensPromotion — la grille d\'un examen', () => {
     const user = userEvent.setup();
     rendre();
     await user.click(screen.getByTitle('Nouvel examen'));
-    await user.click(screen.getByRole('button', { name: 'Examen final' }));
+    await user.type(screen.getByLabelText('Nom *'), 'Examen final');
     await user.click(screen.getByRole('button', { name: 'Créer l\'examen' }));
     expect(ex.addExamen).toHaveBeenCalledWith(
       'p1',
-      expect.objectContaining({ name: 'Examen final', type: 'blanc', seuilAdmission: 10 }),
+      // Compte par défaut dans la dernière période de la promotion.
+      expect.objectContaining({ name: 'Examen final', type: 'blanc', seuilAdmission: 10, periodeId: 'per2' }),
       ['s1', 's2'],
       [
         { tour: 'Écrit', epreuves: [{ niveauMatiereId: 'nm1', nom: 'Français', coefficient: 2, bareme: 20 }] },
         { tour: 'Pratique', epreuves: [{ niveauMatiereId: 'nm2', nom: 'TP Cuisine', coefficient: 4, bareme: 20 }] },
       ],
     );
+  });
+
+  it('dit clairement où comptent les notes de l\'examen dans les moyennes', () => {
+    ex.examens = [{ ...ex.examens[0], periodeId: 'per1' } as typeof ex.examens[0]];
+    rendre();
+    expect(screen.getByText('Examen blanc (10 %)')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Semestre 1' })).toHaveAttribute('href', '/formation/evaluations/p1');
+  });
+
+  it('un examen sans période ne compte dans aucune moyenne — et le dit', () => {
+    rendre();
+    expect(screen.getByText(/Ne compte dans aucune moyenne/)).toBeInTheDocument();
+  });
+
+  it('une épreuve rattachée à aucune matière est signalée « hors moyenne »', () => {
+    rendre();
+    expect(screen.getAllByText('hors moyenne').length).toBe(2);
   });
 
   it('aucun examen : invite à en créer un', () => {
