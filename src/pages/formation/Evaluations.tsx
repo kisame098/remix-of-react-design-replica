@@ -1,9 +1,10 @@
 import { useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useFormationPro } from '@/contexts/FormationProContext';
+import { useSchool } from '@/contexts/SchoolContext';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-import { ClipboardList, Loader2, ChevronRight, Users, GraduationCap } from 'lucide-react';
+import { ClipboardList, Loader2, ChevronRight, Users, GraduationCap, CalendarRange } from 'lucide-react';
 import { triPromotions, grouperPromotions } from '@/lib/formationPro';
 
 /**
@@ -14,7 +15,8 @@ import { triPromotions, grouperPromotions } from '@/lib/formationPro';
  */
 const Evaluations = () => {
   const navigate = useNavigate();
-  const { loading, promotions, formations, niveaux, evaluations } = useFormationPro();
+  const { loading, promotions, formations, niveaux, evaluations, periodes } = useFormationPro();
+  const { getStudentCountByClass } = useSchool();
   const groupes = useMemo(() => grouperPromotions(triPromotions(promotions), niveaux, formations), [promotions, niveaux, formations]);
 
   if (loading) {
@@ -48,6 +50,8 @@ const Evaluations = () => {
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                       {gn.promotions.map(p => {
                         const nbEval = evaluations.filter(e => e.promotionId === p.id).length;
+                        const nbPeriodes = periodes.filter(x => x.promotionId === p.id).length;
+                        const nbEleves = getStudentCountByClass(p.classId);
                         return (
                           <button key={p.id} onClick={() => navigate(`/formation/evaluations/${p.id}`)} className="text-left group">
                             <Card className="hover:shadow-md hover:border-primary/40 transition-all h-full cursor-pointer">
@@ -59,8 +63,9 @@ const Evaluations = () => {
                                   <ChevronRight className="h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors mt-1" />
                                 </div>
                                 <h3 className="font-semibold text-foreground mb-2">{p.name}</h3>
-                                <div className="flex items-center justify-between text-xs text-muted-foreground">
-                                  <span className="flex items-center gap-1"><Users className="h-3 w-3" />{p.studentLimit} places max</span>
+                                <div className="flex items-center justify-between text-xs text-muted-foreground gap-2 flex-wrap">
+                                  <span className="flex items-center gap-1"><Users className="h-3 w-3" />{nbEleves} élève{nbEleves !== 1 ? 's' : ''}</span>
+                                  <span className="flex items-center gap-1"><CalendarRange className="h-3 w-3" />{nbPeriodes} période{nbPeriodes !== 1 ? 's' : ''}</span>
                                   <span className="flex items-center gap-1"><ClipboardList className="h-3 w-3" />{nbEval} évaluation{nbEval !== 1 ? 's' : ''}</span>
                                 </div>
                               </CardContent>

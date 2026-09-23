@@ -30,7 +30,7 @@ const FormationDetail = () => {
   const { accountRole } = useAuth();
   const estDirecteur = peutGererMatieres(accountRole);
   const {
-    loading, formations, niveaux, niveauMatieres, choixGroups, baremeCategories,
+    loading, formations, niveaux, niveauMatieres, choixGroups, baremeCategories, evaluations,
     addNiveau, updateNiveau, deleteNiveau, duplicateNiveau,
     addBaremeCategorie, updateBaremeCategorie, deleteBaremeCategorie, appliquerBaremeParDefaut,
   } = useFormationPro();
@@ -80,7 +80,20 @@ const FormationDetail = () => {
     }
   };
 
+  // La base refuse de supprimer une catégorie encore utilisée (sinon ses notes
+  // ne compteraient plus nulle part) : on le dit clairement avant d'essayer.
+  const nbEvaluationsCat = (id: string) => evaluations.filter(e => e.categorieId === id).length;
   const handleDeleteCat = async (id: string) => {
+    const nb = nbEvaluationsCat(id);
+    if (nb > 0) {
+      toast({
+        title: 'Catégorie utilisée',
+        description: `${nb} évaluation${nb > 1 ? 's' : ''} ${nb > 1 ? 'sont' : 'est'} rangée${nb > 1 ? 's' : ''} dans cette catégorie. Supprimez-les d'abord dans Évaluations, ou renommez la catégorie.`,
+        variant: 'destructive',
+      });
+      setConfirmDeleteCatId(null);
+      return;
+    }
     try {
       await deleteBaremeCategorie(id);
       toast({ title: 'Catégorie supprimée' });
@@ -333,8 +346,9 @@ const FormationDetail = () => {
           <AlertDialogHeader>
             <AlertDialogTitle>Supprimer cette catégorie ?</AlertDialogTitle>
             <AlertDialogDescription>
-              Les évaluations déjà créées dans cette catégorie ne peuvent pas être supprimées par cette action —
-              si des évaluations l'utilisent encore, la suppression sera refusée.
+              {confirmDeleteCatId && nbEvaluationsCat(confirmDeleteCatId) > 0
+                ? `Impossible : ${nbEvaluationsCat(confirmDeleteCatId)} évaluation(s) l'utilisent encore. Supprimez-les d'abord dans Évaluations, ou renommez plutôt la catégorie.`
+                : 'Aucune évaluation ne l\'utilise : elle disparaît simplement de la formule.'}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <div className="flex justify-end gap-2">

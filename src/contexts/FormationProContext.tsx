@@ -153,6 +153,8 @@ interface FormationProContextType {
   notes: Note[];
   /** Insère ou met à jour la note d'un élève pour une évaluation — trace le changement dans fp_notes_historique. */
   saisirNote: (evaluationId: string, studentEnrollmentId: string, data: DonneesNote) => Promise<void>;
+  /** Une case vidée dans la grille : la note disparaît (rien n'est jamais remplacé par un 0). */
+  supprimerNote: (evaluationId: string, studentEnrollmentId: string) => Promise<void>;
 }
 
 const FormationProContext = createContext<FormationProContextType | null>(null);
@@ -258,6 +260,7 @@ export const FormationProProvider = ({ children }: { children: ReactNode }) => {
   const promotionsRef = useRef(promotionsBrut); promotionsRef.current = promotionsBrut;
   const baremeCategoriesRef = useRef(baremeCategories); baremeCategoriesRef.current = baremeCategories;
   const periodesRef = useRef(periodes); periodesRef.current = periodes;
+  const evaluationsRef = useRef(evaluations); evaluationsRef.current = evaluations;
   const notesRef = useRef(notes); notesRef.current = notes;
 
   // ── Formations ─────────────────────────────────────────────────────────
@@ -625,8 +628,11 @@ export const FormationProProvider = ({ children }: { children: ReactNode }) => {
     if (!schoolId) return;
     const { error } = await sb.from('fp_periodes').delete().eq('id', id).eq('school_id', schoolId);
     if (error) throw error;
+    // La base supprime en cascade ses évaluations et leurs notes : l'écran aussi.
+    const idsEvaluations = new Set(evaluationsRef.current.filter(e => e.periodeId === id).map(e => e.id));
     setPeriodes(prev => prev.filter(p => p.id !== id));
     setEvaluations(prev => prev.filter(e => e.periodeId !== id));
+    setNotes(prev => prev.filter(n => !idsEvaluations.has(n.evaluationId)));
   }, [schoolId]);
 
   // ── Évaluations ────────────────────────────────────────────────────────────
@@ -675,6 +681,7 @@ export const FormationProProvider = ({ children }: { children: ReactNode }) => {
     const existante = notesRef.current.find(n => n.evaluationId === evaluationId && n.studentEnrollmentId === studentEnrollmentId);
     const valeur = data.statut === 'note' ? (data.valeur ?? null) : null;
     if (existante) {
+      if (existante.statut === data.statut && (existante.valeur ?? null) === valeur) return;   // rien n'a changé : pas de ligne d'historique inutile
       const { error } = await sb.from('fp_notes').update({
         valeur, statut: data.statut, observation: data.observation?.trim() || null, updated_at: new Date().toISOString(),
       }).eq('id', existante.id).eq('school_id', schoolId);
@@ -684,7 +691,12 @@ export const FormationProProvider = ({ children }: { children: ReactNode }) => {
         ancienne_valeur: existante.valeur ?? null, ancien_statut: existante.statut,
         nouvelle_valeur: valeur, nouveau_statut: data.statut,
       });
-      setNotes(prev => prev.map(n => n.id === existante.id ? { ...n, valeur: valeur ?? undefined, statut: data.statut, observation: data.observation } : n));
+      const maj: Note = { ...existante, valeur: valeur ?? undefined, statut: data.statut, observation: data.observation };
+      // La référence est mise à jour TOUT DE SUITE, sans attendre le rendu : deux
+      // sauvegardes qui s'enchaînent doivent voir la note déjà créée, sinon la
+      // seconde tente un nouvel insert et bute sur l'unicité (évaluation, élève).
+      notesRef.current = notesRef.current.map(n => n.id === existante.id ? maj : n);
+      setNotes(prev => prev.map(n => n.id === existante.id ? maj : n));
     } else {
       const { data: row, error } = await sb.from('fp_notes').insert({
         school_id: schoolId, evaluation_id: evaluationId, student_enrollment_id: studentEnrollmentId,
@@ -696,8 +708,19 @@ export const FormationProProvider = ({ children }: { children: ReactNode }) => {
         school_id: schoolId, note_id: note.id,
         ancienne_valeur: null, ancien_statut: null, nouvelle_valeur: valeur, nouveau_statut: data.statut,
       });
+      notesRef.current = [...notesRef.current, note];
       setNotes(prev => [...prev, note]);
     }
+  }, [schoolId]);
+
+  const supprimerNote = useCallback(async (evaluationId: string, studentEnrollmentId: string): Promise<void> => {
+    if (!schoolId) return;
+    const existante = notesRef.current.find(n => n.evaluationId === evaluationId && n.studentEnrollmentId === studentEnrollmentId);
+    if (!existante) return;
+    const { error } = await sb.from('fp_notes').delete().eq('id', existante.id).eq('school_id', schoolId);
+    if (error) throw error;
+    notesRef.current = notesRef.current.filter(n => n.id !== existante.id);
+    setNotes(prev => prev.filter(n => n.id !== existante.id));
   }, [schoolId]);
 
   const value = useMemo<FormationProContextType>(() => ({
@@ -710,7 +733,7 @@ export const FormationProProvider = ({ children }: { children: ReactNode }) => {
     baremeCategories, addBaremeCategorie, updateBaremeCategorie, deleteBaremeCategorie, appliquerBaremeParDefaut,
     periodes, addPeriode, updatePeriode, deletePeriode,
     evaluations, addEvaluation, updateEvaluation, deleteEvaluation,
-    notes, saisirNote,
+    notes, saisirNote, supprimerNote,
   }), [loading, formations, niveaux, catalogue, niveauMatieres, choixGroups, promotions,
       addFormation, updateFormation, deleteFormation, duplicateFormation,
       addNiveau, updateNiveau, deleteNiveau, duplicateNiveau,
@@ -720,7 +743,7 @@ export const FormationProProvider = ({ children }: { children: ReactNode }) => {
       baremeCategories, addBaremeCategorie, updateBaremeCategorie, deleteBaremeCategorie, appliquerBaremeParDefaut,
       periodes, addPeriode, updatePeriode, deletePeriode,
       evaluations, addEvaluation, updateEvaluation, deleteEvaluation,
-      notes, saisirNote]);
+      notes, saisirNote, supprimerNote]);
 
   return <FormationProContext.Provider value={value}>{children}</FormationProContext.Provider>;
 };
