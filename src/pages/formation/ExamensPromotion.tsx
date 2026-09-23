@@ -12,13 +12,16 @@ import {
 } from '@/components/ui/alert-dialog';
 import {
   Plus, Loader2, Check, AlertCircle, ArrowLeft, ChevronRight, Pencil, Trash2, CalendarRange, Lock, LockOpen, Users, FileCheck2, Wand2,
+  Trophy, BookOpen,
 } from 'lucide-react';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from '@/hooks/use-toast';
 import {
   triExamens, triTours, triEpreuves, epreuvesDepuisProgramme, etatCandidat, propositionJury, decisionRetenue, mentionRetenue,
   bilanExamen, analyserSaisieNoteExamen, peutGererMatieres, LIBELLES_TYPE_EXAMEN, triPeriodes, type Decision, type StatutNoteExamen,
 } from '@/lib/formationPro';
 import { GrilleExamen } from '@/components/formation/GrilleExamen';
+import { ResultatsExamen } from '@/components/formation/ResultatsExamen';
 import { DialogExamen } from '@/components/formation/DialogExamen';
 import { DialogCandidats } from '@/components/formation/DialogCandidats';
 import { useSauvegardeNotes } from '@/components/formation/useSauvegardeNotes';
@@ -102,6 +105,28 @@ const ExamensPromotion = () => {
   const [dialogCandidats, setDialogCandidats] = useState(false);
   const [confirmation, setConfirmation] = useState<'supprimer' | 'verrouiller' | 'deverrouiller' | null>(null);
   const [preparation, setPreparation] = useState(false);
+
+  // ── Colonne de gauche : Résultats, puis une entrée par matière ──────────
+  type Vue = { kind: 'resultats' } | { kind: 'matiere'; id: string } | { kind: 'autres' };
+  const [vue, setVue] = useState<Vue | null>(null);
+  const horsProgramme = useMemo(() => epreuvesExamen.filter(e => !e.niveauMatiereId), [epreuvesExamen]);
+  // Comme dans Évaluations, on arrive sur la première matière qui a des épreuves.
+  const premiereMatiere = matieresNiveau.find(m => epreuvesExamen.some(e => e.niveauMatiereId === m.id));
+  const vueEffective: Vue =
+    vue?.kind === 'matiere' && matieresNiveau.some(m => m.id === vue.id) ? vue
+    : vue?.kind === 'autres' && horsProgramme.length > 0 ? vue
+    : vue?.kind === 'resultats' ? vue
+    : premiereMatiere ? { kind: 'matiere', id: premiereMatiere.id } : { kind: 'resultats' };
+  const matiereChoisie = vueEffective.kind === 'matiere' ? matieresNiveau.find(m => m.id === vueEffective.id) ?? null : null;
+
+  /** Vert : tous les candidats notés (ou absents) à toutes les épreuves ; orange : en cours ; gris : rien. */
+  const avancement = (eps: typeof epreuvesExamen): 'complet' | 'partiel' | 'vide' => {
+    if (eps.length === 0 || candidats.length === 0) return 'vide';
+    const ids = new Set(eps.map(e => e.id));
+    const saisies = ex.notes.filter(n => ids.has(n.epreuveId) && idsCandidats.has(n.studentEnrollmentId)).length;
+    if (saisies === 0) return 'vide';
+    return saisies >= eps.length * candidats.length ? 'complet' : 'partiel';
+  };
 
   const preparerDepuisProgramme = async () => {
     if (!examen) return;
@@ -260,71 +285,138 @@ const ExamensPromotion = () => {
             </div>
           </div>
 
-          <div className="flex-1 min-h-0 overflow-y-auto p-4 md:p-6 space-y-4">
-            {/* Fiche de l'examen + bilan */}
-            <div className="flex items-start justify-between gap-4 flex-wrap">
-              <div className="text-sm text-muted-foreground space-y-0.5">
-                <p>
-                  <span className="font-medium text-foreground">{LIBELLES_TYPE_EXAMEN[examen.type]}</span>
-                  {examen.reference && <> · {examen.reference}</>}
-                  {' '}· admis à partir de {String(examen.seuilAdmission).replace('.', ',')}/20
-                </p>
-                <CompteDans
-                  periode={periodesPromo.find(p => p.id === examen.periodeId)}
-                  categorie={categoriesFormation.find(c => c.sourceExamen === examen.type)}
-                  promotionId={promotion.id}
-                />
-                <p className="flex items-center gap-1 text-xs">
-                  <CalendarRange className="h-3 w-3" />
-                  {examen.dateDebut || examen.dateFin ? `${dateFr(examen.dateDebut) ?? '…'} → ${dateFr(examen.dateFin) ?? '…'}` : 'Dates non définies'}
-                </p>
+          <div className="flex-1 min-h-0 flex">
+            {/* ── Colonne de gauche : Résultats + matières (comme Évaluations) ── */}
+            <div className="hidden md:flex w-56 border-r flex-shrink-0 flex-col bg-muted/10 overflow-hidden">
+              <div className="p-2 border-b">
+                <button
+                  onClick={() => setVue({ kind: 'resultats' })}
+                  className={`w-full text-left flex items-center gap-2 px-2.5 py-2 rounded-lg text-sm transition-all ${
+                    vueEffective.kind === 'resultats' ? 'bg-primary text-primary-foreground font-medium shadow-sm' : 'hover:bg-muted text-foreground'
+                  }`}
+                >
+                  <Trophy className="h-4 w-4 flex-shrink-0" />Résultats
+                </button>
               </div>
-              {candidats.length > 0 && epreuvesExamen.length > 0 && (
-                <div className="flex items-center gap-2 flex-wrap text-xs">
-                  <span className="rounded-full bg-green-100 text-green-800 dark:bg-green-950 dark:text-green-300 px-2.5 py-1 font-medium">{bilan.admis} admis</span>
-                  <span className="rounded-full bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300 px-2.5 py-1 font-medium">{bilan.ajournes} ajourné{bilan.ajournes !== 1 ? 's' : ''}</span>
-                  <span className="rounded-full bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-300 px-2.5 py-1 font-medium">{bilan.refuses} refusé{bilan.refuses !== 1 ? 's' : ''}</span>
-                  {bilan.sansDecision > 0 && <span className="rounded-full bg-muted px-2.5 py-1 font-medium">{bilan.sansDecision} à décider</span>}
-                  {bilan.tauxReussite !== null && <span className="font-semibold text-foreground">Réussite : {format(bilan.tauxReussite)} %</span>}
-                </div>
-              )}
+              <p className="px-3 pt-3 pb-1 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Matières</p>
+              <div className="flex-1 overflow-y-auto p-2 pt-0 space-y-0.5">
+                {matieresNiveau.map(m => (
+                  <BoutonMatiere
+                    key={m.id} nom={m.matiereName} actif={vueEffective.kind === 'matiere' && vueEffective.id === m.id}
+                    etat={avancement(epreuvesExamen.filter(e => e.niveauMatiereId === m.id))}
+                    coefficient={epreuvesExamen.filter(e => e.niveauMatiereId === m.id).reduce((t, e) => t + e.coefficient, 0)}
+                    onClick={() => setVue({ kind: 'matiere', id: m.id })}
+                  />
+                ))}
+                {horsProgramme.length > 0 && (
+                  <BoutonMatiere
+                    nom="Autres épreuves" actif={vueEffective.kind === 'autres'} etat={avancement(horsProgramme)}
+                    coefficient={horsProgramme.reduce((t, e) => t + e.coefficient, 0)} onClick={() => setVue({ kind: 'autres' })}
+                  />
+                )}
+              </div>
             </div>
 
-            {examen.verrouille && (
-              <div className="rounded-md border border-primary/30 bg-primary/5 px-4 py-2.5 text-sm flex items-center gap-2">
-                <Lock className="h-4 w-4 text-primary flex-shrink-0" />
-                Résultats verrouillés{examen.verrouilleLe ? ` le ${new Date(examen.verrouilleLe).toLocaleDateString('fr-FR')}` : ''} : notes, moyennes et décisions sont figées.
-                {estDirecteur ? ' Seul le directeur peut déverrouiller.' : ''}
+            {/* ── Contenu ── */}
+            <div className="flex-1 min-w-0 overflow-y-auto p-4 md:p-6 space-y-4">
+              <div className="md:hidden">
+                <Select
+                  value={vueEffective.kind === 'matiere' ? vueEffective.id : `__${vueEffective.kind}`}
+                  onValueChange={v => setVue(v === '__resultats' ? { kind: 'resultats' } : v === '__autres' ? { kind: 'autres' } : { kind: 'matiere', id: v })}
+                >
+                  <SelectTrigger aria-label="Matière"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__resultats">Résultats</SelectItem>
+                    {matieresNiveau.map(m => <SelectItem key={m.id} value={m.id}>{m.matiereName}</SelectItem>)}
+                    {horsProgramme.length > 0 && <SelectItem value="__autres">Autres épreuves</SelectItem>}
+                  </SelectContent>
+                </Select>
               </div>
-            )}
 
-            {tours.length === 0 ? (
-              <Card className="border-dashed">
-                <CardContent className="py-12 text-center space-y-4">
-                  <p className="text-muted-foreground">Aucune épreuve dans cet examen.</p>
-                  {estDirecteur ? (
-                    <div className="flex items-center justify-center gap-2 flex-wrap">
-                      {programme.length > 0 && (
-                        <Button className="gap-2" disabled={preparation} onClick={() => void preparerDepuisProgramme()}>
-                          {preparation ? <Loader2 className="h-4 w-4 animate-spin" /> : <Wand2 className="h-4 w-4" />}
-                          Reprendre le programme ({resumeProgramme})
+              {/* Fiche de l'examen + bilan */}
+              <div className="flex items-start justify-between gap-4 flex-wrap">
+                <div className="text-sm text-muted-foreground space-y-0.5">
+                  <p>
+                    <span className="font-medium text-foreground">{LIBELLES_TYPE_EXAMEN[examen.type]}</span>
+                    {examen.reference && <> · {examen.reference}</>}
+                    {' '}· admis à partir de {String(examen.seuilAdmission).replace('.', ',')}/20
+                  </p>
+                  <CompteDans
+                    periode={periodesPromo.find(p => p.id === examen.periodeId)}
+                    categorie={categoriesFormation.find(c => c.sourceExamen === examen.type)}
+                    promotionId={promotion.id}
+                  />
+                  <p className="flex items-center gap-1 text-xs">
+                    <CalendarRange className="h-3 w-3" />
+                    {examen.dateDebut || examen.dateFin ? `${dateFr(examen.dateDebut) ?? '…'} → ${dateFr(examen.dateFin) ?? '…'}` : 'Dates non définies'}
+                  </p>
+                </div>
+                {candidats.length > 0 && epreuvesExamen.length > 0 && (
+                  <div className="flex items-center gap-2 flex-wrap text-xs">
+                    <span className="rounded-full bg-green-100 text-green-800 dark:bg-green-950 dark:text-green-300 px-2.5 py-1 font-medium">{bilan.admis} admis</span>
+                    <span className="rounded-full bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300 px-2.5 py-1 font-medium">{bilan.ajournes} ajourné{bilan.ajournes !== 1 ? 's' : ''}</span>
+                    <span className="rounded-full bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-300 px-2.5 py-1 font-medium">{bilan.refuses} refusé{bilan.refuses !== 1 ? 's' : ''}</span>
+                    {bilan.sansDecision > 0 && <span className="rounded-full bg-muted px-2.5 py-1 font-medium">{bilan.sansDecision} à décider</span>}
+                    {bilan.tauxReussite !== null && <span className="font-semibold text-foreground">Réussite : {format(bilan.tauxReussite)} %</span>}
+                  </div>
+                )}
+              </div>
+
+              {examen.verrouille && (
+                <div className="rounded-md border border-primary/30 bg-primary/5 px-4 py-2.5 text-sm flex items-center gap-2">
+                  <Lock className="h-4 w-4 text-primary flex-shrink-0" />
+                  Résultats verrouillés{examen.verrouilleLe ? ` le ${new Date(examen.verrouilleLe).toLocaleDateString('fr-FR')}` : ''} : notes, moyennes et décisions sont figées.
+                  {estDirecteur ? ' Seul le directeur peut déverrouiller.' : ''}
+                </div>
+              )}
+
+
+              {epreuvesExamen.length === 0 && vueEffective.kind === 'resultats' ? (
+                <Card className="border-dashed">
+                  <CardContent className="py-12 text-center space-y-4">
+                    <p className="text-muted-foreground">Aucune épreuve dans cet examen.</p>
+                    {estDirecteur ? (
+                      <div className="flex items-center justify-center gap-2 flex-wrap">
+                        {programme.length > 0 && (
+                          <Button className="gap-2" disabled={preparation} onClick={() => void preparerDepuisProgramme()}>
+                            {preparation ? <Loader2 className="h-4 w-4 animate-spin" /> : <Wand2 className="h-4 w-4" />}
+                            Reprendre le programme ({resumeProgramme})
+                          </Button>
+                        )}
+                        <Button variant="outline" className="gap-2" onClick={() => void ex.addTour(examen.id, 'Écrit').catch(err => toast({ title: 'Erreur', description: String(err), variant: 'destructive' }))}>
+                          <Plus className="h-4 w-4" />Commencer par un tour vide
                         </Button>
-                      )}
-                      <Button variant="outline" className="gap-2" onClick={() => void ex.addTour(examen.id, 'Écrit').catch(err => toast({ title: 'Erreur', description: String(err), variant: 'destructive' }))}>
-                        <Plus className="h-4 w-4" />Commencer par un tour vide
-                      </Button>
-                    </div>
-                  ) : (
-                    <p className="text-sm text-muted-foreground">Les épreuves (coefficients, notes éliminatoires) sont définies par le directeur.</p>
-                  )}
-                </CardContent>
-              </Card>
-            ) : (
-              <GrilleExamen
-                examen={examen} tours={tours} candidats={candidats} matieres={matieresNiveau}
-                sauvegarde={sauvegarde} estDirecteur={estDirecteur}
-              />
-            )}
+                      </div>
+                    ) : (
+                      <p className="text-sm text-muted-foreground">Les épreuves (coefficients, notes éliminatoires) sont définies par le directeur.</p>
+                    )}
+                  </CardContent>
+                </Card>
+              ) : vueEffective.kind === 'resultats' ? (
+                <>
+                  <h2 className="text-xl font-bold flex items-center gap-2"><Trophy className="h-5 w-5 text-primary" />Résultats — {examen.name}</h2>
+                  <ResultatsExamen
+                    examen={examen} epreuves={epreuvesExamen} candidats={candidats}
+                    matieres={matieresNiveau.filter(m => epreuvesExamen.some(e => e.niveauMatiereId === m.id))}
+                    onChoisirMatiere={id => setVue(id ? { kind: 'matiere', id } : { kind: 'autres' })}
+                  />
+                </>
+              ) : (
+                <>
+                  <h2 className="text-xl font-bold flex items-center gap-2">
+                    <BookOpen className="h-5 w-5 text-primary" />
+                    {matiereChoisie ? matiereChoisie.matiereName : 'Autres épreuves'}
+                    <span className="text-sm font-normal text-muted-foreground">{examen.name}</span>
+                  </h2>
+                  <GrilleExamen
+                    examen={examen} tours={tours} candidats={candidats} matieres={matieresNiveau}
+                    matiere={matiereChoisie}
+                    epreuves={matiereChoisie ? epreuvesExamen.filter(e => e.niveauMatiereId === matiereChoisie.id) : horsProgramme}
+                    sauvegarde={sauvegarde} estDirecteur={estDirecteur}
+                  />
+                </>
+              )}
+            </div>
           </div>
         </>
       )}
@@ -388,6 +480,26 @@ const ExamensPromotion = () => {
     </div>
   );
 };
+
+/** Une matière dans la colonne de gauche, avec son avancement de saisie. */
+const BoutonMatiere = ({ nom, actif, etat, coefficient, onClick }: {
+  nom: string; actif: boolean; etat: 'complet' | 'partiel' | 'vide'; coefficient: number; onClick: () => void;
+}) => (
+  <button
+    onClick={onClick}
+    className={`w-full text-left flex items-center gap-2 px-2.5 py-2 rounded-lg transition-all text-sm ${
+      actif ? 'bg-primary text-primary-foreground font-medium shadow-sm' : 'hover:bg-muted text-foreground'
+    }`}
+    title={etat === 'complet' ? 'Toutes les notes sont saisies' : etat === 'partiel' ? 'Saisie en cours' : 'Rien de saisi'}
+  >
+    <div className={`w-2 h-2 rounded-full flex-shrink-0 ${
+      actif ? (etat === 'vide' ? 'bg-primary-foreground/40' : 'bg-primary-foreground')
+        : etat === 'complet' ? 'bg-green-500' : etat === 'partiel' ? 'bg-amber-500' : 'bg-muted-foreground/30'
+    }`} />
+    <span className="truncate flex-1">{nom}</span>
+    <span className={`text-xs flex-shrink-0 ${actif ? 'text-primary-foreground/70' : 'text-muted-foreground'}`}>{coefficient > 0 ? `×${coefficient}` : '—'}</span>
+  </button>
+);
 
 /** Où comptent les notes de l'examen dans les moyennes d'Évaluations — dit clairement, jamais deviné. */
 const CompteDans = ({ periode, categorie, promotionId }: {
