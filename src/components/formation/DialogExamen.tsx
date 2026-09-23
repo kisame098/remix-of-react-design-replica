@@ -3,11 +3,12 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Loader2 } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import {
-  type Examen, type TypeExamen, LIBELLES_TYPE_EXAMEN, nomExamenValide, seuilAdmissionValide, datesPromotionValides,
+  type Examen, type TypeExamen, type Periode, type BaremeCategorie, LIBELLES_TYPE_EXAMEN, nomExamenValide, seuilAdmissionValide, datesPromotionValides,
 } from '@/lib/formationPro';
 import type { DonneesExamen } from '@/contexts/ExamensContext';
 
@@ -17,18 +18,25 @@ interface Props {
   /** Absent : création. */
   examen?: Examen;
   nbExistants: number;
+  /** Les périodes de la promotion : l'examen compte dans la moyenne de l'une d'elles. */
+  periodes: Periode[];
+  /** La formule de la formation, pour dire dans quelle catégorie l'examen comptera. */
+  categories: BaremeCategorie[];
   /** Résumé des épreuves reprises du programme (« Écrit : 3 · Pratique : 2 »), vide si rien à reprendre. */
   resumeProgramme: string;
   onValider: (data: DonneesExamen, depuisProgramme: boolean) => Promise<void>;
 }
 
-export const DialogExamen = ({ open, onOpenChange, examen, nbExistants, resumeProgramme, onValider }: Props) => {
+const AUCUNE = '__aucune';
+
+export const DialogExamen = ({ open, onOpenChange, examen, nbExistants, periodes, categories, resumeProgramme, onValider }: Props) => {
   const [name, setName] = useState('');
   const [type, setType] = useState<TypeExamen>('blanc');
   const [reference, setReference] = useState('');
   const [seuil, setSeuil] = useState('10');
   const [dateDebut, setDateDebut] = useState('');
   const [dateFin, setDateFin] = useState('');
+  const [periodeId, setPeriodeId] = useState<string>(AUCUNE);
   const [depuisProgramme, setDepuisProgramme] = useState(true);
   const [enregistrement, setEnregistrement] = useState(false);
 
@@ -40,8 +48,10 @@ export const DialogExamen = ({ open, onOpenChange, examen, nbExistants, resumePr
     setSeuil(String(examen?.seuilAdmission ?? 10).replace('.', ','));
     setDateDebut(examen?.dateDebut ?? '');
     setDateFin(examen?.dateFin ?? '');
+    // Par défaut, la dernière période : un examen compte en général dans la période en cours.
+    setPeriodeId(examen ? examen.periodeId ?? AUCUNE : periodes[periodes.length - 1]?.id ?? AUCUNE);
     setDepuisProgramme(resumeProgramme !== '');
-  }, [open, examen, resumeProgramme]);
+  }, [open, examen, resumeProgramme, periodes]);
 
   const valider = async () => {
     const seuilAdmission = Number(seuil.replace(',', '.'));
@@ -61,6 +71,7 @@ export const DialogExamen = ({ open, onOpenChange, examen, nbExistants, resumePr
     try {
       await onValider({
         name: name.trim(), type, reference: type === 'officiel' ? reference : '', seuilAdmission,
+        periodeId: periodeId === AUCUNE ? '' : periodeId,
         dateDebut: dateDebut || undefined, dateFin: dateFin || undefined,
       }, !examen && depuisProgramme && resumeProgramme !== '');
       onOpenChange(false);
@@ -72,6 +83,8 @@ export const DialogExamen = ({ open, onOpenChange, examen, nbExistants, resumePr
   };
 
   const suggestions = [`Examen blanc n°${nbExistants + 1}`, 'Examen final'];
+  const categorie = categories.find(c => c.sourceExamen === type);
+  const periodeChoisie = periodes.find(p => p.id === periodeId);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -111,6 +124,23 @@ export const DialogExamen = ({ open, onOpenChange, examen, nbExistants, resumePr
               <Input id="examen-ref" placeholder="Ex : Session juin 2027" value={reference} onChange={e => setReference(e.target.value)} />
             </div>
           )}
+          <div className="space-y-2">
+            <Label>Compte dans la moyenne de</Label>
+            <Select value={periodeId} onValueChange={setPeriodeId}>
+              <SelectTrigger aria-label="Période"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {periodes.map(p => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
+                <SelectItem value={AUCUNE}>Aucune période (ne compte pas dans les moyennes)</SelectItem>
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">
+              {periodeChoisie && categorie
+                ? `Ses notes rempliront la catégorie « ${categorie.name} » (${categorie.pourcentage} %) de ${periodeChoisie.name}, dans Évaluations.`
+                : periodeChoisie
+                  ? `La formule de la formation n'a pas de catégorie « ${LIBELLES_TYPE_EXAMEN[type]} » : l'examen ne comptera pas dans les moyennes.`
+                  : 'Les notes restent propres à l\'examen (décision, mention), sans entrer dans les moyennes.'}
+            </p>
+          </div>
           <div className="grid grid-cols-3 gap-3">
             <div className="space-y-2">
               <Label htmlFor="examen-seuil">Admis à partir de</Label>

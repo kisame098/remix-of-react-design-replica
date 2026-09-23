@@ -24,6 +24,7 @@ const sb = supabase as any;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const mapExamen = (r: any): Examen => ({
   id: r.id, promotionId: r.promotion_id, name: r.name, type: r.type, reference: r.reference ?? undefined,
+  periodeId: r.periode_id ?? undefined,
   seuilAdmission: Number(r.seuil_admission), dateDebut: r.date_debut ?? undefined, dateFin: r.date_fin ?? undefined,
   verrouille: !!r.verrouille, verrouilleLe: r.verrouille_le ?? undefined, createdAt: r.created_at,
 });
@@ -50,7 +51,7 @@ const mapResultat = (r: any): ExamenResultat => ({
 });
 
 export type DonneesExamen = {
-  name: string; type: TypeExamen; reference?: string; seuilAdmission: number; dateDebut?: string; dateFin?: string;
+  name: string; type: TypeExamen; reference?: string; periodeId?: string; seuilAdmission: number; dateDebut?: string; dateFin?: string;
 };
 export type DonneesEpreuve = {
   nom: string; coefficient: number; bareme: number; seuilEliminatoire?: number; niveauMatiereId?: string;
@@ -169,7 +170,7 @@ export const ExamensProvider = ({ children }: { children?: ReactNode }) => {
     const sid = schoolId;
     const { data: row, error } = await sb.from('fp_examens').insert({
       school_id: sid, promotion_id: promotionId, name: data.name.trim(), type: data.type,
-      reference: data.reference?.trim() || null, seuil_admission: data.seuilAdmission,
+      reference: data.reference?.trim() || null, periode_id: data.periodeId || null, seuil_admission: data.seuilAdmission,
       date_debut: data.dateDebut || null, date_fin: data.dateFin || null,
     }).select().single();
     if (error) throw error;
@@ -208,6 +209,7 @@ export const ExamensProvider = ({ children }: { children?: ReactNode }) => {
     if (data.name !== undefined) patch.name = data.name.trim();
     if (data.type !== undefined) patch.type = data.type;
     if ('reference' in data) patch.reference = data.reference?.trim() || null;
+    if ('periodeId' in data) patch.periode_id = data.periodeId || null;
     if (data.seuilAdmission !== undefined) patch.seuil_admission = data.seuilAdmission;
     if ('dateDebut' in data) patch.date_debut = data.dateDebut || null;
     if ('dateFin' in data) patch.date_fin = data.dateFin || null;

@@ -15,7 +15,7 @@ import { toast } from '@/hooks/use-toast';
 import {
   type BaremeCategorie, type Evaluation, type NiveauMatiere, type Note, type Periode,
   triEvaluationsChronologique, titreNouvelleEvaluation, analyserSaisieNote, texteDeLaNote,
-  moyenneMatiere, resumeEvaluation, titreEvaluationValide, baremeValide, poidsValide,
+  moyenneMatiere, resumeEvaluation, titreEvaluationValide, baremeValide, poidsValide, categoriesSaisies,
 } from '@/lib/formationPro';
 import { cleCase, type SauvegardeNotes } from './useSauvegardeNotes';
 
@@ -33,7 +33,10 @@ interface Props {
   promotionId: string;
   periode: Periode;
   matiere: NiveauMatiere;
+  /** Toute la formule : les catégories saisies ici ET celles alimentées par les examens. */
   categories: BaremeCategorie[];
+  /** Les épreuves d'examen de la promotion, déjà traduites en évaluations (voir evaluationsDepuisExamens). */
+  depuisExamens: { evaluations: Evaluation[]; notes: Note[] };
   eleves: Student[];
   sauvegarde: SauvegardeNotes;
 }
@@ -46,12 +49,16 @@ interface Props {
  * directement — la catégorie, la matière et la période sont déjà connues,
  * on ne les redemande jamais. Cliquer le titre d'une colonne permet d'en
  * changer la date, le barème, le poids, ou de la supprimer.
+ *
+ * Seules les catégories SAISIES ici ont des colonnes (Contrôle continu, TP) :
+ * Examen blanc et Examen final viennent de la rubrique Examens. La moyenne,
+ * elle, suit toute la formule — examens compris.
  */
-export const GrilleNotesMatiere = ({ promotionId, periode, matiere, categories, eleves, sauvegarde }: Props) => {
+export const GrilleNotesMatiere = ({ promotionId, periode, matiere, categories, depuisExamens, eleves, sauvegarde }: Props) => {
   const { evaluations, notes, addEvaluation } = useFormationPro();
   const { brouillons, modifierCase } = sauvegarde;
 
-  const colonnes = useMemo(() => categories.map(cat => ({
+  const colonnes = useMemo(() => categoriesSaisies(categories).map(cat => ({
     categorie: cat,
     evaluations: triEvaluationsChronologique(evaluations.filter(e =>
       e.promotionId === promotionId && e.periodeId === periode.id && e.niveauMatiereId === matiere.id && e.categorieId === cat.id)),
@@ -76,8 +83,19 @@ export const GrilleNotesMatiere = ({ promotionId, periode, matiere, categories, 
     return [...parCle.values()];
   }, [notes, brouillons, toutesLesEvaluations, eleves]);
 
-  const moyennes = useMemo(() => new Map(eleves.map(s =>
-    [s.id, moyenneMatiere(categories, toutesLesEvaluations, notesAffichees, s.id)])), [eleves, categories, toutesLesEvaluations, notesAffichees]);
+  // Les examens de cette matière et de cette période, pour la moyenne seulement.
+  const examensMatiere = useMemo(() => {
+    const evs = depuisExamens.evaluations.filter(e => e.periodeId === periode.id && e.niveauMatiereId === matiere.id);
+    const ids = new Set(evs.map(e => e.id));
+    return { evaluations: evs, notes: depuisExamens.notes.filter(n => ids.has(n.evaluationId)) };
+  }, [depuisExamens, periode.id, matiere.id]);
+
+  const moyennes = useMemo(() => {
+    const evs = [...toutesLesEvaluations, ...examensMatiere.evaluations];
+    const ns = [...notesAffichees, ...examensMatiere.notes];
+    return new Map(eleves.map(s => [s.id, moyenneMatiere(categories, evs, ns, s.id)]));
+  }, [eleves, categories, toutesLesEvaluations, notesAffichees, examensMatiere]);
+  const avecExamens = categories.some(c => c.sourceExamen);
 
   // ── Recherche et tri (comme la saisie classique) ─────────────────────────
   const [recherche, setRecherche] = useState('');
@@ -176,7 +194,7 @@ export const GrilleNotesMatiere = ({ promotionId, periode, matiere, categories, 
                 </th>
               ))}
               <th rowSpan={2} className="min-w-[90px] px-3 text-center font-semibold border-l border-b bg-muted/60">
-                Moyenne<div className="text-xs font-normal text-muted-foreground">/20</div>
+                Moyenne<div className="text-xs font-normal text-muted-foreground">{avecExamens ? '/20 · examens inclus' : '/20'}</div>
               </th>
             </tr>
             <tr className="bg-muted/20">

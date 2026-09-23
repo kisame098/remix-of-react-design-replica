@@ -782,3 +782,53 @@ describe('garde-fous — examens : isolation et verrouillage tenus par la base',
     expect(sql).toContain("array['fp_examen_tours','fp_examen_epreuves','fp_examen_candidats','fp_examen_notes','fp_examen_resultats']");
   });
 });
+
+import { evaluationsDepuisExamens, evaluationsDeLaFormule, categoriesSaisies, type Examen } from './formationPro';
+
+describe('les examens alimentent la formule — un examen ne se saisit qu\'une fois', () => {
+  const cats = [
+    categorie({ id: 'cc', name: 'Contrôle continu', pourcentage: 30 }),
+    categorie({ id: 'tp', name: 'TP', pourcentage: 30 }),
+    categorie({ id: 'eb', name: 'Examen blanc', pourcentage: 10, sourceExamen: 'blanc' }),
+    categorie({ id: 'ef', name: 'Examen final', pourcentage: 30, sourceExamen: 'officiel' }),
+  ];
+  const examen = (o: Partial<Examen> = {}): Examen => ({
+    id: 'x1', promotionId: 'p1', name: 'Examen final', type: 'officiel', seuilAdmission: 10, verrouille: false,
+    periodeId: 'per1', createdAt: '2026-06-01T00:00:00Z', ...o,
+  });
+  const tours = [{ id: 't1', examenId: 'x1', name: 'Écrit', ordering: 0 }];
+  const eps = [
+    epreuve({ id: 'ep1', tourId: 't1', niveauMatiereId: 'nm1', coefficient: 2 }),
+    epreuve({ id: 'ep2', tourId: 't1', niveauMatiereId: undefined }),        // pas rattachée à une matière
+  ];
+  const notesEx = [noteEx({ id: 'a', epreuveId: 'ep1', valeur: 16 }), noteEx({ id: 'b', epreuveId: 'ep2', valeur: 4 })];
+
+  it('Évaluations ne montre que les catégories saisies (CC, TP)', () => {
+    expect(categoriesSaisies(cats).map(c => c.name)).toEqual(['Contrôle continu', 'TP']);
+  });
+
+  it('une épreuve d\'examen final devient une note de la catégorie « Examen final », dans la période de l\'examen', () => {
+    const r = evaluationsDepuisExamens('p1', cats, [examen()], tours, eps, notesEx);
+    expect(r.evaluations).toEqual([expect.objectContaining({
+      id: 'examen:ep1', niveauMatiereId: 'nm1', periodeId: 'per1', categorieId: 'ef', poids: 2,
+    })]);
+    expect(r.notes).toEqual([expect.objectContaining({ evaluationId: 'examen:ep1', studentEnrollmentId: 's1', valeur: 16 })]);
+  });
+
+  it('rien n\'entre si l\'examen n\'a pas de période, est d\'une autre promotion, ou si la formule n\'a pas de catégorie pour ce type', () => {
+    expect(evaluationsDepuisExamens('p1', cats, [examen({ periodeId: undefined })], tours, eps, notesEx).evaluations).toEqual([]);
+    expect(evaluationsDepuisExamens('p2', cats, [examen()], tours, eps, notesEx).evaluations).toEqual([]);
+    expect(evaluationsDepuisExamens('p1', cats.slice(0, 2), [examen()], tours, eps, notesEx).evaluations).toEqual([]);
+  });
+
+  it('la moyenne de la matière combine contrôle continu, TP et examen final selon la formule', () => {
+    const cc = evaluation({ id: 'cc1', categorieId: 'cc' });
+    const vieilleColonne = evaluation({ id: 'old', categorieId: 'ef' });   // tapée à la main avant le changement
+    const notesSaisies = [note({ id: 'n1', evaluationId: 'cc1', valeur: 10 }), note({ id: 'n2', evaluationId: 'old', valeur: 0 })];
+    const f = evaluationsDeLaFormule([cc, vieilleColonne], notesSaisies, cats,
+      evaluationsDepuisExamens('p1', cats, [examen()], tours, eps, notesEx));
+    expect(f.evaluations.map(e => e.id)).toEqual(['cc1', 'examen:ep1']);   // l'ancienne colonne ne compte plus
+    // CC 10 (30 %) + Examen final 16 (30 %) → 13 ; TP et examen blanc pas encore notés : ignorés
+    expect(moyenneMatiere(cats, f.evaluations, f.notes, 's1')).toBe(13);
+  });
+});

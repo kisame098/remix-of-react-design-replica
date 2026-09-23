@@ -6,7 +6,7 @@ import { estFormationPro } from '@/lib/modeGestion';
 import {
   type Formation, type Niveau, type MatiereCatalogue, type NiveauMatiere, type ChoixGroup, type ChoixOption,
   type NiveauMatiereType, type NiveauMatiereNature, type Promotion, type RythmePromotion, type StatutPromotion,
-  type BaremeCategorie, type Periode, type Evaluation, type Note, type StatutNote, DEFAUT_BAREME_CATEGORIES,
+  type BaremeCategorie, type Periode, type Evaluation, type Note, type StatutNote, type TypeExamen, DEFAUT_BAREME_CATEGORIES,
 } from '@/lib/formationPro';
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -53,7 +53,7 @@ type DonneesPromotion = {
   name: string; studentLimit: number; rythme: RythmePromotion;
   startDate?: string; endDate?: string; status?: StatutPromotion; description?: string;
 };
-type DonneesBaremeCategorie = { name: string; pourcentage: number };
+type DonneesBaremeCategorie = { name: string; pourcentage: number; sourceExamen?: TypeExamen | null };
 type DonneesPeriode = { name: string; startDate?: string; endDate?: string };
 type DonneesEvaluation = {
   promotionId: string; niveauMatiereId: string; periodeId: string; categorieId: string;
@@ -64,6 +64,7 @@ type DonneesNote = { valeur?: number; statut: StatutNote; observation?: string }
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const mapBaremeCategorie = (r: any): BaremeCategorie => ({
   id: r.id, formationId: r.formation_id, name: r.name, pourcentage: Number(r.pourcentage), ordering: r.ordering ?? 0,
+  sourceExamen: r.source_examen ?? undefined,
 });
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const mapPeriode = (r: any): Periode => ({
@@ -84,11 +85,14 @@ const mapNote = (r: any): Note => ({
 
 /** Insère d'un coup les catégories du barème d'une formation — jamais un formulaire vide à remplir une par une. */
 const seedBaremeCategories = async (
-  schoolId: string, formationId: string, categories: readonly { name: string; pourcentage: number }[],
+  schoolId: string, formationId: string, categories: readonly { name: string; pourcentage: number; sourceExamen?: TypeExamen }[],
 ): Promise<BaremeCategorie[]> => {
   if (categories.length === 0) return [];
   const { data, error } = await sb.from('fp_bareme_categories').insert(
-    categories.map((c, i) => ({ school_id: schoolId, formation_id: formationId, name: c.name, pourcentage: c.pourcentage, ordering: i })),
+    categories.map((c, i) => ({
+      school_id: schoolId, formation_id: formationId, name: c.name, pourcentage: c.pourcentage, ordering: i,
+      source_examen: c.sourceExamen ?? null,
+    })),
   ).select();
   if (error) throw error;
   return (data ?? []).map(mapBaremeCategorie);
@@ -476,7 +480,7 @@ export const FormationProProvider = ({ children }: { children: ReactNode }) => {
     if (schoolId) {
       const baremeSource = baremeCategoriesRef.current.filter(c => c.formationId === sourceFormationId).sort((a, b) => a.ordering - b.ordering);
       if (baremeSource.length > 0) {
-        const cats = await seedBaremeCategories(schoolId, nouvelleFormation.id, baremeSource.map(c => ({ name: c.name, pourcentage: c.pourcentage })));
+        const cats = await seedBaremeCategories(schoolId, nouvelleFormation.id, baremeSource.map(c => ({ name: c.name, pourcentage: c.pourcentage, sourceExamen: c.sourceExamen })));
         setBaremeCategories(prev => [...prev, ...cats]);
       }
     }
@@ -569,6 +573,7 @@ export const FormationProProvider = ({ children }: { children: ReactNode }) => {
     const ordering = baremeCategoriesRef.current.filter(c => c.formationId === formationId).length;
     const { data: row, error } = await sb.from('fp_bareme_categories').insert({
       school_id: schoolId, formation_id: formationId, name: data.name.trim(), pourcentage: data.pourcentage, ordering,
+      source_examen: data.sourceExamen ?? null,
     }).select().single();
     if (error) throw error;
     const cat = mapBaremeCategorie(row);
@@ -581,9 +586,10 @@ export const FormationProProvider = ({ children }: { children: ReactNode }) => {
     const patch: Record<string, unknown> = {};
     if (data.name !== undefined) patch.name = data.name.trim();
     if (data.pourcentage !== undefined) patch.pourcentage = data.pourcentage;
+    if (data.sourceExamen !== undefined) patch.source_examen = data.sourceExamen;
     const { error } = await sb.from('fp_bareme_categories').update(patch).eq('id', id).eq('school_id', schoolId);
     if (error) throw error;
-    setBaremeCategories(prev => prev.map(c => c.id === id ? { ...c, ...data } : c));
+    setBaremeCategories(prev => prev.map(c => c.id === id ? { ...c, ...data, sourceExamen: data.sourceExamen === undefined ? c.sourceExamen : data.sourceExamen ?? undefined } : c));
   }, [schoolId]);
 
   const deleteBaremeCategorie = useCallback(async (id: string): Promise<void> => {

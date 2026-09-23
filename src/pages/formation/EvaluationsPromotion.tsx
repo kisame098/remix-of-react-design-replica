@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { useNavigate, useParams, Link } from 'react-router-dom';
 import { useFormationPro } from '@/contexts/FormationProContext';
 import { useSchool } from '@/contexts/SchoolContext';
+import { useExamens } from '@/contexts/ExamensContext';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -13,7 +14,7 @@ import {
   Plus, Loader2, ClipboardList, Users, Check, AlertCircle, ArrowLeft, ChevronRight, Pencil, Trash2, CalendarRange, Trophy, BookOpen,
 } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
-import { triPeriodes, baremeComplet, sommeBareme, analyserSaisieNote } from '@/lib/formationPro';
+import { triPeriodes, baremeComplet, sommeBareme, analyserSaisieNote, evaluationsDepuisExamens, LIBELLES_TYPE_EXAMEN } from '@/lib/formationPro';
 import { GrilleNotesMatiere } from '@/components/formation/GrilleNotesMatiere';
 import { RecapitulatifPeriode } from '@/components/formation/RecapitulatifPeriode';
 import { DialogPeriode } from '@/components/formation/DialogPeriode';
@@ -44,6 +45,7 @@ const EvaluationsPromotion = () => {
     periodes, evaluations, notes, addPeriode, updatePeriode, deletePeriode, saisirNote, supprimerNote,
   } = useFormationPro();
   const { students } = useSchool();
+  const examens = useExamens();
   const sauvegarde = useSauvegardeNotes({ enregistrer: saisirNote, supprimer: supprimerNote, analyser: analyserSaisieNote });
 
   const promotion = promotions.find(p => p.id === promotionId);
@@ -65,6 +67,11 @@ const EvaluationsPromotion = () => {
   const eleves = useMemo(
     () => students.filter(s => promotion && s.classId === promotion.classId),
     [students, promotion],
+  );
+  // Examen blanc / Examen final : leurs notes viennent de la rubrique Examens.
+  const depuisExamens = useMemo(
+    () => evaluationsDepuisExamens(promotionId ?? '', categories, examens.examens, examens.tours, examens.epreuves, examens.notes),
+    [promotionId, categories, examens.examens, examens.tours, examens.epreuves, examens.notes],
   );
 
   const [periodeId, setPeriodeId] = useState<string | null>(null);
@@ -106,7 +113,7 @@ const EvaluationsPromotion = () => {
     }
   };
 
-  if (loading) {
+  if (loading || examens.loading) {
     return <div className="p-6 flex items-center gap-2 text-muted-foreground"><Loader2 className="h-5 w-5 animate-spin" />Chargement…</div>;
   }
   if (!promotion) {
@@ -268,26 +275,43 @@ const EvaluationsPromotion = () => {
                   <p className="text-sm text-muted-foreground">Moyennes par matière, moyenne générale et rang.</p>
                 </div>
                 <RecapitulatifPeriode
-                  promotionId={promotion.id} periode={periode} matieres={matieres} categories={categories} eleves={eleves}
+                  promotionId={promotion.id} periode={periode} matieres={matieres} categories={categories} depuisExamens={depuisExamens} eleves={eleves}
                   onChoisirMatiere={id => setVue({ kind: 'matiere', id })}
                 />
               </>
             ) : matiere ? (
               <>
-                <div>
-                  <h2 className="text-xl font-bold flex items-center gap-2">
+                <div className="space-y-2">
+                  <h2 className="text-xl font-bold flex items-center gap-2 flex-wrap">
                     <BookOpen className="h-5 w-5 text-primary" />{matiere.matiereName}
                     <span className="text-sm font-normal text-muted-foreground">coefficient {matiere.coefficient} · {periode.name}</span>
                   </h2>
+                  {/* La formule en un coup d'œil : ce qu'on saisit ici, et ce qui vient des examens. */}
+                  <div className="flex items-center gap-1.5 flex-wrap text-xs">
+                    <span className="text-muted-foreground mr-0.5">Moyenne =</span>
+                    {categories.map(c => (
+                      <span
+                        key={c.id}
+                        className={`rounded-full px-2.5 py-0.5 ${c.sourceExamen ? 'border border-dashed text-muted-foreground' : 'bg-primary/10 text-primary font-medium'}`}
+                        title={c.sourceExamen ? `Notes reprises des ${LIBELLES_TYPE_EXAMEN[c.sourceExamen].toLowerCase()}s de la rubrique Examens` : 'Saisi dans ce tableau'}
+                      >
+                        {c.name} {c.pourcentage} %
+                      </span>
+                    ))}
+                    {categories.some(c => c.sourceExamen) && (
+                      <Link to={`/formation/examens/${promotion.id}`} className="text-primary hover:underline ml-1">Saisir les examens →</Link>
+                    )}
+                  </div>
                   {!baremeComplet(categories) && (
-                    <p className="text-xs text-amber-600 mt-1">
+                    <p className="text-xs text-amber-600">
                       La formule d'évaluation totalise {sommeBareme(categories)} % au lieu de 100 % — à corriger par le directeur sur la{' '}
                       <Link to={`/formation/formations/${formation?.id}`} className="underline">page de la formation</Link>.
                     </p>
                   )}
                 </div>
                 <GrilleNotesMatiere
-                  promotionId={promotion.id} periode={periode} matiere={matiere} categories={categories} eleves={eleves} sauvegarde={sauvegarde}
+                  promotionId={promotion.id} periode={periode} matiere={matiere} categories={categories} depuisExamens={depuisExamens}
+                  eleves={eleves} sauvegarde={sauvegarde}
                 />
               </>
             ) : (
