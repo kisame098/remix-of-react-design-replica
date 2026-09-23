@@ -13,7 +13,7 @@ import {
   Plus, Loader2, ClipboardList, Users, Check, AlertCircle, ArrowLeft, ChevronRight, Pencil, Trash2, CalendarRange, Trophy, BookOpen,
 } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
-import { triPeriodes, baremeComplet, sommeBareme } from '@/lib/formationPro';
+import { triPeriodes, baremeComplet, sommeBareme, analyserSaisieNote } from '@/lib/formationPro';
 import { GrilleNotesMatiere } from '@/components/formation/GrilleNotesMatiere';
 import { RecapitulatifPeriode } from '@/components/formation/RecapitulatifPeriode';
 import { DialogPeriode } from '@/components/formation/DialogPeriode';
@@ -41,10 +41,10 @@ const EvaluationsPromotion = () => {
   const navigate = useNavigate();
   const {
     loading, promotions, formations, niveaux, niveauMatieres, baremeCategories,
-    periodes, evaluations, notes, addPeriode, updatePeriode, deletePeriode,
+    periodes, evaluations, notes, addPeriode, updatePeriode, deletePeriode, saisirNote, supprimerNote,
   } = useFormationPro();
   const { students } = useSchool();
-  const sauvegarde = useSauvegardeNotes();
+  const sauvegarde = useSauvegardeNotes({ enregistrer: saisirNote, supprimer: supprimerNote, analyser: analyserSaisieNote });
 
   const promotion = promotions.find(p => p.id === promotionId);
   const niveau = promotion ? niveaux.find(n => n.id === promotion.niveauId) : undefined;

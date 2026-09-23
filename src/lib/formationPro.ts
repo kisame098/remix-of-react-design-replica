@@ -620,3 +620,215 @@ export const recapitulatifPeriode = (
   });
   return [...classes, ...lignes.filter(l => l.generale === null)];
 };
+
+// ═══════════════════════════════════════════════════════════════════════════
+// EXAMENS (étape 4)
+//
+// Un examen (blanc ou officiel) appartient à UNE promotion. Ses épreuves sont
+// rangées en tours (Écrit, Pratique…) — un regroupement d'affichage, jamais
+// une pondération. Le calcul est volontairement simple et transparent :
+//   moyenne = Σ(note sur 20 × coefficient) / Σ(coefficients des épreuves notées)
+// Le logiciel PROPOSE une décision et une mention ; le jury les retient ou les
+// corrige, puis le directeur verrouille (règle tenue par la base de données,
+// docs/sql/formation_pro_examens.sql).
+// ═══════════════════════════════════════════════════════════════════════════
+
+export type TypeExamen = 'blanc' | 'officiel';
+export const LIBELLES_TYPE_EXAMEN: Record<TypeExamen, string> = { blanc: 'Examen blanc', officiel: 'Examen officiel' };
+
+export type Decision = 'admis' | 'ajourne' | 'refuse';
+export const LIBELLES_DECISION: Record<Decision, string> = { admis: 'Admis', ajourne: 'Ajourné', refuse: 'Refusé' };
+
+export type Mention = 'passable' | 'assez_bien' | 'bien' | 'tres_bien';
+export const LIBELLES_MENTION: Record<Mention, string> = {
+  passable: 'Passable', assez_bien: 'Assez bien', bien: 'Bien', tres_bien: 'Très bien',
+};
+
+export interface Examen {
+  id: string;
+  promotionId: string;
+  name: string;
+  type: TypeExamen;
+  reference?: string;
+  seuilAdmission: number;
+  dateDebut?: string;
+  dateFin?: string;
+  verrouille: boolean;
+  verrouilleLe?: string;
+  createdAt: string;
+}
+
+export interface ExamenTour {
+  id: string;
+  examenId: string;
+  name: string;
+  ordering: number;
+}
+
+export interface ExamenEpreuve {
+  id: string;
+  tourId: string;
+  niveauMatiereId?: string;
+  nom: string;
+  coefficient: number;
+  bareme: number;
+  /** Sur le barème de l'épreuve. `undefined` : l'épreuve n'est pas éliminatoire. */
+  seuilEliminatoire?: number;
+  date?: string;
+  heure?: string;
+  salle?: string;
+  examinateurs?: string;
+  ordering: number;
+}
+
+export type StatutNoteExamen = 'note' | 'absent' | 'absent_justifie';
+
+export interface ExamenNote {
+  id: string;
+  epreuveId: string;
+  studentEnrollmentId: string;
+  valeur?: number;
+  statut: StatutNoteExamen;
+}
+
+export interface ExamenResultat {
+  id: string;
+  examenId: string;
+  studentEnrollmentId: string;
+  decision?: Decision;
+  mention?: Mention;
+  /** Figés au verrouillage. */
+  moyenne?: number;
+  elimine: boolean;
+}
+
+export const nomExamenValide = (name: string): boolean => name.trim() !== '';
+export const nomTourValide = (name: string): boolean => name.trim() !== '';
+export const nomEpreuveValide = (nom: string): boolean => nom.trim() !== '';
+export const seuilAdmissionValide = (v: number): boolean => Number.isFinite(v) && v > 0 && v <= 20;
+/** Le seuil éliminatoire est facultatif ; s'il est donné, il est entre 0 et le barème (exclu). */
+export const seuilEliminatoireValide = (v: number | undefined, bareme: number): boolean =>
+  v === undefined || (Number.isFinite(v) && v >= 0 && v < bareme);
+
+/** Pas de « non évalué » à un examen : on y est noté, absent, ou absent justifié. */
+export const analyserSaisieNoteExamen = (texte: string, bareme: number): SaisieNote => {
+  const s = analyserSaisieNote(texte, bareme);
+  if (s.kind === 'statut' && s.statut === 'non_evalue') return { kind: 'invalide', raison: 'À un examen : une note, A ou AJ' };
+  return s;
+};
+
+// ─── Le calcul ──────────────────────────────────────────────────────────────
+
+export interface EtatCandidat {
+  /** Sur 20, sur les seules épreuves notées — `null` si aucune. */
+  moyenne: number | null;
+  /** Épreuves où la note est sous le seuil éliminatoire. */
+  epreuvesEliminatoires: string[];
+  /** Épreuves sans note ni absence saisie. */
+  epreuvesManquantes: string[];
+  /** Épreuves où le candidat est absent (A ou AJ). */
+  epreuvesAbsent: string[];
+}
+
+export const etatCandidat = (epreuves: ExamenEpreuve[], notes: ExamenNote[], studentEnrollmentId: string): EtatCandidat => {
+  let total = 0, coefs = 0;
+  const etat: EtatCandidat = { moyenne: null, epreuvesEliminatoires: [], epreuvesManquantes: [], epreuvesAbsent: [] };
+  for (const ep of epreuves) {
+    const n = notes.find(x => x.epreuveId === ep.id && x.studentEnrollmentId === studentEnrollmentId);
+    if (!n) { etat.epreuvesManquantes.push(ep.id); continue; }
+    if (n.statut !== 'note' || n.valeur == null) { etat.epreuvesAbsent.push(ep.id); continue; }
+    total += convertirSur20(n.valeur, ep.bareme) * ep.coefficient;
+    coefs += ep.coefficient;
+    if (ep.seuilEliminatoire != null && n.valeur < ep.seuilEliminatoire) etat.epreuvesEliminatoires.push(ep.id);
+  }
+  etat.moyenne = coefs > 0 ? total / coefs : null;
+  return etat;
+};
+
+/** Bandes habituelles (10–12 passable, 12–14 assez bien, 14–16 bien, 16 et plus très bien). */
+export const mentionPourMoyenne = (moyenne: number | null): Mention | null => {
+  if (moyenne === null || moyenne < 10) return null;
+  if (moyenne < 12) return 'passable';
+  if (moyenne < 14) return 'assez_bien';
+  if (moyenne < 16) return 'bien';
+  return 'tres_bien';
+};
+
+export interface Proposition {
+  decision: Decision | null;
+  mention: Mention | null;
+  /** Pourquoi il n'y a pas de proposition, ou ce qui l'a dictée — affiché au jury. */
+  motif?: string;
+}
+
+/**
+ * Ce que le logiciel propose au jury — jamais une décision imposée :
+ *   - une note éliminatoire → Refusé, quel que soit le reste ;
+ *   - une épreuve pas encore saisie → aucune proposition (le calcul serait faux) ;
+ *   - une absence → aucune proposition : c'est au jury de trancher ;
+ *   - sinon : Admis si la moyenne atteint le seuil (mention selon la moyenne), Ajourné sinon.
+ */
+export const propositionJury = (etat: EtatCandidat, seuilAdmission: number): Proposition => {
+  if (etat.epreuvesEliminatoires.length > 0) {
+    return { decision: 'refuse', mention: null, motif: 'Note éliminatoire' };
+  }
+  if (etat.epreuvesManquantes.length > 0) {
+    return { decision: null, mention: null, motif: `${etat.epreuvesManquantes.length} épreuve${etat.epreuvesManquantes.length > 1 ? 's' : ''} sans note` };
+  }
+  if (etat.epreuvesAbsent.length > 0) {
+    return { decision: null, mention: null, motif: `Absent à ${etat.epreuvesAbsent.length} épreuve${etat.epreuvesAbsent.length > 1 ? 's' : ''} — au jury de décider` };
+  }
+  if (etat.moyenne === null) return { decision: null, mention: null };
+  return etat.moyenne >= seuilAdmission
+    ? { decision: 'admis', mention: mentionPourMoyenne(etat.moyenne) }
+    : { decision: 'ajourne', mention: null };
+};
+
+/** Décision retenue : celle choisie par le jury, sinon la proposition. */
+export const decisionRetenue = (resultat: Pick<ExamenResultat, 'decision'> | undefined, proposition: Proposition): Decision | null =>
+  resultat?.decision ?? proposition.decision;
+
+/** Mention retenue : seulement pour un admis — celle du jury, sinon la proposition. */
+export const mentionRetenue = (
+  resultat: Pick<ExamenResultat, 'decision' | 'mention'> | undefined, proposition: Proposition,
+): Mention | null => {
+  if (decisionRetenue(resultat, proposition) !== 'admis') return null;
+  return resultat?.mention ?? proposition.mention;
+};
+
+export interface BilanExamen { candidats: number; admis: number; ajournes: number; refuses: number; sansDecision: number; tauxReussite: number | null }
+
+export const bilanExamen = (decisions: (Decision | null)[]): BilanExamen => {
+  const b = { candidats: decisions.length, admis: 0, ajournes: 0, refuses: 0, sansDecision: 0 };
+  for (const d of decisions) {
+    if (d === 'admis') b.admis++;
+    else if (d === 'ajourne') b.ajournes++;
+    else if (d === 'refuse') b.refuses++;
+    else b.sansDecision++;
+  }
+  const decides = b.admis + b.ajournes + b.refuses;
+  return { ...b, tauxReussite: decides > 0 ? (b.admis / decides) * 100 : null };
+};
+
+export const triEpreuves = (epreuves: ExamenEpreuve[]): ExamenEpreuve[] => [...epreuves].sort((a, b) => a.ordering - b.ordering);
+export const triTours = (tours: ExamenTour[]): ExamenTour[] => [...tours].sort((a, b) => a.ordering - b.ordering);
+export const triExamens = (examens: Examen[]): Examen[] =>
+  [...examens].sort((a, b) => (a.dateDebut ?? a.createdAt).localeCompare(b.dateDebut ?? b.createdAt));
+
+/**
+ * Épreuves proposées à la création d'un examen, à partir du programme du
+ * niveau : les matières théoriques en « Écrit », les pratiques et projets en
+ * « Pratique », chacune avec SON coefficient (fixé par le directeur dans le
+ * programme — jamais retapé). Les stages ont leur propre module.
+ */
+export const epreuvesDepuisProgramme = (
+  matieres: Pick<NiveauMatiere, 'id' | 'matiereName' | 'coefficient' | 'nature' | 'ordering'>[],
+): { tour: string; epreuves: { niveauMatiereId: string; nom: string; coefficient: number }[] }[] => {
+  const tries = [...matieres].sort((a, b) => a.ordering - b.ordering);
+  const ecrit = tries.filter(m => m.nature === 'theorique');
+  const pratique = tries.filter(m => m.nature === 'pratique' || m.nature === 'projet');
+  return [
+    { tour: 'Écrit', epreuves: ecrit.map(m => ({ niveauMatiereId: m.id, nom: m.matiereName, coefficient: m.coefficient })) },
+    { tour: 'Pratique', epreuves: pratique.map(m => ({ niveauMatiereId: m.id, nom: m.matiereName, coefficient: m.coefficient })) },
+  ].filter(t => t.epreuves.length > 0);
+};
