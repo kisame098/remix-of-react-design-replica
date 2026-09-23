@@ -29,7 +29,8 @@ describe('DashboardSidebar selon le mode', () => {
     expect(screen.getByText('Promotions').closest('a')).not.toHaveTextContent('En dév.');
     expect(screen.getByText('Évaluations').closest('a')).not.toHaveTextContent('En dév.');
     expect(screen.getByText('Formation professionnelle')).toBeInTheDocument();
-    expect(screen.getAllByText('En dév.')).toHaveLength(4);
+    expect(screen.getAllByText('En dév.')).toHaveLength(3);
+    expect(screen.getByText('Examens').closest('a')).not.toHaveTextContent('En dév.');
     expect(screen.getByText('Formations')).toBeInTheDocument();
     for (const t of ['Gestion Classe', 'Gestion Notes', 'Cursus']) expect(screen.queryByText(t)).not.toBeInTheDocument();
     // les outils partagés restent

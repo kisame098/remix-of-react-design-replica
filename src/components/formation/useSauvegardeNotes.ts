@@ -1,11 +1,18 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useFormationPro } from '@/contexts/FormationProContext';
-import { analyserSaisieNote } from '@/lib/formationPro';
+import { type SaisieNote, type StatutNote } from '@/lib/formationPro';
 import { toast } from '@/hooks/use-toast';
 
 export type EtatSauvegarde = 'idle' | 'saving' | 'saved' | 'error';
 
 interface CaseEnAttente { evaluationId: string; studentId: string; bareme: number; texte: string }
+
+/** Où et comment enregistrer — fourni par la page (évaluations ou examens). */
+export interface ActionsSauvegarde {
+  enregistrer: (colonneId: string, studentId: string, data: { valeur?: number; statut: StatutNote }) => Promise<void>;
+  supprimer: (colonneId: string, studentId: string) => Promise<void>;
+  /** Lit une case : chaque module a ses statuts permis (pas de « NE » à un examen). */
+  analyser: (texte: string, bareme: number) => SaisieNote;
+}
 
 export const cleCase = (evaluationId: string, studentId: string) => `${evaluationId}|${studentId}`;
 
@@ -19,11 +26,13 @@ export const cleCase = (evaluationId: string, studentId: string) => `${evaluatio
  * liste des cases à enregistrer dès qu'on changeait d'évaluation, et la
  * dernière note tapée se perdait. Au démontage, ce qui attend part tout de
  * suite au lieu d'être abandonné.
+ *
+ * Sert aux évaluations comme aux examens : `evaluationId` désigne la colonne
+ * (une évaluation, ou une épreuve d'examen).
  */
-export const useSauvegardeNotes = () => {
-  const { saisirNote, supprimerNote } = useFormationPro();
-  const actions = useRef({ saisirNote, supprimerNote });
-  actions.current = { saisirNote, supprimerNote };
+export const useSauvegardeNotes = (fournies: ActionsSauvegarde) => {
+  const actions = useRef(fournies);
+  actions.current = fournies;
 
   /** Ce qui est tapé mais pas encore confirmé par la base (clé : cleCase). */
   const [brouillons, setBrouillons] = useState<Record<string, string>>({});
@@ -41,12 +50,12 @@ export const useSauvegardeNotes = () => {
     chaine.current = chaine.current.then(async () => {
       let echecs = 0;
       for (const [cle, c] of lot) {
-        const saisie = analyserSaisieNote(c.texte, c.bareme);
+        const saisie = actions.current.analyser(c.texte, c.bareme);
         try {
           if (saisie.kind === 'invalide') continue;
-          if (saisie.kind === 'vide') await actions.current.supprimerNote(c.evaluationId, c.studentId);
-          else if (saisie.kind === 'note') await actions.current.saisirNote(c.evaluationId, c.studentId, { valeur: saisie.valeur, statut: 'note' });
-          else await actions.current.saisirNote(c.evaluationId, c.studentId, { statut: saisie.statut });
+          if (saisie.kind === 'vide') await actions.current.supprimer(c.evaluationId, c.studentId);
+          else if (saisie.kind === 'note') await actions.current.enregistrer(c.evaluationId, c.studentId, { valeur: saisie.valeur, statut: 'note' });
+          else await actions.current.enregistrer(c.evaluationId, c.studentId, { statut: saisie.statut });
           // La base fait foi : le brouillon disparaît, sauf si on a retapé entre-temps.
           setBrouillons(prev => {
             if (prev[cle] !== c.texte) return prev;
@@ -73,7 +82,7 @@ export const useSauvegardeNotes = () => {
   const modifierCase = useCallback((evaluationId: string, studentId: string, bareme: number, texte: string) => {
     const cle = cleCase(evaluationId, studentId);
     setBrouillons(prev => ({ ...prev, [cle]: texte }));
-    if (analyserSaisieNote(texte, bareme).kind === 'invalide') {
+    if (actions.current.analyser(texte, bareme).kind === 'invalide') {
       // Jamais enregistrée : la case reste en rouge jusqu'à correction.
       enAttente.current.delete(cle);
       return;

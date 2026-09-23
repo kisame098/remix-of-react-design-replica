@@ -653,3 +653,132 @@ describe('recapitulatifPeriode — moyennes par matière, moyenne générale et 
     expect(r.map(l => l.rang)).toEqual([1, 1, 3]);
   });
 });
+
+import {
+  etatCandidat, propositionJury, mentionPourMoyenne, decisionRetenue, mentionRetenue, bilanExamen,
+  epreuvesDepuisProgramme, analyserSaisieNoteExamen, seuilEliminatoireValide, seuilAdmissionValide,
+  type ExamenEpreuve, type ExamenNote,
+} from './formationPro';
+
+const epreuve = (o: Partial<ExamenEpreuve> = {}): ExamenEpreuve =>
+  ({ id: 'ep1', tourId: 't1', nom: 'Cuisine', coefficient: 1, bareme: 20, ordering: 0, ...o });
+const noteEx = (o: Partial<ExamenNote> = {}): ExamenNote =>
+  ({ id: 'x', epreuveId: 'ep1', studentEnrollmentId: 's1', valeur: 12, statut: 'note', ...o });
+
+describe('examens — validation', () => {
+  it('seuil d\'admission entre 0 (exclu) et 20', () => {
+    expect(seuilAdmissionValide(10)).toBe(true);
+    expect(seuilAdmissionValide(0)).toBe(false);
+    expect(seuilAdmissionValide(21)).toBe(false);
+  });
+  it('seuil éliminatoire facultatif, sinon sous le barème de l\'épreuve', () => {
+    expect(seuilEliminatoireValide(undefined, 20)).toBe(true);
+    expect(seuilEliminatoireValide(5, 20)).toBe(true);
+    expect(seuilEliminatoireValide(20, 20)).toBe(false);
+    expect(seuilEliminatoireValide(-1, 20)).toBe(false);
+  });
+  it('pas de « non évalué » à un examen, mais A et AJ oui', () => {
+    expect(analyserSaisieNoteExamen('NE', 20).kind).toBe('invalide');
+    expect(analyserSaisieNoteExamen('A', 20)).toEqual({ kind: 'statut', statut: 'absent' });
+    expect(analyserSaisieNoteExamen('AJ', 20)).toEqual({ kind: 'statut', statut: 'absent_justifie' });
+    expect(analyserSaisieNoteExamen('14', 20)).toEqual({ kind: 'note', valeur: 14 });
+  });
+});
+
+describe('etatCandidat — moyenne pondérée par coefficient, tous tours confondus', () => {
+  const eps = [
+    epreuve({ id: 'ecrit', coefficient: 2, bareme: 20 }),
+    epreuve({ id: 'prat', tourId: 't2', coefficient: 4, bareme: 40, seuilEliminatoire: 10 }),
+  ];
+  it('calcule la moyenne sur 20 (barèmes différents ramenés sur 20)', () => {
+    const e = etatCandidat(eps, [noteEx({ epreuveId: 'ecrit', valeur: 11 }), noteEx({ epreuveId: 'prat', valeur: 30 })], 's1');
+    expect(e.moyenne).toBe((11 * 2 + 15 * 4) / 6);
+    expect(e.epreuvesEliminatoires).toEqual([]);
+  });
+  it('repère la note éliminatoire (sur le barème de l\'épreuve)', () => {
+    const e = etatCandidat(eps, [noteEx({ epreuveId: 'ecrit', valeur: 18 }), noteEx({ epreuveId: 'prat', valeur: 9 })], 's1');
+    expect(e.epreuvesEliminatoires).toEqual(['prat']);
+  });
+  it('une épreuve sans note ou une absence n\'est jamais comptée 0', () => {
+    const e = etatCandidat(eps, [noteEx({ epreuveId: 'ecrit', valeur: 14 })], 's1');
+    expect(e.moyenne).toBe(14);
+    expect(e.epreuvesManquantes).toEqual(['prat']);
+    const a = etatCandidat(eps, [noteEx({ epreuveId: 'ecrit', valeur: 14 }), noteEx({ epreuveId: 'prat', statut: 'absent', valeur: undefined })], 's1');
+    expect(a.moyenne).toBe(14);
+    expect(a.epreuvesAbsent).toEqual(['prat']);
+  });
+});
+
+describe('propositionJury — ce que le logiciel propose, jamais imposé', () => {
+  const base = { moyenne: 13, epreuvesEliminatoires: [], epreuvesManquantes: [], epreuvesAbsent: [] };
+  it('admis au-dessus du seuil, avec la mention de la moyenne', () => {
+    expect(propositionJury(base, 10)).toEqual({ decision: 'admis', mention: 'assez_bien' });
+  });
+  it('ajourné sous le seuil (le seuil de l\'examen, pas forcément 10)', () => {
+    expect(propositionJury(base, 14)).toEqual({ decision: 'ajourne', mention: null });
+  });
+  it('une note éliminatoire donne Refusé même avec une bonne moyenne', () => {
+    expect(propositionJury({ ...base, moyenne: 17, epreuvesEliminatoires: ['x'] }, 10).decision).toBe('refuse');
+  });
+  it('aucune proposition tant qu\'une épreuve n\'est pas saisie, ou en cas d\'absence', () => {
+    expect(propositionJury({ ...base, epreuvesManquantes: ['x'] }, 10).decision).toBeNull();
+    const abs = propositionJury({ ...base, epreuvesAbsent: ['x'] }, 10);
+    expect(abs.decision).toBeNull();
+    expect(abs.motif).toMatch(/jury/);
+  });
+  it('mentions : bandes habituelles', () => {
+    expect(mentionPourMoyenne(9.99)).toBeNull();
+    expect(mentionPourMoyenne(10)).toBe('passable');
+    expect(mentionPourMoyenne(12)).toBe('assez_bien');
+    expect(mentionPourMoyenne(14)).toBe('bien');
+    expect(mentionPourMoyenne(16)).toBe('tres_bien');
+  });
+  it('le choix du jury l\'emporte sur la proposition ; pas de mention si non admis', () => {
+    const prop = { decision: 'admis' as const, mention: 'bien' as const };
+    expect(decisionRetenue(undefined, prop)).toBe('admis');
+    expect(decisionRetenue({ decision: 'ajourne' }, prop)).toBe('ajourne');
+    expect(mentionRetenue({ decision: 'ajourne' }, prop)).toBeNull();
+    expect(mentionRetenue({ decision: 'admis', mention: 'tres_bien' }, prop)).toBe('tres_bien');
+    expect(mentionRetenue(undefined, prop)).toBe('bien');
+  });
+});
+
+describe('bilanExamen et épreuves proposées', () => {
+  it('compte les décisions ; le taux de réussite ne porte que sur les candidats décidés', () => {
+    const b = bilanExamen(['admis', 'admis', 'ajourne', 'refuse', null]);
+    expect(b).toMatchObject({ candidats: 5, admis: 2, ajournes: 1, refuses: 1, sansDecision: 1, tauxReussite: 50 });
+    expect(bilanExamen([null]).tauxReussite).toBeNull();
+  });
+  it('théorique → Écrit, pratique/projet → Pratique, stage exclu, coefficient du programme repris', () => {
+    const r = epreuvesDepuisProgramme([
+      { id: 'a', matiereName: 'Français', coefficient: 2, nature: 'theorique', ordering: 1 },
+      { id: 'b', matiereName: 'TP Cuisine', coefficient: 4, nature: 'pratique', ordering: 0 },
+      { id: 'c', matiereName: 'Stage', coefficient: 3, nature: 'stage', ordering: 2 },
+      { id: 'd', matiereName: 'Projet pro', coefficient: 1, nature: 'projet', ordering: 3 },
+    ]);
+    expect(r).toEqual([
+      { tour: 'Écrit', epreuves: [{ niveauMatiereId: 'a', nom: 'Français', coefficient: 2 }] },
+      { tour: 'Pratique', epreuves: [
+        { niveauMatiereId: 'b', nom: 'TP Cuisine', coefficient: 4 },
+        { niveauMatiereId: 'd', nom: 'Projet pro', coefficient: 1 },
+      ] },
+    ]);
+  });
+});
+
+describe('garde-fous — examens : isolation et verrouillage tenus par la base', () => {
+  const sql = readFileSync('docs/sql/formation_pro_examens.sql', 'utf8');
+  it('les 6 tables sont filtrées par école (RLS)', () => {
+    for (const t of ['fp_examens', 'fp_examen_tours', 'fp_examen_epreuves', 'fp_examen_candidats', 'fp_examen_notes', 'fp_examen_resultats']) {
+      expect(sql).toContain(`'${t}'`);
+    }
+    expect(sql).toContain('school_id = get_my_school_id()');
+  });
+  it('une absence n\'a jamais de valeur', () => {
+    expect(sql).toContain("check ((statut = 'note') = (valeur is not null))");
+  });
+  it('seul le directeur verrouille, et rien ne bouge dans un examen verrouillé', () => {
+    expect(sql).toContain('new.verrouille is distinct from old.verrouille and not is_school_admin()');
+    expect(sql).toContain("array['fp_examen_tours','fp_examen_epreuves','fp_examen_candidats','fp_examen_notes','fp_examen_resultats']");
+  });
+});

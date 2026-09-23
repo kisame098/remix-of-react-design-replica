@@ -22,6 +22,7 @@ import { MiseAJourApplication } from "./components/MiseAJourApplication";
 import { Referencement } from "./components/Referencement";
 import ModeRoute from "./components/ModeRoute";
 import { FormationProProvider } from "./contexts/FormationProContext";
+import { ExamensProvider } from "./contexts/ExamensContext";
 import { SuiviActivite } from "@/components/SuiviActivite";
 import { SchoolYearProvider } from "./contexts/SchoolYearContext";
 import { SchoolProvider } from "./contexts/SchoolContext";
@@ -66,6 +67,8 @@ const Formations = lazy(() => import("./pages/formation/Formations"));
 const Promotions = lazy(() => import("./pages/formation/Promotions"));
 const Evaluations = lazy(() => import("./pages/formation/Evaluations"));
 const EvaluationsPromotion = lazy(() => import("./pages/formation/EvaluationsPromotion"));
+const Examens = lazy(() => import("./pages/formation/Examens"));
+const ExamensPromotion = lazy(() => import("./pages/formation/ExamensPromotion"));
 const FormationDetail = lazy(() => import("./pages/formation/FormationDetail"));
 const NiveauProgramme = lazy(() => import("./pages/formation/NiveauProgramme"));
 const PlatformStats         = lazy(() => import("./pages/platform/PlatformStats"));
@@ -188,8 +191,17 @@ const App = () => (
                     <Route path="/formation/evaluations/:promotionId" element={
                       <ModeRoute mode="formation_pro"><RequirePermission permission="grades"><EvaluationsPromotion /></RequirePermission></ModeRoute>
                     } />
+                    {/* Les données des examens ne se chargent que sur ces deux pages. */}
+                    <Route element={<ExamensProvider />}>
+                      <Route path="/formation/examens" element={
+                        <ModeRoute mode="formation_pro"><RequirePermission permission="grades"><Examens /></RequirePermission></ModeRoute>
+                      } />
+                      <Route path="/formation/examens/:promotionId" element={
+                        <ModeRoute mode="formation_pro"><RequirePermission permission="grades"><ExamensPromotion /></RequirePermission></ModeRoute>
+                      } />
+                    </Route>
                     {["/formation",
-                      "/formation/examens", "/formation/stages", "/formation/documents"].map(chemin => (
+                      "/formation/stages", "/formation/documents"].map(chemin => (
                       <Route key={chemin} path={chemin} element={
                         <ModeRoute mode="formation_pro"><RequirePermission permission="grades"><FormationEnDeveloppement /></RequirePermission></ModeRoute>
                       } />
