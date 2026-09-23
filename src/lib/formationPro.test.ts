@@ -557,3 +557,99 @@ describe('garde-fous — évaluations : isolation, catégorie du barème, histor
     expect(sql).toContain("check ((statut = 'note') = (valeur is not null))");
   });
 });
+
+import {
+  triEvaluationsChronologique, titreNouvelleEvaluation, analyserSaisieNote, texteDeLaNote, recapitulatifPeriode,
+} from './formationPro';
+
+describe('grille de saisie — colonnes d\'une catégorie', () => {
+  it('se lisent de gauche à droite dans l\'ordre où les évaluations ont eu lieu', () => {
+    const evs = [
+      evaluation({ id: 'b', date: '2026-10-02', createdAt: '2' }),
+      evaluation({ id: 'a', date: '2026-09-18', createdAt: '3' }),
+      evaluation({ id: 'c', date: '2026-10-02', createdAt: '1' }),
+    ];
+    expect(triEvaluationsChronologique(evs).map(e => e.id)).toEqual(['a', 'c', 'b']);
+  });
+  it('une nouvelle colonne prend le premier numéro libre, jamais un nom déjà pris', () => {
+    expect(titreNouvelleEvaluation('Contrôle continu', [])).toBe('Contrôle continu 1');
+    expect(titreNouvelleEvaluation('TP', ['TP 1'])).toBe('TP 2');
+    // TP 1 supprimé, TP 2 reste : on ne recrée pas un second « TP 2 »
+    expect(titreNouvelleEvaluation('TP', ['TP 2'])).toBe('TP 3');
+    expect(titreNouvelleEvaluation('TP', ['Pratique cuisine'])).toBe('TP 2');
+  });
+});
+
+describe('analyserSaisieNote — ce qui est tapé dans une case', () => {
+  it('accepte une note avec virgule ou point', () => {
+    expect(analyserSaisieNote('12,5', 20)).toEqual({ kind: 'note', valeur: 12.5 });
+    expect(analyserSaisieNote(' 14.25 ', 20)).toEqual({ kind: 'note', valeur: 14.25 });
+    expect(analyserSaisieNote('0', 20)).toEqual({ kind: 'note', valeur: 0 });
+    expect(analyserSaisieNote('20', 20)).toEqual({ kind: 'note', valeur: 20 });
+  });
+  it('refuse une note au-dessus du barème de l\'évaluation (pas seulement 20)', () => {
+    expect(analyserSaisieNote('25', 20).kind).toBe('invalide');
+    expect(analyserSaisieNote('11', 10).kind).toBe('invalide');
+    expect(analyserSaisieNote('75', 100)).toEqual({ kind: 'note', valeur: 75 });
+  });
+  it('les codes A, AJ, NE donnent un statut, en majuscules ou minuscules — jamais une note de 0', () => {
+    expect(analyserSaisieNote('A', 20)).toEqual({ kind: 'statut', statut: 'absent' });
+    expect(analyserSaisieNote('aj', 20)).toEqual({ kind: 'statut', statut: 'absent_justifie' });
+    expect(analyserSaisieNote('Ne', 20)).toEqual({ kind: 'statut', statut: 'non_evalue' });
+  });
+  it('une case vidée est « vide » (la note sera retirée), le reste est invalide', () => {
+    expect(analyserSaisieNote('   ', 20)).toEqual({ kind: 'vide' });
+    expect(analyserSaisieNote('-3', 20).kind).toBe('invalide');
+    expect(analyserSaisieNote('abc', 20).kind).toBe('invalide');
+    expect(analyserSaisieNote('12,', 20).kind).toBe('invalide');
+  });
+  it('texteDeLaNote fait l\'aller-retour avec la saisie', () => {
+    expect(texteDeLaNote(undefined)).toBe('');
+    expect(texteDeLaNote({ statut: 'note', valeur: 12.5 })).toBe('12,5');
+    expect(texteDeLaNote({ statut: 'absent' })).toBe('A');
+    expect(texteDeLaNote({ statut: 'absent_justifie' })).toBe('AJ');
+    expect(texteDeLaNote({ statut: 'non_evalue' })).toBe('NE');
+  });
+});
+
+describe('recapitulatifPeriode — moyennes par matière, moyenne générale et rang', () => {
+  const cats = [categorie({ id: 'cc', pourcentage: 50 }), categorie({ id: 'ef', name: 'Examen final', pourcentage: 50 })];
+  const matieres = [{ id: 'nm1', coefficient: 3 }, { id: 'nm2', coefficient: 1 }];
+  const evs = [
+    evaluation({ id: 'e1', niveauMatiereId: 'nm1', categorieId: 'cc' }),
+    evaluation({ id: 'e2', niveauMatiereId: 'nm1', categorieId: 'ef' }),
+    evaluation({ id: 'e3', niveauMatiereId: 'nm2', categorieId: 'cc' }),
+  ];
+  const notes = [
+    note({ id: '1', evaluationId: 'e1', studentEnrollmentId: 's1', valeur: 10 }),
+    note({ id: '2', evaluationId: 'e2', studentEnrollmentId: 's1', valeur: 14 }),
+    note({ id: '3', evaluationId: 'e3', studentEnrollmentId: 's1', valeur: 8 }),
+    note({ id: '4', evaluationId: 'e1', studentEnrollmentId: 's2', valeur: 16 }),
+    note({ id: '5', evaluationId: 'e3', studentEnrollmentId: 's2', statut: 'absent', valeur: undefined }),
+  ];
+
+  it('calcule chaque matière puis la générale pondérée par les coefficients', () => {
+    const r = recapitulatifPeriode(['s1', 's2'], matieres, cats, evs, notes);
+    const s1 = r.find(l => l.studentEnrollmentId === 's1')!;
+    expect(s1.parMatiere.nm1).toBe(12);                 // (10×50 + 14×50) / 100
+    expect(s1.parMatiere.nm2).toBe(8);
+    expect(s1.generale).toBe(11);                        // (12×3 + 8×1) / 4
+    const s2 = r.find(l => l.studentEnrollmentId === 's2')!;
+    expect(s2.parMatiere.nm1).toBe(16);                 // examen final pas encore passé : ignoré, pas 0
+    expect(s2.parMatiere.nm2).toBeNull();               // absent : rien de noté
+    expect(s2.generale).toBe(16);
+  });
+  it('classe du meilleur au moins bon ; un élève sans note n\'a pas de rang et passe à la fin', () => {
+    const r = recapitulatifPeriode(['s3', 's1', 's2'], matieres, cats, evs, notes);
+    expect(r.map(l => [l.studentEnrollmentId, l.rang])).toEqual([['s2', 1], ['s1', 2], ['s3', null]]);
+  });
+  it('les ex æquo partagent le même rang', () => {
+    const n = [
+      note({ id: 'a', evaluationId: 'e1', studentEnrollmentId: 'x', valeur: 12 }),
+      note({ id: 'b', evaluationId: 'e1', studentEnrollmentId: 'y', valeur: 12 }),
+      note({ id: 'c', evaluationId: 'e1', studentEnrollmentId: 'z', valeur: 9 }),
+    ];
+    const r = recapitulatifPeriode(['x', 'y', 'z'], matieres, cats, evs, n);
+    expect(r.map(l => l.rang)).toEqual([1, 1, 3]);
+  });
+});

@@ -1,10 +1,10 @@
 import { describe, it, expect, vi, beforeEach, beforeAll } from 'vitest';
-import { render, screen, within } from '@testing-library/react';
+import { render, screen, within, act } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import userEvent from '@testing-library/user-event';
 
-// jsdom n'implémente pas l'API Pointer Capture que Radix UI (le <Select>)
-// utilise en interne — sans ce filet, tout clic dans un <SelectItem> plante.
+// jsdom n'implémente pas l'API Pointer Capture que Radix UI utilise en
+// interne — sans ce filet, tout clic dans un <Select> ou un <Popover> plante.
 beforeAll(() => {
   if (!Element.prototype.hasPointerCapture) Element.prototype.hasPointerCapture = () => false;
   if (!Element.prototype.releasePointerCapture) Element.prototype.releasePointerCapture = () => {};
@@ -12,12 +12,13 @@ beforeAll(() => {
 });
 
 // ════════════════════════════════════════════════════════════════════════════
-// Évaluations — un seul espace de travail par promotion : périodes en
-// pastilles, catégories du barème en blocs, matières en sidebar, saisie des
-// notes avec sauvegarde automatique.
+// Évaluations — l'espace de travail d'une promotion : période en pastilles,
+// matière à gauche, UNE grille où chaque catégorie de la formule est un
+// groupe de colonnes. La catégorie n'est plus un filtre à choisir puis à
+// redemander dans un formulaire « Nouvelle évaluation ».
 // ════════════════════════════════════════════════════════════════════════════
 
-const ctx = {
+const ctxInitial = () => ({
   loading: false,
   formations: [{ id: 'f1', name: 'CAP Restauration', ordering: 0, createdAt: '', active: true }],
   niveaux: [{ id: 'n1', formationId: 'f1', name: 'CAP 1', ordering: 0, createdAt: '' }],
@@ -32,15 +33,26 @@ const ctx = {
     { id: 'ef', formationId: 'f1', name: 'Examen final', pourcentage: 30, ordering: 3 },
   ],
   promotions: [{ id: 'p1', niveauId: 'n1', classId: 'c1', name: 'CAP 1 — Promo Septembre 2026', studentLimit: 30, rythme: 'jour' as const, startDate: '2026-09-01', endDate: '2027-06-30', status: 'active' as const, createdAt: '' }],
-  periodes: [{ id: 'per1', promotionId: 'p1', name: 'Semestre 1', ordering: 0 }],
-  evaluations: [{ id: 'e1', promotionId: 'p1', niveauMatiereId: 'nm1', periodeId: 'per1', categorieId: 'cc', type: 'Devoir', title: 'Devoir 1', date: '2026-09-18', bareme: 20, poids: 1, createdAt: '' }],
-  notes: [{ id: 'note1', evaluationId: 'e1', studentEnrollmentId: 's1', valeur: 14, statut: 'note' as const }],
+  periodes: [{ id: 'per1', promotionId: 'p1', name: 'Semestre 1', ordering: 0 }] as { id: string; promotionId: string; name: string; ordering: number }[],
+  evaluations: [
+    { id: 'e1', promotionId: 'p1', niveauMatiereId: 'nm1', periodeId: 'per1', categorieId: 'cc', type: 'Contrôle continu', title: 'Devoir 1', date: '2026-09-18', bareme: 20, poids: 1, createdAt: '1' },
+    { id: 'e2', promotionId: 'p1', niveauMatiereId: 'nm2', periodeId: 'per1', categorieId: 'cc', type: 'Contrôle continu', title: 'Dictée', date: '2026-09-20', bareme: 20, poids: 1, createdAt: '2' },
+  ],
+  notes: [
+    { id: 'note1', evaluationId: 'e1', studentEnrollmentId: 's1', valeur: 14, statut: 'note' as const },
+    { id: 'note2', evaluationId: 'e2', studentEnrollmentId: 's1', valeur: 8, statut: 'note' as const },
+    { id: 'note3', evaluationId: 'e1', studentEnrollmentId: 's2', valeur: 16, statut: 'note' as const },
+  ],
   addPeriode: vi.fn().mockResolvedValue({ id: 'pernew' }),
+  updatePeriode: vi.fn().mockResolvedValue(undefined),
   deletePeriode: vi.fn().mockResolvedValue(undefined),
   addEvaluation: vi.fn().mockResolvedValue({ id: 'enew' }),
+  updateEvaluation: vi.fn().mockResolvedValue(undefined),
   deleteEvaluation: vi.fn().mockResolvedValue(undefined),
   saisirNote: vi.fn().mockResolvedValue(undefined),
-};
+  supprimerNote: vi.fn().mockResolvedValue(undefined),
+});
+let ctx = ctxInitial();
 vi.mock('@/contexts/FormationProContext', () => ({ useFormationPro: () => ctx }));
 vi.mock('@/contexts/SchoolContext', () => ({
   useSchool: () => ({
@@ -59,96 +71,128 @@ const rendre = () => render(
     <Routes><Route path="/formation/evaluations/:promotionId" element={<EvaluationsPromotion />} /></Routes>
   </MemoryRouter>,
 );
+const attendreSauvegarde = () => act(() => new Promise(resolve => setTimeout(resolve, 900)));
+const caseDe = (evaluation: string, eleve: string) => screen.getByLabelText(`${evaluation} — ${eleve}`);
 
-describe('EvaluationsPromotion — périodes, catégories en blocs, matières en sidebar', () => {
-  beforeEach(() => vi.clearAllMocks());
+describe('EvaluationsPromotion — une grille par matière, catégories en colonnes', () => {
+  beforeEach(() => { ctx = ctxInitial(); });
 
-  it('sélectionne la seule période et affiche les 4 catégories en blocs', () => {
+  it('ouvre directement la première matière : toutes les catégories en colonnes, notes et moyenne visibles', () => {
     rendre();
     expect(screen.getByRole('heading', { name: 'CAP 1 — Promo Septembre 2026' })).toBeInTheDocument();
-    expect(screen.getByText('Semestre 1')).toBeInTheDocument();
-    expect(screen.getByText('Contrôle continu')).toBeInTheDocument();
-    expect(screen.getByText('TP')).toBeInTheDocument();
-    expect(screen.getByText('Examen blanc')).toBeInTheDocument();
-    expect(screen.getByText('Examen final')).toBeInTheDocument();
-  });
-
-  it('les matières sont dans une sidebar', () => {
-    rendre();
-    expect(screen.getByText('Matières')).toBeInTheDocument();
-    expect(screen.getByText('TP Cuisine')).toBeInTheDocument();
-    expect(screen.getByText('Français')).toBeInTheDocument();
-  });
-
-  it('cliquer une matière (catégorie Contrôle continu déjà sélectionnée par défaut) affiche ses évaluations et les notes déjà saisies', async () => {
-    const user = userEvent.setup();
-    rendre();
-    await user.click(screen.getByText('TP Cuisine'));
-    expect(screen.getAllByText('Devoir 1').length).toBeGreaterThan(0);
-    expect(screen.getByText('Diop')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /TP Cuisine/ })).toBeInTheDocument();
+    for (const cat of ['Contrôle continu', 'TP', 'Examen blanc', 'Examen final']) {
+      expect(screen.getByRole('columnheader', { name: new RegExp(`^${cat} ·`) })).toBeInTheDocument();
+    }
+    expect(caseDe('Devoir 1', 'Diop Awa')).toHaveValue('14');
     const ligneAwa = screen.getByText('Diop').closest('tr')!;
-    expect(within(ligneAwa).getByRole('spinbutton')).toHaveValue(14);
+    expect(within(ligneAwa).getAllByText('14').length).toBeGreaterThan(0);   // moyenne de la matière
   });
 
-  it('changer de catégorie masque les évaluations d\'une autre catégorie', async () => {
+  it('plus de formulaire « Nouvelle évaluation » : « + » dans l\'en-tête de la catégorie crée la colonne directement', async () => {
     const user = userEvent.setup();
     rendre();
-    await user.click(screen.getByText('TP Cuisine'));
-    expect(screen.getAllByText('Devoir 1').length).toBeGreaterThan(0);
-    await user.click(screen.getByText('TP'));
-    expect(screen.queryByText('Devoir 1')).not.toBeInTheDocument();
-    expect(screen.getByText(/Aucune évaluation pour/)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Nouvelle évaluation/ })).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Ajouter une évaluation en TP' }));
+    expect(ctx.addEvaluation).toHaveBeenCalledWith(expect.objectContaining({
+      promotionId: 'p1', niveauMatiereId: 'nm1', periodeId: 'per1', categorieId: 'tp', type: 'TP', title: 'TP 1', bareme: 20, poids: 1,
+    }));
   });
 
-  it('modifier une note l\'enregistre après un court délai (sauvegarde automatique)', async () => {
+  it('une note tapée est enregistrée automatiquement après un court délai', async () => {
     const user = userEvent.setup();
     rendre();
-    await user.click(screen.getByText('TP Cuisine'));
-    const ligneMoussa = screen.getByText('Fall').closest('tr')!;
-    const input = within(ligneMoussa).getByRole('spinbutton');
-    await user.clear(input);
-    await user.type(input, '18');
+    await user.type(caseDe('Devoir 1', 'Fall Moussa'), '{Backspace}{Backspace}12,5');
     expect(ctx.saisirNote).not.toHaveBeenCalled();
-    await new Promise(resolve => setTimeout(resolve, 900));
-    expect(ctx.saisirNote).toHaveBeenCalledWith('e1', 's2', { valeur: 18, statut: 'note' });
+    await attendreSauvegarde();
+    expect(ctx.saisirNote).toHaveBeenLastCalledWith('e1', 's2', { valeur: 12.5, statut: 'note' });
   }, 10000);
 
-  it('crée une nouvelle évaluation sans avoir à re-choisir la matière, la période ou la catégorie', async () => {
+  it('« A » enregistre une absence, jamais une note de 0', async () => {
     const user = userEvent.setup();
     rendre();
-    await user.click(screen.getByText('TP Cuisine'));
-    await user.click(screen.getByRole('button', { name: /Nouvelle évaluation/ }));
-    await user.type(screen.getByLabelText('Titre *'), 'Contrôle pratique n°2');
-    await user.click(screen.getByRole('button', { name: 'Créer' }));
-    expect(ctx.addEvaluation).toHaveBeenCalledWith(expect.objectContaining({
-      promotionId: 'p1', niveauMatiereId: 'nm1', periodeId: 'per1', categorieId: 'cc', title: 'Contrôle pratique n°2',
-    }));
+    const c = caseDe('Devoir 1', 'Fall Moussa');
+    await user.clear(c);
+    await user.type(c, 'A');
+    await attendreSauvegarde();
+    expect(ctx.saisirNote).toHaveBeenCalledWith('e1', 's2', { statut: 'absent' });
+  }, 10000);
+
+  it('vider une case retire la note en base (elle ne reste plus en silence)', async () => {
+    const user = userEvent.setup();
+    rendre();
+    await user.clear(caseDe('Devoir 1', 'Diop Awa'));
+    await attendreSauvegarde();
+    expect(ctx.supprimerNote).toHaveBeenCalledWith('e1', 's1');
+    expect(ctx.saisirNote).not.toHaveBeenCalled();
+  }, 10000);
+
+  it('une note au-dessus du barème est signalée et jamais enregistrée', async () => {
+    const user = userEvent.setup();
+    rendre();
+    const c = caseDe('Devoir 1', 'Fall Moussa');
+    await user.clear(c);
+    await user.type(c, '25');
+    expect(c).toHaveAttribute('aria-invalid', 'true');
+    await attendreSauvegarde();
+    expect(ctx.saisirNote).not.toHaveBeenCalledWith('e1', 's2', expect.objectContaining({ valeur: 25 }));
+  }, 10000);
+
+  it('changer de matière juste après avoir tapé ne perd pas la note (ancien bug)', async () => {
+    const user = userEvent.setup();
+    rendre();
+    const c = caseDe('Devoir 1', 'Fall Moussa');
+    await user.clear(c);
+    await user.type(c, '9');
+    await user.click(screen.getByRole('button', { name: /Français/ }));   // moins de 800 ms plus tard
+    expect(screen.getByRole('heading', { name: /Français/ })).toBeInTheDocument();
+    await attendreSauvegarde();
+    expect(ctx.saisirNote).toHaveBeenCalledWith('e1', 's2', { valeur: 9, statut: 'note' });
+  }, 10000);
+
+  it('cliquer le titre d\'une colonne permet d\'en changer la date et le barème', async () => {
+    const user = userEvent.setup();
+    rendre();
+    await user.click(screen.getByRole('button', { name: /Devoir 1/ }));
+    const bareme = screen.getByLabelText('Noté sur');
+    await user.clear(bareme);
+    await user.type(bareme, '40');
+    await user.click(screen.getByRole('button', { name: 'Enregistrer' }));
+    expect(ctx.updateEvaluation).toHaveBeenCalledWith('e1', expect.objectContaining({ bareme: 40, title: 'Devoir 1' }));
+  });
+
+  it('le récapitulatif donne la moyenne générale pondérée par les coefficients et le rang', async () => {
+    const user = userEvent.setup();
+    rendre();
+    await user.click(screen.getByRole('button', { name: /Récapitulatif/ }));
+    const ligneAwa = screen.getByText('Diop').closest('tr')!;
+    // (14×4 + 8×2) / 6 = 12
+    expect(within(ligneAwa).getByText('12')).toBeInTheDocument();
+    const ligneMoussa = screen.getByText('Fall').closest('tr')!;
+    expect(within(ligneMoussa).getAllByText('1').length).toBeGreaterThan(0);   // 16 : premier
+    expect(within(ligneAwa).getByText('2')).toBeInTheDocument();
   });
 
   it('crée une nouvelle période', async () => {
     const user = userEvent.setup();
     rendre();
     await user.click(screen.getByTitle('Nouvelle période'));
-    await user.type(screen.getByLabelText('Nom *'), 'Semestre 2');
-    await user.click(screen.getByRole('button', { name: 'Créer' }));
-    expect(ctx.addPeriode).toHaveBeenCalledWith('p1', { name: 'Semestre 2' });
+    await user.click(screen.getByRole('button', { name: 'Semestre 2' }));
+    await user.click(screen.getByRole('button', { name: 'Créer la période' }));
+    expect(ctx.addPeriode).toHaveBeenCalledWith('p1', { name: 'Semestre 2', startDate: undefined, endDate: undefined });
   });
 
-  it('aucune période créée : invite à en créer une, pas de catégories affichées', () => {
-    const original = ctx.periodes;
+  it('aucune période créée : invite à en créer une, pas de grille', () => {
     ctx.periodes = [];
     rendre();
-    expect(screen.getByText(/Aucune période/)).toBeInTheDocument();
+    expect(screen.getByText('Aucune période')).toBeInTheDocument();
     expect(screen.queryByText('Contrôle continu')).not.toBeInTheDocument();
-    ctx.periodes = original;
   });
 
-  it('formation sans formule d\'évaluation : message d\'aide, pas de matières affichées', () => {
-    const original = ctx.baremeCategories;
+  it('formation sans formule d\'évaluation : message d\'aide, pas de grille', () => {
     ctx.baremeCategories = [];
     rendre();
     expect(screen.getByText(/Aucune formule d'évaluation définie/)).toBeInTheDocument();
     expect(screen.queryByText('Matières')).not.toBeInTheDocument();
-    ctx.baremeCategories = original;
   });
 });

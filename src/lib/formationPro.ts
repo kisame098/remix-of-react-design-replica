@@ -532,3 +532,91 @@ export const triEvaluations = (evaluations: Evaluation[]): Evaluation[] =>
 
 export const triPeriodes = (periodes: Periode[]): Periode[] =>
   [...periodes].sort((a, b) => a.ordering - b.ordering);
+
+// ─── Grille de saisie : une colonne par évaluation, groupées par catégorie ──
+// Dans la grille, les évaluations d'une catégorie se lisent de gauche à
+// droite dans l'ordre où elles ont eu lieu (CC 1, CC 2…) — l'inverse de la
+// liste « la plus récente d'abord ».
+export const triEvaluationsChronologique = (evaluations: Evaluation[]): Evaluation[] =>
+  [...evaluations].sort((a, b) => a.date.localeCompare(b.date) || a.createdAt.localeCompare(b.createdAt));
+
+/** « Contrôle continu 3 » : le premier numéro libre de la catégorie — jamais deux colonnes au même nom. */
+export const titreNouvelleEvaluation = (categorieName: string, titresExistants: string[]): string => {
+  const pris = new Set(titresExistants.map(t => t.trim().toLowerCase()));
+  let n = titresExistants.length + 1;
+  while (pris.has(`${categorieName} ${n}`.toLowerCase())) n++;
+  return `${categorieName} ${n}`;
+};
+
+// Une case de la grille accepte une note OU un code de statut — un statut
+// n'est jamais une note de 0.
+export const CODES_STATUT_NOTE: Record<string, Exclude<StatutNote, 'note'>> = {
+  A: 'absent',
+  AJ: 'absent_justifie',
+  NE: 'non_evalue',
+};
+const CODE_PAR_STATUT: Record<Exclude<StatutNote, 'note'>, string> = {
+  absent: 'A', absent_justifie: 'AJ', non_evalue: 'NE',
+};
+
+export type SaisieNote =
+  | { kind: 'vide' }
+  | { kind: 'note'; valeur: number }
+  | { kind: 'statut'; statut: Exclude<StatutNote, 'note'> }
+  | { kind: 'invalide'; raison: string };
+
+/** Lit ce qui est tapé dans une case : « 12,5 », « 12.5 », « A », « aj », « NE » ou rien. */
+export const analyserSaisieNote = (texte: string, bareme: number): SaisieNote => {
+  const t = texte.trim();
+  if (t === '') return { kind: 'vide' };
+  const code = CODES_STATUT_NOTE[t.toUpperCase()];
+  if (code) return { kind: 'statut', statut: code };
+  if (!/^\d+([.,]\d+)?$/.test(t)) return { kind: 'invalide', raison: 'Note ou code (A, AJ, NE) attendu' };
+  const valeur = Number(t.replace(',', '.'));
+  if (valeur > bareme) return { kind: 'invalide', raison: `La note ne peut pas dépasser ${bareme}` };
+  return { kind: 'note', valeur };
+};
+
+/** Ce qu'affiche une case pour une note enregistrée (vide si aucune). */
+export const texteDeLaNote = (note: Pick<Note, 'statut' | 'valeur'> | undefined): string => {
+  if (!note) return '';
+  if (note.statut === 'note') return note.valeur == null ? '' : String(note.valeur).replace('.', ',');
+  return CODE_PAR_STATUT[note.statut];
+};
+
+// ─── Récapitulatif d'une période : moyennes par matière, générale, rang ─────
+export interface LigneRecapitulatif {
+  studentEnrollmentId: string;
+  /** Moyenne sur 20 de chaque matière (clé : id de la matière du niveau), `null` si rien de noté. */
+  parMatiere: Record<string, number | null>;
+  generale: number | null;
+  /** `null` pour un élève qui n'a encore aucune note — il n'est jamais classé dernier par défaut. */
+  rang: number | null;
+}
+
+/**
+ * Tableau récapitulatif d'une promotion pour UNE période : `evaluations`
+ * doit déjà être restreint à cette période. Les ex æquo partagent le même
+ * rang (1, 2, 2, 4) ; triés du meilleur au moins bon, les non-classés à la fin.
+ */
+export const recapitulatifPeriode = (
+  studentEnrollmentIds: string[],
+  matieres: Pick<NiveauMatiere, 'id' | 'coefficient'>[],
+  categories: BaremeCategorie[],
+  evaluations: Evaluation[],
+  notes: Note[],
+): LigneRecapitulatif[] => {
+  const lignes = studentEnrollmentIds.map(sid => {
+    const parMatiere: Record<string, number | null> = {};
+    for (const m of matieres) {
+      parMatiere[m.id] = moyenneMatiere(categories, evaluations.filter(e => e.niveauMatiereId === m.id), notes, sid);
+    }
+    const generale = moyenneGenerale(matieres.map(m => ({ niveauMatiereId: m.id, coefficient: m.coefficient, moyenne: parMatiere[m.id] })));
+    return { studentEnrollmentId: sid, parMatiere, generale, rang: null as number | null };
+  });
+  const classes = lignes.filter(l => l.generale !== null).sort((a, b) => (b.generale as number) - (a.generale as number));
+  classes.forEach((l, i) => {
+    l.rang = i > 0 && Math.abs((classes[i - 1].generale as number) - (l.generale as number)) < 1e-9 ? classes[i - 1].rang : i + 1;
+  });
+  return [...classes, ...lignes.filter(l => l.generale === null)];
+};

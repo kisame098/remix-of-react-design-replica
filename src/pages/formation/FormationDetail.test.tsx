@@ -14,6 +14,7 @@ const ctx = {
   niveauMatieres: [{ id: 'nm1', niveauId: 'n1', matiereId: 'm1', matiereName: 'TP Cuisine', type: 'obligatoire' as const, coefficient: 4, volumeHoraire: 150, nature: 'pratique' as const, ordering: 0 }],
   choixGroups: [],
   baremeCategories: [],
+  evaluations: [],
   addNiveau: vi.fn().mockResolvedValue({ id: 'nnew' }),
   updateNiveau: vi.fn(), deleteNiveau: vi.fn(),
   duplicateNiveau: vi.fn().mockResolvedValue({ id: 'ndup', name: 'CAP 2' }),
