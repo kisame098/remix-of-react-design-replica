@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useExamens } from '@/contexts/ExamensContext';
 import type { Student } from '@/contexts/SchoolContext';
 import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -10,54 +11,57 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { Plus, Loader2, Trash2, Search, ArrowUpDown } from 'lucide-react';
+import { Plus, Loader2, Trash2, Search, ArrowUpDown, ClipboardList } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import {
-  type Examen, type ExamenEpreuve, type ExamenNote, type ExamenTour, type Decision, type Mention, type NiveauMatiere,
-  analyserSaisieNoteExamen, texteDeLaNote, etatCandidat, propositionJury, decisionRetenue, mentionRetenue,
-  triEpreuves, LIBELLES_DECISION, LIBELLES_MENTION, nomEpreuveValide, baremeValide, coefficientValide, seuilEliminatoireValide,
-  nomTourValide,
+  type Examen, type ExamenEpreuve, type ExamenNote, type ExamenTour, type NiveauMatiere,
+  analyserSaisieNoteExamen, texteDeLaNote, etatCandidat, triEpreuves,
+  nomEpreuveValide, baremeValide, coefficientValide, seuilEliminatoireValide, nomTourValide,
 } from '@/lib/formationPro';
 import { cleCase, type SauvegardeNotes } from './useSauvegardeNotes';
 
 const format = (n: number) => (Math.round(n * 100) / 100).toString().replace('.', ',');
-const couleurMoyenne = (m: number | null, seuil: number) => m === null ? 'text-muted-foreground' : m >= seuil ? 'text-green-600' : 'text-red-500';
-const COULEUR_DECISION: Record<Decision, string> = { admis: 'text-green-700', ajourne: 'text-amber-700', refuse: 'text-red-600' };
-const AUTO = '__auto';
+const couleurNote = (m: number | null, seuil: number) => m === null ? 'text-muted-foreground' : m >= seuil ? 'text-green-600' : 'text-red-500';
 
-type Tri = 'defaut' | 'nom' | 'moyenne';
+type Tri = 'defaut' | 'nom' | 'note';
 
 interface Props {
   examen: Examen;
+  /** Tous les tours de l'examen (pour y ranger une nouvelle épreuve). */
   tours: ExamenTour[];
-  candidats: Student[];
-  /** Le programme du niveau : une épreuve rattachée à une matière compte dans sa moyenne (Évaluations). */
+  /** Les épreuves affichées : celles de la matière choisie (ou celles sans matière). */
+  epreuves: ExamenEpreuve[];
+  /** La matière choisie dans la colonne de gauche — `null` pour les épreuves hors programme. */
+  matiere: NiveauMatiere | null;
   matieres: NiveauMatiere[];
+  candidats: Student[];
   sauvegarde: SauvegardeNotes;
   estDirecteur: boolean;
 }
 
 /**
- * La saisie d'un examen en UN tableau : une ligne par candidat, les épreuves
- * en colonnes regroupées par tour, puis moyenne, décision et mention.
- * Le logiciel PROPOSE la décision (note éliminatoire, seuil d'admission) ;
- * le jury la retient ou la change dans la case. Une fois l'examen verrouillé,
- * tout passe en lecture seule et affiche les valeurs figées.
+ * La saisie d'UNE matière d'un examen — comme une matière dans Évaluations :
+ * une ligne par candidat, ses épreuves en colonnes (rangées par tour : Écrit,
+ * Pratique, Oral…) et la note de la matière sur 20. Moyenne générale,
+ * décision et mention sont sur l'écran « Résultats » (ResultatsExamen).
  */
-export const GrilleExamen = ({ examen, tours, candidats, matieres, sauvegarde, estDirecteur }: Props) => {
-  const { epreuves, notes, resultats, addEpreuve, choisirDecision } = useExamens();
+export const GrilleExamen = ({ examen, tours, epreuves, matiere, matieres, candidats, sauvegarde, estDirecteur }: Props) => {
+  const { notes, epreuves: toutesLesEpreuves } = useExamens();
   const { brouillons, modifierCase } = sauvegarde;
   const verrouille = examen.verrouille;
   const modifiable = estDirecteur && !verrouille;
 
-  const colonnes = useMemo(() => tours.map(t => ({ tour: t, epreuves: triEpreuves(epreuves.filter(e => e.tourId === t.id)) })), [tours, epreuves]);
-  const toutesLesEpreuves = useMemo(() => colonnes.flatMap(c => c.epreuves), [colonnes]);
+  const colonnes = useMemo(() => tours
+    .map(t => ({ tour: t, epreuves: triEpreuves(epreuves.filter(e => e.tourId === t.id)) }))
+    .filter(c => c.epreuves.length > 0), [tours, epreuves]);
+  const lesEpreuves = useMemo(() => colonnes.flatMap(c => c.epreuves), [colonnes]);
+  const epreuvesDuTour = (tourId: string) => toutesLesEpreuves.filter(e => e.tourId === tourId).length;
 
   // Les notes telles qu'à l'écran : la base, recouverte par ce qui vient d'être tapé.
   const notesAffichees = useMemo<ExamenNote[]>(() => {
-    const ids = new Set(toutesLesEpreuves.map(e => e.id));
+    const ids = new Set(lesEpreuves.map(e => e.id));
     const parCle = new Map(notes.filter(n => ids.has(n.epreuveId)).map(n => [cleCase(n.epreuveId, n.studentEnrollmentId), n]));
-    for (const ep of toutesLesEpreuves) {
+    for (const ep of lesEpreuves) {
       for (const s of candidats) {
         const cle = cleCase(ep.id, s.id);
         if (!(cle in brouillons)) continue;
@@ -68,47 +72,25 @@ export const GrilleExamen = ({ examen, tours, candidats, matieres, sauvegarde, e
       }
     }
     return [...parCle.values()];
-  }, [notes, brouillons, toutesLesEpreuves, candidats]);
-
-  const lignesBrutes = useMemo(() => candidats.map(s => {
-    const etat = etatCandidat(toutesLesEpreuves, notesAffichees, s.id);
-    const proposition = propositionJury(etat, examen.seuilAdmission);
-    const resultat = resultats.find(r => r.examenId === examen.id && r.studentEnrollmentId === s.id);
-    return {
-      eleve: s, etat, proposition, resultat,
-      moyenne: verrouille && resultat ? resultat.moyenne ?? null : etat.moyenne,
-      decision: decisionRetenue(resultat, proposition),
-      mention: mentionRetenue(resultat, proposition),
-    };
-  }), [candidats, toutesLesEpreuves, notesAffichees, examen.seuilAdmission, examen.id, resultats, verrouille]);
+  }, [notes, brouillons, lesEpreuves, candidats]);
 
   const [recherche, setRecherche] = useState('');
   const [tri, setTri] = useState<Tri>('defaut');
   const lignes = useMemo(() => {
-    let liste = lignesBrutes.map(l => ({ ...l, rang: null as number | null }));
+    let liste = candidats.map(s => {
+      const etat = etatCandidat(lesEpreuves, notesAffichees, s.id);
+      return { eleve: s, etat, note: etat.moyenne, rang: null as number | null };
+    });
     if (tri === 'nom') liste.sort((a, b) => a.eleve.lastName.localeCompare(b.eleve.lastName, 'fr') || a.eleve.firstName.localeCompare(b.eleve.firstName, 'fr'));
-    if (tri === 'moyenne') {
-      liste.sort((a, b) => (b.moyenne ?? -1) - (a.moyenne ?? -1));
-      liste = liste.map((l, _, arr) => ({ ...l, rang: l.moyenne === null ? null : arr.findIndex(x => x.moyenne === l.moyenne) + 1 }));
+    if (tri === 'note') {
+      liste.sort((a, b) => (b.note ?? -1) - (a.note ?? -1));
+      liste = liste.map((l, _, arr) => ({ ...l, rang: l.note === null ? null : arr.findIndex(x => x.note === l.note) + 1 }));
     }
     const q = recherche.trim().toLowerCase();
     return q ? liste.filter(l => `${l.eleve.lastName} ${l.eleve.firstName}`.toLowerCase().includes(q)) : liste;
-  }, [lignesBrutes, tri, recherche]);
+  }, [candidats, lesEpreuves, notesAffichees, tri, recherche]);
 
-  // ── Ajouter une épreuve (directeur) ─────────────────────────────────────────
-  const [ajoutEnCours, setAjoutEnCours] = useState<string | null>(null);
   const [epreuveAOuvrir, setEpreuveAOuvrir] = useState<string | null>(null);
-  const ajouterEpreuve = async (tour: ExamenTour, existantes: ExamenEpreuve[]) => {
-    setAjoutEnCours(tour.id);
-    try {
-      const ep = await addEpreuve(tour.id, { nom: `Épreuve ${existantes.length + 1}`, coefficient: 1, bareme: 20 });
-      setEpreuveAOuvrir(ep.id);   // on ouvre sa fiche : nom et coefficient sont à donner tout de suite
-    } catch (err) {
-      toast({ title: 'Erreur', description: String(err), variant: 'destructive' });
-    } finally {
-      setAjoutEnCours(null);
-    }
-  };
 
   const tableRef = useRef<HTMLDivElement>(null);
   const focaliser = (ligne: number, colonne: string) => {
@@ -121,15 +103,25 @@ export const GrilleExamen = ({ examen, tours, candidats, matieres, sauvegarde, e
     return texteDeLaNote(notes.find(n => n.epreuveId === ep.id && n.studentEnrollmentId === studentId));
   };
 
-  const changerDecision = async (studentId: string, data: { decision?: Decision | null; mention?: Mention | null }) => {
-    try {
-      await choisirDecision(examen.id, studentId, data);
-    } catch (err) {
-      toast({ title: 'Erreur', description: String(err), variant: 'destructive' });
-    }
-  };
+  const boutonAjout = modifiable && (
+    <AjouterEpreuve examenId={examen.id} tours={tours} matiere={matiere} onCree={id => setEpreuveAOuvrir(id)} />
+  );
 
-  const afficherRang = tri === 'moyenne';
+  if (lesEpreuves.length === 0) {
+    return (
+      <Card className="border-dashed">
+        <CardContent className="flex flex-col items-center justify-center py-14 gap-3">
+          <ClipboardList className="h-12 w-12 text-muted-foreground/40" />
+          <p className="text-muted-foreground">
+            {matiere ? `Aucune épreuve de « ${matiere.matiereName} » dans cet examen.` : 'Aucune épreuve hors programme.'}
+          </p>
+          {boutonAjout || (!verrouille && <p className="text-sm text-muted-foreground/70">Les épreuves sont définies par le directeur.</p>)}
+        </CardContent>
+      </Card>
+    );
+  }
+
+  const afficherRang = tri === 'note';
 
   return (
     <div className="space-y-3">
@@ -139,15 +131,15 @@ export const GrilleExamen = ({ examen, tours, candidats, matieres, sauvegarde, e
           <Input placeholder="Rechercher un candidat…" value={recherche} onChange={e => setRecherche(e.target.value)} className="pl-8 w-52 h-8 text-sm" />
         </div>
         <div className="flex items-center gap-2 flex-wrap">
-          {modifiable && <NouveauTour examenId={examen.id} />}
+          {boutonAjout}
           <div className="flex items-center gap-1.5">
             <ArrowUpDown className="h-3.5 w-3.5 text-muted-foreground" />
             <Select value={tri} onValueChange={v => setTri(v as Tri)}>
-              <SelectTrigger className="w-44 h-8 text-sm" aria-label="Trier"><SelectValue /></SelectTrigger>
+              <SelectTrigger className="w-40 h-8 text-sm" aria-label="Trier"><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="defaut">Ordre d'inscription</SelectItem>
                 <SelectItem value="nom">Nom (A → Z)</SelectItem>
-                <SelectItem value="moyenne">Moyenne et rang</SelectItem>
+                <SelectItem value="note">Note et rang</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -161,31 +153,16 @@ export const GrilleExamen = ({ examen, tours, candidats, matieres, sauvegarde, e
               {afficherRang && <th rowSpan={2} className="w-12 px-2 text-center font-medium text-muted-foreground border-b">Rang</th>}
               <th rowSpan={2} className="sticky left-0 z-10 bg-muted min-w-[170px] px-3 py-2 text-left font-medium text-muted-foreground border-b border-r">Candidat</th>
               {colonnes.map(({ tour, epreuves: eps }) => (
-                <th key={tour.id} colSpan={Math.max(eps.length, 1)} className="px-2 pt-2 pb-1 border-l border-b text-left">
-                  <div className="flex items-center justify-between gap-2">
-                    {modifiable ? <EnTeteTour tour={tour} nbEpreuves={eps.length} /> : <span className="font-semibold text-foreground whitespace-nowrap">{tour.name}</span>}
-                    {modifiable && (
-                      <Button
-                        variant="ghost" size="icon" className="h-6 w-6 flex-shrink-0"
-                        title={`Ajouter une épreuve en ${tour.name}`} aria-label={`Ajouter une épreuve en ${tour.name}`}
-                        disabled={ajoutEnCours === tour.id} onClick={() => void ajouterEpreuve(tour, eps)}
-                      >
-                        {ajoutEnCours === tour.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
-                      </Button>
-                    )}
-                  </div>
+                <th key={tour.id} colSpan={eps.length} className="px-2 pt-2 pb-1 border-l border-b text-left">
+                  {modifiable ? <EnTeteTour tour={tour} nbEpreuves={epreuvesDuTour(tour.id)} /> : <span className="font-semibold text-foreground whitespace-nowrap">{tour.name}</span>}
                 </th>
               ))}
-              <th rowSpan={2} className="min-w-[80px] px-3 text-center font-semibold border-l border-b bg-muted/60">
-                Moyenne<div className="text-xs font-normal text-muted-foreground">/20</div>
+              <th rowSpan={2} className="min-w-[90px] px-3 text-center font-semibold border-l border-b bg-muted/60">
+                {matiere ? 'Note' : 'Moyenne'}<div className="text-xs font-normal text-muted-foreground">/20</div>
               </th>
-              <th rowSpan={2} className="min-w-[150px] px-2 text-center font-semibold border-b bg-muted/60">Décision</th>
-              <th rowSpan={2} className="min-w-[130px] px-2 text-center font-semibold border-b bg-muted/60">Mention</th>
             </tr>
             <tr className="bg-muted/20">
-              {colonnes.map(({ tour, epreuves: eps }) => eps.length === 0 ? (
-                <th key={tour.id} className="px-2 py-1.5 border-l border-b text-xs font-normal text-muted-foreground/70 text-center italic">aucune épreuve</th>
-              ) : eps.map((ep, i) => (
+              {colonnes.map(({ epreuves: eps }) => eps.map((ep, i) => (
                 <th key={ep.id} className={`px-1 py-1 border-b text-center min-w-[90px] ${i === 0 ? 'border-l' : ''}`}>
                   <EnTeteEpreuve
                     epreuve={ep} modifiable={modifiable} matieres={matieres}
@@ -200,16 +177,14 @@ export const GrilleExamen = ({ examen, tours, candidats, matieres, sauvegarde, e
               <tr><td colSpan={99} className="text-center py-8 text-muted-foreground">
                 {candidats.length === 0 ? 'Aucun candidat — ajoutez-en avec le bouton « Candidats ».' : `Aucun candidat trouvé pour « ${recherche} »`}
               </td></tr>
-            ) : lignes.map(({ eleve: s, etat, proposition, resultat, moyenne, decision, mention, rang }, iLigne) => (
+            ) : lignes.map(({ eleve: s, etat, note, rang }, iLigne) => (
               <tr key={s.id} className="border-b last:border-b-0 hover:bg-muted/20">
                 {afficherRang && <td className="text-center font-bold bg-primary/5">{rang ?? '—'}</td>}
                 <td className="sticky left-0 z-10 bg-background px-3 py-1.5 border-r">
                   <div className="font-medium leading-tight">{s.lastName}</div>
                   <div className="text-xs text-muted-foreground">{s.firstName}</div>
                 </td>
-                {colonnes.map(({ tour, epreuves: eps }) => eps.length === 0 ? (
-                  <td key={tour.id} className="border-l bg-muted/10" />
-                ) : eps.map((ep, i) => {
+                {colonnes.map(({ epreuves: eps }) => eps.map((ep, i) => {
                   const texte = valeurCase(ep, s.id);
                   const saisie = analyserSaisieNoteExamen(texte, ep.bareme);
                   const invalide = saisie.kind === 'invalide';
@@ -235,49 +210,9 @@ export const GrilleExamen = ({ examen, tours, candidats, matieres, sauvegarde, e
                     </td>
                   );
                 }))}
-                <td className={`text-center font-semibold border-l bg-muted/30 ${couleurMoyenne(moyenne, examen.seuilAdmission)}`}>
-                  {moyenne === null ? '—' : format(moyenne)}
-                  {etat.epreuvesEliminatoires.length > 0 && <div className="text-[10px] font-semibold uppercase text-red-600">Éliminé</div>}
-                </td>
-                <td className="px-2 py-1 bg-muted/30">
-                  {verrouille ? (
-                    <span className={`block text-center font-semibold ${decision ? COULEUR_DECISION[decision] : 'text-muted-foreground'}`}>
-                      {decision ? LIBELLES_DECISION[decision] : '—'}
-                    </span>
-                  ) : (
-                    <Select
-                      value={resultat?.decision ?? AUTO}
-                      onValueChange={v => void changerDecision(s.id, { decision: v === AUTO ? null : v as Decision })}
-                    >
-                      <SelectTrigger className={`h-8 text-xs ${decision ? COULEUR_DECISION[decision] : ''}`} aria-label={`Décision — ${s.lastName} ${s.firstName}`} title={proposition.motif}>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value={AUTO}>
-                          {proposition.decision ? `${LIBELLES_DECISION[proposition.decision]} (proposé)` : `À décider${proposition.motif ? ` — ${proposition.motif}` : ''}`}
-                        </SelectItem>
-                        {(Object.keys(LIBELLES_DECISION) as Decision[]).map(d => <SelectItem key={d} value={d}>{LIBELLES_DECISION[d]}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
-                  )}
-                </td>
-                <td className="px-2 py-1 bg-muted/30">
-                  {decision !== 'admis' ? (
-                    <span className="block text-center text-muted-foreground">—</span>
-                  ) : verrouille ? (
-                    <span className="block text-center font-medium">{mention ? LIBELLES_MENTION[mention] : '—'}</span>
-                  ) : (
-                    <Select
-                      value={resultat?.mention ?? AUTO}
-                      onValueChange={v => void changerDecision(s.id, { mention: v === AUTO ? null : v as Mention })}
-                    >
-                      <SelectTrigger className="h-8 text-xs" aria-label={`Mention — ${s.lastName} ${s.firstName}`}><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value={AUTO}>{proposition.mention ? `${LIBELLES_MENTION[proposition.mention]} (proposé)` : 'Sans mention'}</SelectItem>
-                        {(Object.keys(LIBELLES_MENTION) as Mention[]).map(m => <SelectItem key={m} value={m}>{LIBELLES_MENTION[m]}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
-                  )}
+                <td className={`text-center font-semibold border-l bg-muted/30 ${couleurNote(note, examen.seuilAdmission)}`}>
+                  {note === null ? '—' : format(note)}
+                  {etat.epreuvesEliminatoires.length > 0 && <div className="text-[10px] font-semibold uppercase text-red-600">Éliminatoire</div>}
                 </td>
               </tr>
             ))}
@@ -287,8 +222,8 @@ export const GrilleExamen = ({ examen, tours, candidats, matieres, sauvegarde, e
 
       <p className="text-xs text-muted-foreground">
         Tapez la note, ou <strong>A</strong> (absent), <strong>AJ</strong> (absent justifié). Entrée passe au candidat suivant.
-        Moyenne = notes sur 20 pondérées par les coefficients, tous tours confondus ; une épreuve sans note n'est jamais comptée 0.
-        La décision est <em>proposée</em> (admission à {format(examen.seuilAdmission)}/20, note éliminatoire → refusé) : choisissez-en une autre dans la case si le jury en décide autrement.
+        {lesEpreuves.length > 1 && ' La note de la matière combine ses épreuves selon leur coefficient.'}
+        {' '}Moyenne générale, décision et mention : écran « Résultats ».
       </p>
     </div>
   );
@@ -517,32 +452,76 @@ const EnTeteTour = ({ tour, nbEpreuves }: { tour: ExamenTour; nbEpreuves: number
   );
 };
 
-/** « + Tour » : Écrit, Pratique, Oral… (directeur). */
-const NouveauTour = ({ examenId }: { examenId: string }) => {
-  const { addTour } = useExamens();
+/**
+ * « + Épreuve » dans une matière : on choisit le tour (ou on en crée un), et
+ * l'épreuve reprend le nom et le coefficient de la matière — sa fiche s'ouvre
+ * ensuite pour ajuster barème, note éliminatoire, date (directeur).
+ */
+const AjouterEpreuve = ({ examenId, tours, matiere, onCree }: {
+  examenId: string; tours: ExamenTour[]; matiere: NiveauMatiere | null; onCree: (epreuveId: string) => void;
+}) => {
+  const { epreuves, addTour, addEpreuve } = useExamens();
   const [ouvert, setOuvert] = useState(false);
-  const [nom, setNom] = useState('');
+  const [tourId, setTourId] = useState<string>('');
+  const [nouveauTour, setNouveauTour] = useState('');
+  const [enCours, setEnCours] = useState(false);
+
+  useEffect(() => {
+    if (ouvert) { setTourId(tours[0]?.id ?? '__nouveau'); setNouveauTour(tours.length === 0 ? 'Écrit' : ''); }
+  }, [ouvert, tours]);
+
   const creer = async () => {
-    if (!nomTourValide(nom)) return;
-    try { await addTour(examenId, nom); setNom(''); setOuvert(false); }
-    catch (err) { toast({ title: 'Erreur', description: String(err), variant: 'destructive' }); }
+    if (tourId === '__nouveau' && !nomTourValide(nouveauTour)) {
+      toast({ title: 'Erreur', description: 'Donnez un nom au nouveau tour (Écrit, Pratique, Oral…).', variant: 'destructive' });
+      return;
+    }
+    setEnCours(true);
+    try {
+      const idTour = tourId === '__nouveau' ? (await addTour(examenId, nouveauTour)).id : tourId;
+      const deCeTour = epreuves.filter(e => e.tourId === idTour).length;
+      const ep = await addEpreuve(idTour, matiere
+        ? { nom: matiere.matiereName, coefficient: matiere.coefficient, bareme: 20, niveauMatiereId: matiere.id }
+        : { nom: `Épreuve ${deCeTour + 1}`, coefficient: 1, bareme: 20 });
+      setOuvert(false);
+      onCree(ep.id);
+    } catch (err) {
+      toast({ title: 'Erreur', description: String(err), variant: 'destructive' });
+    } finally {
+      setEnCours(false);
+    }
   };
+
   return (
     <Popover open={ouvert} onOpenChange={setOuvert}>
       <PopoverTrigger asChild>
-        <Button variant="outline" size="sm" className="h-8 gap-1.5"><Plus className="h-3.5 w-3.5" />Tour</Button>
+        <Button variant="outline" size="sm" className="h-8 gap-1.5"><Plus className="h-3.5 w-3.5" />Épreuve</Button>
       </PopoverTrigger>
-      <PopoverContent className="w-64 space-y-3">
+      <PopoverContent className="w-72 space-y-3">
+        <p className="text-sm font-medium">Nouvelle épreuve{matiere ? ` de ${matiere.matiereName}` : ''}</p>
         <div className="space-y-1.5">
-          <Label htmlFor="nouveau-tour">Nom du tour</Label>
-          <Input id="nouveau-tour" placeholder="Ex : Oral" value={nom} onChange={e => setNom(e.target.value)} onKeyDown={e => e.key === 'Enter' && void creer()} />
-          <div className="flex gap-1.5 flex-wrap">
-            {['Écrit', 'Pratique', 'Oral'].map(s => (
-              <button key={s} type="button" onClick={() => setNom(s)} className="text-xs px-2.5 py-1 rounded-full bg-muted hover:bg-muted/70">{s}</button>
-            ))}
-          </div>
+          <Label>Tour</Label>
+          <Select value={tourId} onValueChange={setTourId}>
+            <SelectTrigger aria-label="Tour"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {tours.map(t => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}
+              <SelectItem value="__nouveau">Nouveau tour…</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
-        <Button size="sm" className="w-full" onClick={() => void creer()}>Ajouter le tour</Button>
+        {tourId === '__nouveau' && (
+          <div className="space-y-1.5">
+            <Label htmlFor="nouveau-tour">Nom du tour</Label>
+            <Input id="nouveau-tour" placeholder="Ex : Oral" value={nouveauTour} onChange={e => setNouveauTour(e.target.value)} />
+            <div className="flex gap-1.5 flex-wrap">
+              {['Écrit', 'Pratique', 'Oral'].map(n => (
+                <button key={n} type="button" onClick={() => setNouveauTour(n)} className="text-xs px-2.5 py-1 rounded-full bg-muted hover:bg-muted/70">{n}</button>
+              ))}
+            </div>
+          </div>
+        )}
+        <Button size="sm" className="w-full" disabled={enCours} onClick={() => void creer()}>
+          {enCours && <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />}Ajouter l'épreuve
+        </Button>
       </PopoverContent>
     </Popover>
   );

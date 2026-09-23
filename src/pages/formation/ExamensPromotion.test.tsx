@@ -43,9 +43,9 @@ const exInitial = () => ({
     { id: 't2', examenId: 'x1', name: 'Pratique', ordering: 1 },
   ],
   epreuves: [
-    { id: 'ep1', tourId: 't1', nom: 'Français', coefficient: 2, bareme: 20, ordering: 0 },
-    { id: 'ep2', tourId: 't2', nom: 'TP Cuisine', coefficient: 4, bareme: 20, seuilEliminatoire: 8, ordering: 0 },
-  ] as { id: string; tourId: string; nom: string; coefficient: number; bareme: number; seuilEliminatoire?: number; ordering: number }[],
+    { id: 'ep1', tourId: 't1', niveauMatiereId: 'nm1', nom: 'Français', coefficient: 2, bareme: 20, ordering: 0 },
+    { id: 'ep2', tourId: 't2', niveauMatiereId: 'nm2', nom: 'TP Cuisine', coefficient: 4, bareme: 20, seuilEliminatoire: 8, ordering: 0 },
+  ] as { id: string; tourId: string; niveauMatiereId?: string; nom: string; coefficient: number; bareme: number; seuilEliminatoire?: number; ordering: number }[],
   candidats: [{ examenId: 'x1', studentEnrollmentId: 's1' }, { examenId: 'x1', studentEnrollmentId: 's2' }],
   notes: [
     { id: 'a', epreuveId: 'ep1', studentEnrollmentId: 's1', valeur: 12, statut: 'note' as const },
@@ -92,37 +92,51 @@ const ligne = (nom: string) => screen.getByText(nom).closest('tr')!;
 describe('ExamensPromotion — la grille d\'un examen', () => {
   beforeEach(() => { ex = exInitial(); role = 'admin'; vi.clearAllMocks(); });
 
-  it('tours en groupes de colonnes, moyenne pondérée et décision proposée', () => {
+  it('les matières sont dans une colonne à gauche, et on arrive sur la première', () => {
     rendre();
-    expect(screen.getByRole('columnheader', { name: /^Écrit/ })).toBeInTheDocument();
-    expect(screen.getByRole('columnheader', { name: /^Pratique/ })).toBeInTheDocument();
+    const colonne = screen.getByText('Matières').parentElement!;
+    expect(within(colonne).getByRole('button', { name: /Français/ })).toBeInTheDocument();
+    expect(within(colonne).getByRole('button', { name: /TP Cuisine/ })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /Français/ })).toBeInTheDocument();
+    // Seules les épreuves de la matière choisie sont affichées.
     expect(screen.getByLabelText('Français — Diop Awa')).toHaveValue('12');
+    expect(screen.queryByLabelText('TP Cuisine — Diop Awa')).not.toBeInTheDocument();
+  });
+
+  it('cliquer une matière affiche ses épreuves ; une note éliminatoire est signalée', async () => {
+    const user = userEvent.setup();
+    rendre();
+    await user.click(screen.getByRole('button', { name: /TP Cuisine/ }));
+    expect(screen.getByLabelText('TP Cuisine — Fall Moussa')).toHaveValue('6');
+    expect(within(ligne('Fall')).getByText('Éliminatoire')).toBeInTheDocument();
+  });
+
+  it('Résultats : note par matière, moyenne pondérée, décision et mention proposées', async () => {
+    const user = userEvent.setup();
+    rendre();
+    await user.click(screen.getByRole('button', { name: /Résultats/ }));
     // (12×2 + 14×4) / 6 = 13,33 → admis, assez bien
     expect(within(ligne('Diop')).getByText('13,33')).toBeInTheDocument();
     expect(within(ligne('Diop')).getByText('Admis (proposé)')).toBeInTheDocument();
     expect(within(ligne('Diop')).getByText('Assez bien (proposé)')).toBeInTheDocument();
-  });
-
-  it('une note sous le seuil éliminatoire : Éliminé et Refusé proposé, malgré la moyenne', () => {
-    rendre();
-    const l = ligne('Fall');
-    expect(within(l).getByText('Éliminé')).toBeInTheDocument();
-    expect(within(l).getByText('Refusé (proposé)')).toBeInTheDocument();
+    expect(within(ligne('Fall')).getByText('Éliminé')).toBeInTheDocument();
+    expect(within(ligne('Fall')).getByText('Refusé (proposé)')).toBeInTheDocument();
     expect(screen.getByText('1 admis')).toBeInTheDocument();
     expect(screen.getByText('1 refusé')).toBeInTheDocument();
   });
 
-  it('le directeur ajoute une épreuve avec « + » dans l\'en-tête du tour', async () => {
+  it('le directeur ajoute une épreuve à la matière : nom et coefficient repris du programme', async () => {
     const user = userEvent.setup();
     rendre();
-    await user.click(screen.getByRole('button', { name: 'Ajouter une épreuve en Pratique' }));
-    expect(ex.addEpreuve).toHaveBeenCalledWith('t2', { nom: 'Épreuve 2', coefficient: 1, bareme: 20 });
+    await user.click(screen.getByRole('button', { name: /^Épreuve$/ }));
+    await user.click(screen.getByRole('button', { name: 'Ajouter l\'épreuve' }));
+    expect(ex.addEpreuve).toHaveBeenCalledWith('t1', { nom: 'Français', coefficient: 2, bareme: 20, niveauMatiereId: 'nm1' });
   });
 
   it('le personnel saisit les notes mais ne touche pas aux épreuves ni au verrou', () => {
     role = 'staff';
     rendre();
-    expect(screen.queryByRole('button', { name: /Ajouter une épreuve/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^Épreuve$/ })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Verrouiller/ })).not.toBeInTheDocument();
     expect(screen.getByLabelText('Français — Diop Awa')).not.toBeDisabled();
   });
@@ -130,6 +144,7 @@ describe('ExamensPromotion — la grille d\'un examen', () => {
   it('une note tapée est enregistrée automatiquement ; « NE » n\'existe pas à un examen', async () => {
     const user = userEvent.setup();
     rendre();
+    await user.click(screen.getByRole('button', { name: /TP Cuisine/ }));
     const c = screen.getByLabelText('TP Cuisine — Fall Moussa');
     await user.clear(c);
     await user.type(c, 'NE');
@@ -160,14 +175,16 @@ describe('ExamensPromotion — la grille d\'un examen', () => {
     expect(toast).toHaveBeenCalledWith(expect.objectContaining({ title: 'Décisions manquantes' }));
   });
 
-  it('examen verrouillé : cases en lecture seule, décisions figées affichées, bouton Déverrouiller', () => {
+  it('examen verrouillé : cases en lecture seule, décisions figées affichées, bouton Déverrouiller', async () => {
     ex.examens = [{ ...ex.examens[0], verrouille: true }];
     ex.resultats = [
       { id: 'r1', examenId: 'x1', studentEnrollmentId: 's1', decision: 'admis', mention: 'bien', moyenne: 13.33, elimine: false },
       { id: 'r2', examenId: 'x1', studentEnrollmentId: 's2', decision: 'ajourne', moyenne: 9, elimine: true },
     ];
+    const user = userEvent.setup();
     rendre();
     expect(screen.getByLabelText('Français — Diop Awa')).toBeDisabled();
+    await user.click(screen.getByRole('button', { name: /Résultats/ }));
     expect(within(ligne('Diop')).getByText('Bien')).toBeInTheDocument();          // choix du jury, pas la proposition
     expect(within(ligne('Fall')).getByText('Ajourné')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Déverrouiller/ })).toBeInTheDocument();
@@ -203,9 +220,13 @@ describe('ExamensPromotion — la grille d\'un examen', () => {
     expect(screen.getByText(/Ne compte dans aucune moyenne/)).toBeInTheDocument();
   });
 
-  it('une épreuve rattachée à aucune matière est signalée « hors moyenne »', () => {
+  it('une épreuve rattachée à aucune matière apparaît dans « Autres épreuves », signalée « hors moyenne »', async () => {
+    ex.epreuves = [...ex.epreuves, { id: 'ep3', tourId: 't1', nom: 'Hygiène générale', coefficient: 1, bareme: 20, ordering: 1 }];
+    const user = userEvent.setup();
     rendre();
-    expect(screen.getAllByText('hors moyenne').length).toBe(2);
+    await user.click(screen.getByRole('button', { name: /Autres épreuves/ }));
+    expect(screen.getByText('Hygiène générale')).toBeInTheDocument();
+    expect(screen.getByText('hors moyenne')).toBeInTheDocument();
   });
 
   it('aucun examen : invite à en créer un', () => {
