@@ -25,6 +25,7 @@ const ctxInitial = () => ({
   niveauMatieres: [
     { id: 'nm1', niveauId: 'n1', matiereId: 'm1', matiereName: 'TP Cuisine', type: 'obligatoire' as const, coefficient: 4, volumeHoraire: 150, nature: 'pratique' as const, ordering: 0 },
     { id: 'nm2', niveauId: 'n1', matiereId: 'm2', matiereName: 'Français', type: 'obligatoire' as const, coefficient: 2, nature: 'theorique' as const, ordering: 1 },
+    { id: 'nmS', niveauId: 'n1', matiereId: 'm9', matiereName: 'Stage en entreprise', type: 'obligatoire' as const, coefficient: 2, nature: 'stage' as const, ordering: 2 },
   ],
   baremeCategories: [
     { id: 'cc', formationId: 'f1', name: 'Contrôle continu', pourcentage: 30, ordering: 0 },
@@ -65,6 +66,16 @@ const examensInitial = () => ({
 });
 let examens = examensInitial();
 vi.mock('@/contexts/ExamensContext', () => ({ useExamens: () => examens }));
+
+// Stage de Diop au Semestre 1, noté 12 : il remplit la matière « Stage ».
+const stagesInitial = () => ({
+  loading: false,
+  entreprises: [{ id: 'e1', nom: 'Hôtel Terrou-Bi' }],
+  stages: [{ id: 'st1', promotionId: 'p1', studentEnrollmentId: 's1', entrepriseId: 'e1', conventionSignee: false, abandonne: false,
+    niveauMatiereId: 'nmS', periodeId: 'per1', note: 12, createdAt: '' }],
+});
+let stagesCtx = stagesInitial();
+vi.mock('@/contexts/StagesContext', () => ({ useStages: () => stagesCtx }));
 vi.mock('@/contexts/SchoolContext', () => ({
   useSchool: () => ({
     students: [
@@ -86,7 +97,7 @@ const attendreSauvegarde = () => act(() => new Promise(resolve => setTimeout(res
 const caseDe = (evaluation: string, eleve: string) => screen.getByLabelText(`${evaluation} — ${eleve}`);
 
 describe('EvaluationsPromotion — une grille par matière, catégories en colonnes', () => {
-  beforeEach(() => { ctx = ctxInitial(); examens = examensInitial(); });
+  beforeEach(() => { ctx = ctxInitial(); examens = examensInitial(); stagesCtx = stagesInitial(); });
 
   it('ouvre directement la première matière : seules les catégories saisies ici ont des colonnes', () => {
     examens.notes = [];
@@ -191,11 +202,23 @@ describe('EvaluationsPromotion — une grille par matière, catégories en colon
     rendre();
     await user.click(screen.getByRole('button', { name: /Récapitulatif/ }));
     const ligneAwa = screen.getByText('Diop').closest('tr')!;
-    // TP Cuisine : CC 14 et examen final 20 → 17 ; Français 8 → (17×4 + 8×2) / 6 = 14
-    expect(within(ligneAwa).getByText('14')).toBeInTheDocument();
+    // TP Cuisine : CC 14 et examen final 20 → 17 ; Français 8 ; Stage 12 → (17×4 + 8×2 + 12×2) / 8 = 13,5
+    expect(within(ligneAwa).getByText('13,5')).toBeInTheDocument();
     const ligneMoussa = screen.getByText('Fall').closest('tr')!;
     expect(within(ligneMoussa).getAllByText('1').length).toBeGreaterThan(0);   // 16 : premier
     expect(within(ligneAwa).getByText('2')).toBeInTheDocument();
+  });
+
+  it('une matière « Stage » n\'a rien à saisir : elle montre la note venue de la rubrique Stages', async () => {
+    const user = userEvent.setup();
+    rendre();
+    await user.click(screen.getByRole('button', { name: /Stage en entreprise/ }));
+    expect(screen.getByText(/rien à taper ici/)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Stages' })).toHaveAttribute('href', '/formation/stages/p1');
+    const ligneAwa = screen.getByText('Diop').closest('tr')!;
+    expect(within(ligneAwa).getByText('Hôtel Terrou-Bi')).toBeInTheDocument();
+    expect(within(ligneAwa).getByText('12')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Ajouter une évaluation/ })).not.toBeInTheDocument();
   });
 
   it('crée une nouvelle période', async () => {

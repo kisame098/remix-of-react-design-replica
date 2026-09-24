@@ -1,7 +1,10 @@
 import { useMemo } from 'react';
 import { useFormationPro } from '@/contexts/FormationProContext';
 import type { Student } from '@/contexts/SchoolContext';
-import { type BaremeCategorie, type Evaluation, type Note, type NiveauMatiere, type Periode, recapitulatifPeriode, evaluationsDeLaFormule } from '@/lib/formationPro';
+import {
+  type BaremeCategorie, type Evaluation, type Note, type NiveauMatiere, type Periode, type Stage,
+  recapitulatifPeriode, evaluationsDeLaFormule, notesImposeesParStages,
+} from '@/lib/formationPro';
 
 const format = (n: number) => (Math.round(n * 100) / 100).toString().replace('.', ',');
 const couleur = (m: number | null) => m === null ? 'text-muted-foreground' : m >= 10 ? 'text-green-600' : 'text-red-500';
@@ -12,6 +15,8 @@ interface Props {
   matieres: NiveauMatiere[];
   categories: BaremeCategorie[];
   depuisExamens: { evaluations: Evaluation[]; notes: Note[] };
+  /** Les stages de la promotion : leur note remplit les matières « Stage ». */
+  stages: Stage[];
   eleves: Student[];
   onChoisirMatiere: (matiereId: string) => void;
 }
@@ -21,13 +26,16 @@ interface Props {
  * moyenne générale (pondérée par les coefficients) et le rang — le résultat
  * des trois étages de calcul, qu'aucun écran ne montrait jusqu'ici.
  */
-export const RecapitulatifPeriode = ({ promotionId, periode, matieres, categories, depuisExamens, eleves, onChoisirMatiere }: Props) => {
+export const RecapitulatifPeriode = ({ promotionId, periode, matieres, categories, depuisExamens, stages, eleves, onChoisirMatiere }: Props) => {
   const { evaluations, notes } = useFormationPro();
   const lignes = useMemo(() => {
     // Contrôle continu et TP saisis dans Évaluations + examens blancs et finaux de la période.
     const f = evaluationsDeLaFormule(evaluations.filter(e => e.promotionId === promotionId), notes, categories, depuisExamens);
-    return recapitulatifPeriode(eleves.map(s => s.id), matieres, categories, f.evaluations.filter(e => e.periodeId === periode.id), f.notes);
-  }, [eleves, matieres, categories, evaluations, notes, promotionId, periode.id, depuisExamens]);
+    return recapitulatifPeriode(
+      eleves.map(s => s.id), matieres, categories, f.evaluations.filter(e => e.periodeId === periode.id), f.notes,
+      notesImposeesParStages(matieres, stages, periode.id),
+    );
+  }, [eleves, matieres, categories, evaluations, notes, promotionId, periode.id, depuisExamens, stages]);
   const parId = new Map(eleves.map(s => [s.id, s]));
 
   return (
@@ -76,7 +84,7 @@ export const RecapitulatifPeriode = ({ promotionId, periode, matieres, categorie
         </table>
       </div>
       <p className="text-xs text-muted-foreground">
-        Chaque moyenne de matière suit toute la formule d'évaluation (contrôle continu, TP et examens de la période) ; la moyenne générale est pondérée par les coefficients.
+        Chaque moyenne de matière suit toute la formule d'évaluation (contrôle continu, TP et examens de la période) ; une matière « Stage » prend la note du stage. La moyenne générale est pondérée par les coefficients.
         Une matière sans aucune note n'est pas comptée (jamais 0) ; un élève sans aucune note n'est pas classé.
       </p>
     </div>
