@@ -71,7 +71,7 @@ export const RUBRIQUES_FORMATION_PRO: (ItemMenu & { description: string })[] = [
     description: "La formule de notation de l'année (contrôle continu, TP, examens…) et la saisie des notes par matière." },
   { title: 'Examens', url: '/formation/examens', icon: 'examens', permission: 'grades', groupe: 'formation_pro',
     description: "Examens blancs et officiels à un ou plusieurs tours : épreuves, notes éliminatoires, décisions et mentions, verrouillage des résultats." },
-  { title: 'Stages', url: '/formation/stages', icon: 'stages', permission: 'grades', bientot: true, groupe: 'formation_pro',
+  { title: 'Stages', url: '/formation/stages', icon: 'stages', permission: 'grades', groupe: 'formation_pro',
     description: "Le suivi des stages en entreprise : établissement d'accueil, dates, encadrant, appréciation et note." },
   { title: 'Documents', url: '/formation/documents', icon: 'documents', permission: 'grades', bientot: true, groupe: 'formation_pro',
     description: "Relevés, bulletins, attestations et diplômes de l'école, avec son identité (autorisation, NINEA, RC…)." },

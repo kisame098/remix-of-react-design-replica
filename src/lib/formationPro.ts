@@ -621,11 +621,18 @@ export const recapitulatifPeriode = (
   categories: BaremeCategorie[],
   evaluations: Evaluation[],
   notes: Note[],
+  /**
+   * Matières dont la note ne vient PAS de la formule mais d'un autre module
+   * (la matière « Stage » : note du stage) — clé : id de la matière.
+   */
+  notesImposees: Record<string, Record<string, number>> = {},
 ): LigneRecapitulatif[] => {
   const lignes = studentEnrollmentIds.map(sid => {
     const parMatiere: Record<string, number | null> = {};
     for (const m of matieres) {
-      parMatiere[m.id] = moyenneMatiere(categories, evaluations.filter(e => e.niveauMatiereId === m.id), notes, sid);
+      parMatiere[m.id] = m.id in notesImposees
+        ? notesImposees[m.id][sid] ?? null
+        : moyenneMatiere(categories, evaluations.filter(e => e.niveauMatiereId === m.id), notes, sid);
     }
     const generale = moyenneGenerale(matieres.map(m => ({ niveauMatiereId: m.id, coefficient: m.coefficient, moyenne: parMatiere[m.id] })));
     return { studentEnrollmentId: sid, parMatiere, generale, rang: null as number | null };
@@ -915,4 +922,152 @@ export const evaluationsDeLaFormule = (
     evaluations: [...evaluationsSaisies.filter(e => idsSaisies.has(e.categorieId)), ...depuisExamens.evaluations],
     notes: [...notesSaisies, ...depuisExamens.notes],
   };
+};
+
+// ═══════════════════════════════════════════════════════════════════════════
+// STAGES (étape 5)
+//
+// Un stage concerne UN élève (entreprise, dates) ; un élève peut en faire
+// plusieurs. UNE note sur 20 donnée à la fin (choix de l'école), saisie une
+// seule fois ici : elle remplit la matière de nature « Stage » du programme
+// dans Évaluations, pour la période choisie.
+// ═══════════════════════════════════════════════════════════════════════════
+
+export interface Entreprise {
+  id: string;
+  nom: string;
+  secteur?: string;
+  adresse?: string;
+  telephone?: string;
+  email?: string;
+  contact?: string;
+}
+
+export interface Stage {
+  id: string;
+  promotionId: string;
+  studentEnrollmentId: string;
+  entrepriseId?: string;
+  poste?: string;
+  tuteur?: string;
+  tuteurTelephone?: string;
+  dateDebut?: string;
+  dateFin?: string;
+  conventionSignee: boolean;
+  abandonne: boolean;
+  niveauMatiereId?: string;
+  periodeId?: string;
+  /** Sur 20. `undefined` : pas encore noté (jamais un 0 par défaut). */
+  note?: number;
+  appreciation?: string;
+  createdAt: string;
+}
+
+export interface VisiteStage {
+  id: string;
+  stageId: string;
+  date: string;
+  visiteur?: string;
+  observation?: string;
+}
+
+export const nomEntrepriseValide = (nom: string): boolean => nom.trim() !== '';
+
+const normaliserNom = (nom: string) => nom.trim().toLowerCase().replace(/\s+/g, ' ');
+
+/** Retrouve une entreprise du carnet par son nom (casse et espaces ignorés). */
+export const trouverEntreprise = (carnet: Entreprise[], nom: string, excludeId?: string): Entreprise | undefined =>
+  carnet.find(e => e.id !== excludeId && normaliserNom(e.nom) === normaliserNom(nom));
+
+export const datesStageValides = (debut?: string, fin?: string): boolean => !debut || !fin || debut <= fin;
+
+export const noteStageValide = (v: number | undefined): boolean => v === undefined || (Number.isFinite(v) && v >= 0 && v <= 20);
+
+export type StatutStage = 'a_planifier' | 'a_venir' | 'en_cours' | 'a_noter' | 'note' | 'abandonne';
+
+export const LIBELLES_STATUT_STAGE: Record<StatutStage, string> = {
+  a_planifier: 'À planifier',
+  a_venir: 'À venir',
+  en_cours: 'En cours',
+  a_noter: 'À noter',
+  note: 'Noté',
+  abandonne: 'Abandonné',
+};
+
+/**
+ * Le statut se lit dans les dates et la note — jamais un champ de plus à
+ * tenir à jour à la main :
+ *   abandonné > noté > à noter (fini, sans note) > en cours > à venir > à planifier (sans dates).
+ */
+export const statutStage = (stage: Pick<Stage, 'abandonne' | 'note' | 'dateDebut' | 'dateFin'>, aujourdhui: string): StatutStage => {
+  if (stage.abandonne) return 'abandonne';
+  if (stage.note != null) return 'note';
+  if (stage.dateFin && stage.dateFin < aujourdhui) return 'a_noter';
+  if (stage.dateDebut && stage.dateDebut > aujourdhui) return 'a_venir';
+  if (stage.dateDebut || stage.dateFin) return 'en_cours';
+  return 'a_planifier';
+};
+
+/** Durée en jours, bornes comprises (`null` si une date manque). */
+export const dureeStageJours = (debut?: string, fin?: string): number | null => {
+  if (!debut || !fin) return null;
+  const ms = Date.parse(`${fin}T00:00:00Z`) - Date.parse(`${debut}T00:00:00Z`);
+  return Number.isFinite(ms) ? Math.round(ms / 86_400_000) + 1 : null;
+};
+
+/** « 3 semaines », « 10 jours », « 2 mois » — pour l'affichage. */
+export const libelleDuree = (jours: number | null): string => {
+  if (jours === null) return '';
+  if (jours >= 56) return `${Math.round(jours / 30)} mois`;
+  if (jours >= 14) return `${Math.round(jours / 7)} semaines`;
+  return `${jours} jour${jours > 1 ? 's' : ''}`;
+};
+
+/** Les matières du programme alimentées par les stages. */
+export const matieresStage = <M extends Pick<NiveauMatiere, 'nature'>>(matieres: M[]): M[] => matieres.filter(m => m.nature === 'stage');
+
+/**
+ * La période où compte la note : celle qui contient la date de fin du stage ;
+ * à défaut, la dernière (on propose, l'école peut changer).
+ */
+export const periodePourStage = (periodes: Periode[], dateFin?: string): Periode | undefined => {
+  const tries = triPeriodes(periodes);
+  if (dateFin) {
+    const contenant = tries.find(p => (!p.startDate || p.startDate <= dateFin) && (!p.endDate || dateFin <= p.endDate) && (p.startDate || p.endDate));
+    if (contenant) return contenant;
+  }
+  return tries[tries.length - 1];
+};
+
+/**
+ * Note de chaque élève dans chaque matière « Stage », pour UNE période :
+ * moyenne de ses stages notés (abandonnés exclus). Un élève sans stage noté
+ * n'a pas de note — jamais 0.
+ */
+export const notesStageParMatiere = (stages: Stage[], periodeId: string): Record<string, Record<string, number>> => {
+  const cumul: Record<string, Record<string, { total: number; n: number }>> = {};
+  for (const s of stages) {
+    if (s.abandonne || s.note == null || s.periodeId !== periodeId || !s.niveauMatiereId) continue;
+    const parEleve = (cumul[s.niveauMatiereId] ??= {});
+    const c = (parEleve[s.studentEnrollmentId] ??= { total: 0, n: 0 });
+    c.total += s.note;
+    c.n += 1;
+  }
+  const res: Record<string, Record<string, number>> = {};
+  for (const [m, parEleve] of Object.entries(cumul)) {
+    res[m] = Object.fromEntries(Object.entries(parEleve).map(([e, c]) => [e, c.total / c.n]));
+  }
+  return res;
+};
+
+/**
+ * Ce qu'on passe à `recapitulatifPeriode` comme notes imposées : TOUTES les
+ * matières « Stage » du programme, même sans aucun stage noté — sinon elles
+ * retomberaient sur d'anciennes notes tapées à la main dans Évaluations.
+ */
+export const notesImposeesParStages = (
+  matieres: Pick<NiveauMatiere, 'id' | 'nature'>[], stages: Stage[], periodeId: string,
+): Record<string, Record<string, number>> => {
+  const notes = notesStageParMatiere(stages, periodeId);
+  return Object.fromEntries(matieresStage(matieres).map(m => [m.id, notes[m.id] ?? {}]));
 };

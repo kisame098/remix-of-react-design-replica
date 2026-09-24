@@ -3,6 +3,7 @@ import { useNavigate, useParams, Link } from 'react-router-dom';
 import { useFormationPro } from '@/contexts/FormationProContext';
 import { useSchool } from '@/contexts/SchoolContext';
 import { useExamens } from '@/contexts/ExamensContext';
+import { useStages } from '@/contexts/StagesContext';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -17,6 +18,7 @@ import { toast } from '@/hooks/use-toast';
 import { triPeriodes, baremeComplet, sommeBareme, analyserSaisieNote, evaluationsDepuisExamens, LIBELLES_TYPE_EXAMEN } from '@/lib/formationPro';
 import { GrilleNotesMatiere } from '@/components/formation/GrilleNotesMatiere';
 import { RecapitulatifPeriode } from '@/components/formation/RecapitulatifPeriode';
+import { NotesStageMatiere } from '@/components/formation/NotesStageMatiere';
 import { DialogPeriode } from '@/components/formation/DialogPeriode';
 import { useSauvegardeNotes } from '@/components/formation/useSauvegardeNotes';
 
@@ -46,6 +48,7 @@ const EvaluationsPromotion = () => {
   } = useFormationPro();
   const { students } = useSchool();
   const examens = useExamens();
+  const stagesCtx = useStages();
   const sauvegarde = useSauvegardeNotes({ enregistrer: saisirNote, supprimer: supprimerNote, analyser: analyserSaisieNote });
 
   const promotion = promotions.find(p => p.id === promotionId);
@@ -94,8 +97,13 @@ const EvaluationsPromotion = () => {
     const idsEvals = new Map(evaluationsPeriode.map(e => [e.id, e.niveauMatiereId]));
     const set = new Set<string>();
     for (const n of notes) { const m = idsEvals.get(n.evaluationId); if (m) set.add(m); }
+    // Matière « Stage » : notée dès qu'un stage de la période a sa note.
+    for (const st of stagesCtx.stages) {
+      if (st.promotionId === promotionId && periode && st.periodeId === periode.id && st.note != null && !st.abandonne && st.niveauMatiereId) set.add(st.niveauMatiereId);
+    }
     return set;
-  }, [evaluationsPeriode, notes]);
+  }, [evaluationsPeriode, notes, stagesCtx.stages, promotionId, periode]);
+  const stagesPromo = useMemo(() => stagesCtx.stages.filter(st => st.promotionId === promotionId), [stagesCtx.stages, promotionId]);
 
   // ── Périodes : créer, modifier, supprimer ────────────────────────────────
   const [dialogPeriode, setDialogPeriode] = useState<'create' | 'edit' | null>(null);
@@ -113,7 +121,7 @@ const EvaluationsPromotion = () => {
     }
   };
 
-  if (loading || examens.loading) {
+  if (loading || examens.loading || stagesCtx.loading) {
     return <div className="p-6 flex items-center gap-2 text-muted-foreground"><Loader2 className="h-5 w-5 animate-spin" />Chargement…</div>;
   }
   if (!promotion) {
@@ -275,9 +283,18 @@ const EvaluationsPromotion = () => {
                   <p className="text-sm text-muted-foreground">Moyennes par matière, moyenne générale et rang.</p>
                 </div>
                 <RecapitulatifPeriode
-                  promotionId={promotion.id} periode={periode} matieres={matieres} categories={categories} depuisExamens={depuisExamens} eleves={eleves}
+                  promotionId={promotion.id} periode={periode} matieres={matieres} categories={categories} depuisExamens={depuisExamens}
+                  stages={stagesPromo} eleves={eleves}
                   onChoisirMatiere={id => setVue({ kind: 'matiere', id })}
                 />
+              </>
+            ) : matiere && matiere.nature === 'stage' ? (
+              <>
+                <h2 className="text-xl font-bold flex items-center gap-2 flex-wrap">
+                  <BookOpen className="h-5 w-5 text-primary" />{matiere.matiereName}
+                  <span className="text-sm font-normal text-muted-foreground">coefficient {matiere.coefficient} · {periode.name}</span>
+                </h2>
+                <NotesStageMatiere promotionId={promotion.id} periode={periode} matiere={matiere} eleves={eleves} />
               </>
             ) : matiere ? (
               <>

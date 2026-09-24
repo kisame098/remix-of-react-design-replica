@@ -832,3 +832,101 @@ describe('les examens alimentent la formule — un examen ne se saisit qu\'une f
     expect(moyenneMatiere(cats, f.evaluations, f.notes, 's1')).toBe(13);
   });
 });
+
+import {
+  statutStage, dureeStageJours, libelleDuree, trouverEntreprise, datesStageValides, noteStageValide,
+  periodePourStage, notesStageParMatiere, notesImposeesParStages, type Stage,
+} from './formationPro';
+
+const stage = (o: Partial<Stage> = {}): Stage => ({
+  id: 'st1', promotionId: 'p1', studentEnrollmentId: 's1', conventionSignee: false, abandonne: false,
+  niveauMatiereId: 'nmStage', periodeId: 'per1', createdAt: '', ...o,
+});
+
+describe('stages — statut lu dans les dates et la note', () => {
+  const auj = '2026-09-24';
+  it('à planifier sans dates, à venir, en cours, à noter une fois fini sans note', () => {
+    expect(statutStage(stage(), auj)).toBe('a_planifier');
+    expect(statutStage(stage({ dateDebut: '2026-10-01', dateFin: '2026-11-30' }), auj)).toBe('a_venir');
+    expect(statutStage(stage({ dateDebut: '2026-09-01', dateFin: '2026-10-31' }), auj)).toBe('en_cours');
+    expect(statutStage(stage({ dateDebut: '2026-09-01' }), auj)).toBe('en_cours');
+    expect(statutStage(stage({ dateDebut: '2026-06-01', dateFin: '2026-08-31' }), auj)).toBe('a_noter');
+  });
+  it('noté dès qu\'il a une note ; abandonné l\'emporte sur tout', () => {
+    expect(statutStage(stage({ dateFin: '2026-08-31', note: 15 }), auj)).toBe('note');
+    expect(statutStage(stage({ note: 0 }), auj)).toBe('note');   // 0 est une vraie note
+    expect(statutStage(stage({ note: 15, abandonne: true }), auj)).toBe('abandonne');
+  });
+  it('durée affichée en jours, semaines ou mois', () => {
+    expect(dureeStageJours('2026-09-01', '2026-09-10')).toBe(10);
+    expect(dureeStageJours('2026-09-01', undefined)).toBeNull();
+    expect(libelleDuree(10)).toBe('10 jours');
+    expect(libelleDuree(21)).toBe('3 semaines');
+    expect(libelleDuree(90)).toBe('3 mois');
+  });
+  it('validation : dates dans l\'ordre, note entre 0 et 20 ou vide', () => {
+    expect(datesStageValides('2026-09-01', '2026-08-01')).toBe(false);
+    expect(datesStageValides(undefined, '2026-08-01')).toBe(true);
+    expect(noteStageValide(undefined)).toBe(true);
+    expect(noteStageValide(20)).toBe(true);
+    expect(noteStageValide(21)).toBe(false);
+  });
+});
+
+describe('stages — carnet d\'entreprises sans doublon', () => {
+  const carnet = [{ id: 'e1', nom: 'Hôtel Terrou-Bi' }];
+  it('retrouve une entreprise malgré la casse et les espaces', () => {
+    expect(trouverEntreprise(carnet, '  hôtel   terrou-bi ')?.id).toBe('e1');
+    expect(trouverEntreprise(carnet, 'Radisson')).toBeUndefined();
+    expect(trouverEntreprise(carnet, 'Hôtel Terrou-Bi', 'e1')).toBeUndefined();
+  });
+});
+
+describe('stages — la note remplit la matière « Stage » d\'Évaluations', () => {
+  const periodes = [
+    { id: 'per1', promotionId: 'p1', name: 'Semestre 1', startDate: '2026-09-01', endDate: '2027-01-31', ordering: 0 },
+    { id: 'per2', promotionId: 'p1', name: 'Semestre 2', startDate: '2027-02-01', endDate: '2027-06-30', ordering: 1 },
+  ];
+  it('période proposée : celle qui contient la fin du stage, sinon la dernière', () => {
+    expect(periodePourStage(periodes, '2026-12-15')?.id).toBe('per1');
+    expect(periodePourStage(periodes, '2027-03-10')?.id).toBe('per2');
+    expect(periodePourStage(periodes, undefined)?.id).toBe('per2');
+    expect(periodePourStage(periodes, '2028-01-01')?.id).toBe('per2');
+  });
+  it('moyenne des stages notés de l\'élève dans la période ; abandonnés et non notés exclus', () => {
+    const r = notesStageParMatiere([
+      stage({ id: 'a', note: 14 }), stage({ id: 'b', note: 16 }),
+      stage({ id: 'c', note: 2, abandonne: true }), stage({ id: 'd' }),
+      stage({ id: 'e', note: 8, periodeId: 'per2' }), stage({ id: 'f', studentEnrollmentId: 's2', note: 11 }),
+    ], 'per1');
+    expect(r).toEqual({ nmStage: { s1: 15, s2: 11 } });
+  });
+  it('toute matière « Stage » est imposée, même sans note — et le récapitulatif la prend telle quelle', () => {
+    const matieres = [{ id: 'nmStage', nature: 'stage' as const, coefficient: 2 }, { id: 'nm1', nature: 'theorique' as const, coefficient: 2 }];
+    expect(notesImposeesParStages(matieres, [], 'per1')).toEqual({ nmStage: {} });
+    const imposees = notesImposeesParStages(matieres, [stage({ note: 18 })], 'per1');
+    const cats = [categorie({ id: 'cc', pourcentage: 100 })];
+    const ancienneColonneStage = evaluation({ id: 'old', niveauMatiereId: 'nmStage', categorieId: 'cc' });
+    const r = recapitulatifPeriode(['s1'], matieres, cats,
+      [evaluation({ id: 'e1', niveauMatiereId: 'nm1', categorieId: 'cc' }), ancienneColonneStage],
+      [note({ id: 'n1', evaluationId: 'e1', valeur: 10 }), note({ id: 'n2', evaluationId: 'old', valeur: 2 })],
+      imposees);
+    expect(r[0].parMatiere).toEqual({ nmStage: 18, nm1: 10 });   // la vieille note de 2 n'est pas prise
+    expect(r[0].generale).toBe(14);
+  });
+});
+
+describe('garde-fous — stages : isolation, carnet sans doublon, une note sur 20', () => {
+  const sql = readFileSync('docs/sql/formation_pro_stages.sql', 'utf8');
+  it('les 3 tables sont filtrées par école (RLS)', () => {
+    expect(sql).toContain("array['fp_entreprises','fp_stages','fp_stage_visites']");
+    expect(sql).toContain('school_id = get_my_school_id()');
+  });
+  it('une entreprise n\'existe qu\'une fois par école (casse et espaces ignorés) et ne disparaît pas sous un stage', () => {
+    expect(sql).toContain('(school_id, lower(trim(nom)))');
+    expect(sql).toContain('references public.fp_entreprises(id) on delete restrict');
+  });
+  it('une seule note, entre 0 et 20, vide tant que le stage n\'est pas noté', () => {
+    expect(sql).toContain('note is null or (note >= 0 and note <= 20)');
+  });
+});
