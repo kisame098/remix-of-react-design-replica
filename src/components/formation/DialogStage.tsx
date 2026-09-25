@@ -12,7 +12,9 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { Loader2, Plus, Trash2, Building2 } from 'lucide-react';
+import { Loader2, Plus, Trash2, Building2, FileText } from 'lucide-react';
+import { BoutonDocument } from '@/components/formation/BoutonDocument';
+import { useDonneesDocuments } from '@/hooks/useDocumentsFormation';
 import { toast } from '@/hooks/use-toast';
 import {
   type Stage, type Periode, type NiveauMatiere, trouverEntreprise, datesStageValides, noteStageValide,
@@ -53,6 +55,7 @@ const vide = {
 export const DialogStage = ({ open, onOpenChange, promotionId, stage, eleveId, eleves, periodes, matieresStage }: Props) => {
   const { entreprises, visites, entrepriseParNom, addStage, updateStage, deleteStage, addVisite, deleteVisite } = useStages();
   const [f, setF] = useState(vide);
+  const documents = useDonneesDocuments();
   // La période suit la date de fin tant que l'école ne l'a pas choisie elle-même.
   const [periodeChoisie, setPeriodeChoisie] = useState(false);
   const [enregistrement, setEnregistrement] = useState(false);
@@ -283,9 +286,26 @@ export const DialogStage = ({ open, onOpenChange, promotionId, stage, eleveId, e
 
           <div className="flex items-center justify-between gap-2 pt-3 border-t">
             {stage ? (
-              <Button variant="ghost" className="text-destructive hover:text-destructive gap-1.5" onClick={() => setConfirmer(true)}>
-                <Trash2 className="h-4 w-4" />Supprimer
-              </Button>
+              <div className="flex items-center gap-1">
+                <Button variant="ghost" className="text-destructive hover:text-destructive gap-1.5" onClick={() => setConfirmer(true)}>
+                  <Trash2 className="h-4 w-4" />Supprimer
+                </Button>
+                <BoutonDocument
+                  variant="ghost" size="default" className="gap-1.5"
+                  titre="Attestation de stage"
+                  nomFichier={`Attestation_stage_${eleve?.lastName ?? ''}_${eleve?.firstName ?? ''}`}
+                  disabled={!stage.entrepriseId || !stage.dateDebut || !stage.dateFin}
+                  title={!stage.entrepriseId || !stage.dateDebut || !stage.dateFin ? 'Il faut l\'entreprise et les dates du stage (enregistrées).' : undefined}
+                  fabriquer={async () => {
+                    const d = documents.attestationStage(stage.id);
+                    if (!d) throw new Error('Stage introuvable');
+                    const { genererAttestationStagePdf } = await import('@/lib/documentsFormationProPdf');
+                    return genererAttestationStagePdf(d);
+                  }}
+                >
+                  <FileText className="h-4 w-4" />Attestation
+                </BoutonDocument>
+              </div>
             ) : <span />}
             <Button onClick={() => void enregistrer()} disabled={enregistrement}>
               {enregistrement && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}

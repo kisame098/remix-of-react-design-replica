@@ -3,7 +3,7 @@ import { useFormationPro } from '@/contexts/FormationProContext';
 import type { Student } from '@/contexts/SchoolContext';
 import {
   type BaremeCategorie, type Evaluation, type Note, type NiveauMatiere, type Periode, type Stage,
-  recapitulatifPeriode, evaluationsDeLaFormule, notesImposeesParStages,
+  recapitulatifComplet,
 } from '@/lib/formationPro';
 
 const format = (n: number) => (Math.round(n * 100) / 100).toString().replace('.', ',');
@@ -28,14 +28,10 @@ interface Props {
  */
 export const RecapitulatifPeriode = ({ promotionId, periode, matieres, categories, depuisExamens, stages, eleves, onChoisirMatiere }: Props) => {
   const { evaluations, notes } = useFormationPro();
-  const lignes = useMemo(() => {
-    // Contrôle continu et TP saisis dans Évaluations + examens blancs et finaux de la période.
-    const f = evaluationsDeLaFormule(evaluations.filter(e => e.promotionId === promotionId), notes, categories, depuisExamens);
-    return recapitulatifPeriode(
-      eleves.map(s => s.id), matieres, categories, f.evaluations.filter(e => e.periodeId === periode.id), f.notes,
-      notesImposeesParStages(matieres, stages, periode.id),
-    );
-  }, [eleves, matieres, categories, evaluations, notes, promotionId, periode.id, depuisExamens, stages]);
+  const lignes = useMemo(() => recapitulatifComplet({
+    promotionId, periodeId: periode.id, eleveIds: eleves.map(s => s.id), matieres, categories,
+    evaluations, notes, depuisExamens, stages,
+  }), [eleves, matieres, categories, evaluations, notes, promotionId, periode.id, depuisExamens, stages]);
   const parId = new Map(eleves.map(s => [s.id, s]));
 
   return (

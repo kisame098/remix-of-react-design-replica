@@ -22,10 +22,15 @@ export const ROUGE = '#B91C1C';
 
 export type Alignement = 'left' | 'right' | 'center';
 
-/** Change l'opacité du dessin qui suit (à entourer de saveGraphicsState/restoreGraphicsState). */
+/**
+ * Change l'opacité du dessin qui suit (à entourer de saveGraphicsState/restoreGraphicsState).
+ * Remplissage ET contour : `opacity` seule ne vaut que pour le remplissage — le
+ * cercle du monogramme (école sans logo) sortait alors en trait plein, en plein
+ * milieu du filigrane.
+ */
 export const opacite = (doc: jsPDF, valeur: number) => {
-  const GState = (doc as unknown as { GState: new (o: { opacity: number }) => unknown }).GState;
-  doc.setGState(new GState({ opacity: valeur }));
+  const GState = (doc as unknown as { GState: new (o: Record<string, number>) => unknown }).GState;
+  doc.setGState(new GState({ opacity: valeur, 'stroke-opacity': valeur }));
 };
 
 /** Texte espacé (capitales d'étiquette). jsPDF compte `charSpace` en millimètres. */

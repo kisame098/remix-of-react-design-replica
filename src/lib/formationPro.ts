@@ -1071,3 +1071,26 @@ export const notesImposeesParStages = (
   const notes = notesStageParMatiere(stages, periodeId);
   return Object.fromEntries(matieresStage(matieres).map(m => [m.id, notes[m.id] ?? {}]));
 };
+
+/**
+ * Le récapitulatif COMPLET d'une période, tel que le montre Évaluations et
+ * que l'impriment les bulletins : CC/TP saisis + examens de la période +
+ * note des stages pour les matières « Stage ». Un seul calcul, deux usages.
+ */
+export const recapitulatifComplet = (p: {
+  promotionId: string;
+  periodeId: string;
+  eleveIds: string[];
+  matieres: Pick<NiveauMatiere, 'id' | 'coefficient' | 'nature'>[];
+  categories: BaremeCategorie[];
+  evaluations: Evaluation[];
+  notes: Note[];
+  depuisExamens: { evaluations: Evaluation[]; notes: Note[] };
+  stages: Stage[];
+}): LigneRecapitulatif[] => {
+  const f = evaluationsDeLaFormule(p.evaluations.filter(e => e.promotionId === p.promotionId), p.notes, p.categories, p.depuisExamens);
+  return recapitulatifPeriode(
+    p.eleveIds, p.matieres, p.categories, f.evaluations.filter(e => e.periodeId === p.periodeId), f.notes,
+    notesImposeesParStages(p.matieres, p.stages.filter(s => s.promotionId === p.promotionId), p.periodeId),
+  );
+};

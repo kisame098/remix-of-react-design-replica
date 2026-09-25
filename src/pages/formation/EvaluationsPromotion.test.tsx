@@ -85,6 +85,8 @@ vi.mock('@/contexts/SchoolContext', () => ({
   }),
 }));
 vi.mock('@/hooks/use-toast', () => ({ toast: vi.fn() }));
+// Les boutons de documents ne fabriquent rien tant qu'on ne clique pas : une fabrique vide suffit.
+vi.mock('@/hooks/useDocumentsFormation', () => ({ useDonneesDocuments: () => ({}) }));
 
 import EvaluationsPromotion from './EvaluationsPromotion';
 
