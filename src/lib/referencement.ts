@@ -26,6 +26,7 @@ export interface Referencement {
 const PAGES_PUBLIQUES: Record<string, Referencement> = {
   '/':               { titre: TITRE_ACCUEIL, indexer: true },
   '/auth':           { titre: `Connexion | ${NOM_DU_SITE}`, indexer: false },
+  '/telecharger':    { titre: `Télécharger le logiciel | ${NOM_DU_SITE}`, indexer: true },
   '/reset-password': { titre: `Nouveau mot de passe | ${NOM_DU_SITE}`, indexer: false },
 };
 

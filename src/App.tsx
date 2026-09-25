@@ -39,6 +39,7 @@ import { AuthProvider } from "./contexts/AuthContext";
 // de bulletins. Chaque écran est désormais un morceau séparé, récupéré quand
 // on y va — puis gardé sur l'appareil par l'application installée.
 const ResetPassword         = lazy(() => import("./pages/ResetPassword"));
+const Telecharger           = lazy(() => import("./pages/Telecharger"));
 const Dashboard             = lazy(() => import("./pages/Dashboard"));
 const StudentRegistration   = lazy(() => import("./pages/StudentRegistration"));
 const ClassManagement       = lazy(() => import("./pages/ClassManagement"));
@@ -116,6 +117,7 @@ const App = () => (
               <Routes>
                 <Route path="/" element={<Index />} />
                 <Route path="/auth" element={<Auth />} />
+                <Route path="/telecharger" element={<Telecharger />} />
                 <Route path="/reset-password" element={<ResetPassword />} />
 
                 {/* ── Portail élève / professeur ─────────────────────── */}
