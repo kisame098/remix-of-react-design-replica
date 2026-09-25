@@ -125,12 +125,15 @@ const Formations = () => {
   const [diplomaType, setDiplomaType] = useState('');
   const [duration, setDuration] = useState('');
   const [entryLevel, setEntryLevel] = useState('');
+  const [intituleDiplome, setIntituleDiplome] = useState('');
+  const [optionDiplome, setOptionDiplome] = useState('');
   const [description, setDescription] = useState('');
   const [isSaving, setIsSaving] = useState(false);
 
   const remplirFormulaire = (f?: Partial<Formation>) => {
     setName(f?.name ?? ''); setDiplomaType(f?.diplomaType ?? ''); setDuration(f?.duration ?? '');
     setEntryLevel(f?.entryLevel ?? ''); setDescription(f?.description ?? '');
+    setIntituleDiplome(f?.intituleDiplome ?? ''); setOptionDiplome(f?.optionDiplome ?? '');
   };
   const resetForm = () => { remplirFormulaire(); setDialog(null); };
   const openCreate = () => { remplirFormulaire(); setDialog({ kind: 'create' }); };
@@ -149,7 +152,11 @@ const Formations = () => {
     }
     setIsSaving(true);
     try {
-      const data = { name: name.trim(), diplomaType: diplomaType.trim() || undefined, duration: duration.trim() || undefined, entryLevel: entryLevel.trim() || undefined, description: description.trim() || undefined };
+      const data = {
+        name: name.trim(), diplomaType: diplomaType.trim() || undefined, duration: duration.trim() || undefined,
+        entryLevel: entryLevel.trim() || undefined, description: description.trim() || undefined,
+        intituleDiplome: intituleDiplome.trim(), optionDiplome: optionDiplome.trim(),
+      };
       if (dialog.kind === 'create') {
         await addFormation(data);
         toast({ title: 'Formation créée', description: data.name });
@@ -338,6 +345,16 @@ const Formations = () => {
               <datalist id="types-diplome">
                 {TYPES_DIPLOME_SUGGERES.map(t => <option key={t} value={t} />)}
               </datalist>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <Label htmlFor="formation-intitule">Intitulé du diplôme (relevés)</Label>
+                <Input id="formation-intitule" placeholder="Ex : Brevet d'Étude Professionnelle (BEP)" value={intituleDiplome} onChange={e => setIntituleDiplome(e.target.value)} />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="formation-option">Option</Label>
+                <Input id="formation-option" placeholder="Ex : RESTAURATION" value={optionDiplome} onChange={e => setOptionDiplome(e.target.value)} />
+              </div>
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-2">

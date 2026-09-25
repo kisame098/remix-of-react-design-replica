@@ -1,11 +1,15 @@
 import { useEffect, useRef, useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
-import { CLE_ADRESSE_ECOLE, CLE_NINEA_ECOLE, CLE_AUTORISATION_ECOLE, CLE_RC_ECOLE } from '@/lib/documentsEcole';
+import {
+  CLE_ADRESSE_ECOLE, CLE_NINEA_ECOLE, CLE_AUTORISATION_ECOLE, CLE_RC_ECOLE,
+  CLE_DIRECTEUR_ETUDES, CLE_DIRECTEUR_GENERAL, CLE_PIED_DOCUMENTS,
+} from '@/lib/documentsEcole';
 import { useSchoolYear } from '@/contexts/SchoolYearContext';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {
@@ -95,6 +99,9 @@ const SettingsPage = () => {
   const [nineaEcole, setNineaEcole] = useState('');
   const [autorisationEcole, setAutorisationEcole] = useState('');
   const [rcEcole, setRcEcole] = useState('');
+  const [directeurEtudes, setDirecteurEtudes] = useState('');
+  const [directeurGeneral, setDirecteurGeneral] = useState('');
+  const [piedDocuments, setPiedDocuments] = useState('');
   const [savingSchool, setSavingSchool] = useState(false);
   const [uploadingLogo, setUploadingLogo] = useState(false);
 
@@ -111,6 +118,10 @@ const SettingsPage = () => {
       setNineaEcole(typeof school.settings?.[CLE_NINEA_ECOLE] === 'string' ? school.settings[CLE_NINEA_ECOLE] as string : '');
       setAutorisationEcole(typeof school.settings?.[CLE_AUTORISATION_ECOLE] === 'string' ? school.settings[CLE_AUTORISATION_ECOLE] as string : '');
       setRcEcole(typeof school.settings?.[CLE_RC_ECOLE] === 'string' ? school.settings[CLE_RC_ECOLE] as string : '');
+      const reglage = (cle: string) => (typeof school.settings?.[cle] === 'string' ? school.settings[cle] as string : '');
+      setDirecteurEtudes(reglage(CLE_DIRECTEUR_ETUDES));
+      setDirecteurGeneral(reglage(CLE_DIRECTEUR_GENERAL));
+      setPiedDocuments(reglage(CLE_PIED_DOCUMENTS));
     }
   }, [school]);
 
@@ -121,6 +132,8 @@ const SettingsPage = () => {
       await updateSchoolSettings({
         [CLE_ADRESSE_ECOLE]: adresseEcole.trim(), [CLE_NINEA_ECOLE]: nineaEcole.trim(),
         [CLE_AUTORISATION_ECOLE]: autorisationEcole.trim(), [CLE_RC_ECOLE]: rcEcole.trim(),
+        [CLE_DIRECTEUR_ETUDES]: directeurEtudes.trim(), [CLE_DIRECTEUR_GENERAL]: directeurGeneral.trim(),
+        [CLE_PIED_DOCUMENTS]: piedDocuments.trim(),
       });
       toast({ title: 'École mise à jour' });
     } catch {
@@ -403,6 +416,24 @@ const SettingsPage = () => {
                 <p className="text-xs text-muted-foreground sm:col-span-2 -mt-2">
                   L'autorisation et le RC figurent au pied des documents officiels (attestations, diplômes).
                 </p>
+                <div className="space-y-1.5">
+                  <Label>Directeur des études <span className="font-normal text-muted-foreground">(facultatif)</span></Label>
+                  <Input value={directeurEtudes} onChange={e => setDirecteurEtudes(e.target.value)} placeholder="Ex : M. Babacar Gueye" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Directeur général <span className="font-normal text-muted-foreground">(facultatif)</span></Label>
+                  <Input value={directeurGeneral} onChange={e => setDirecteurGeneral(e.target.value)} />
+                </div>
+                <div className="space-y-1.5 sm:col-span-2">
+                  <Label>Pied de page des documents <span className="font-normal text-muted-foreground">(facultatif)</span></Label>
+                  <Textarea
+                    rows={3} value={piedDocuments} onChange={e => setPiedDocuments(e.target.value)}
+                    placeholder={"Adresse : …\nE-mail : …  ·  Tél. : …\nBanque : …"}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Imprimé en bas des bulletins et relevés, une ligne par ligne. Les noms des directeurs signent les bulletins.
+                  </p>
+                </div>
               </div>
             </CardContent>
             <CardFooter className="justify-end border-t bg-muted/30 py-4">

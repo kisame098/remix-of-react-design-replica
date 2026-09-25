@@ -5,6 +5,7 @@ import { couleurDominanteDuLogo, paletteDepuis, type Palette } from '@/lib/coule
 import {
   ENCRE, GRIS, dessinerBandeau, dessinerTitre, ecrireAjuste, etiquette, filigrane, guilloche, signatureSenClass,
 } from '@/lib/documentsDesign';
+import { dessinerLogoEcole } from '@/lib/documentsEcole';
 import {
   type DonneesBulletins, type BulletinEleve, type LigneConvocation, type DocumentOfficiel, type TypeDocumentOfficiel,
   numeroDocument, accord, rangOrdinal, titreDiplome, libelleMention, libelleTypeExamen,
@@ -118,94 +119,228 @@ const encadre = (doc: jsPDF, c: Palette, y: number, champs: [string, string | un
   return y + h + 6;
 };
 
-// ─── Bulletin de période ─────────────────────────────────────────────────────
+// ─── En-tête et pied « à la manière de l'école » (bulletin, relevé) ──────────
+// Calqués sur les documents d'IFHO : logo centré, nom de l'école, autorisation
+// et adresse en petit, cadre autour de la page, pied de page libre.
+
+const TRAIT = '#374151';
+
+const cadrePage = (doc: jsPDF, c: Palette) => {
+  doc.setDrawColor(c.fonce);
+  doc.setLineWidth(0.8);
+  doc.rect(6, 6, L - 12, H - 12, 'S');
+};
+
+/** Logo centré, nom de l'école, références ; renvoie le y suivant. */
+const enTeteCentre = (doc: jsPDF, ecole: InfosEcole, c: Palette): number => {
+  filigrane(doc, ecole, L, H, 110, c.fonce);
+  dessinerLogoEcole(doc, ecole, L / 2 - 22, 10, 44, 16, c.fonce);
+  let y = 31;
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(10.5);
+  doc.setTextColor(ENCRE);
+  doc.text(ecole.nom, L / 2, y, { align: 'center' });
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(7.8);
+  for (const ligne of [
+    ecole.autorisation && `N° Aut : ${ecole.autorisation}`,
+    ecole.adresse && `Adresse : ${ecole.adresse}`,
+    [ecole.ninea && `NINEA : ${ecole.ninea}`, ecole.rc && `RC : ${ecole.rc}`].filter(Boolean).join('  ·  '),
+  ].filter((l): l is string => !!l)) {
+    y += 3.9;
+    doc.text(ligne, L / 2, y, { align: 'center' });
+  }
+  return y + 7;
+};
+
+/** Pied de page : le texte libre de l'école (Paramètres), sinon e-mail et téléphone. */
+const piedEcole = (doc: jsPDF, ecole: InfosEcole, c: Palette) => {
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(7.4);
+  doc.setTextColor(ENCRE);
+  const lignes = ecole.piedDePage
+    ? ecole.piedDePage.split('\n').map(l => l.trim()).filter(Boolean).slice(0, 4)
+    : [[ecole.email && `Email : ${ecole.email}`, ecole.telephone && `Tél. : ${ecole.telephone}`].filter(Boolean).join('    ·    ')].filter(Boolean);
+  let y = H - 10 - (lignes.length - 1) * 3.4;
+  for (const l of lignes) { doc.text(l, L / 2, y, { align: 'center' }); y += 3.4; }
+  doc.setFontSize(6);
+  signatureSenClass(doc, c, L - 9, H - 7.4);
+};
+
+/** Texte centré, rétréci plutôt que coupé s'il est trop long. */
+const centreAjuste = (doc: jsPDF, texte: string, y: number, largeur: number, taille: number) => {
+  let t = taille;
+  doc.setFontSize(t);
+  while (doc.getTextWidth(texte) > largeur && t > 7) { t -= 0.25; doc.setFontSize(t); }
+  doc.text(texte, L / 2, y, { align: 'center' });
+};
+
+/** Titre souligné, centré. */
+const titreSouligne = (doc: jsPDF, texte: string, y: number, taille = 12.5) => {
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(taille);
+  doc.setTextColor(ENCRE);
+  doc.text(texte, L / 2, y, { align: 'center' });
+  const w = doc.getTextWidth(texte);
+  doc.setDrawColor(ENCRE);
+  doc.setLineWidth(0.35);
+  doc.line(L / 2 - w / 2, y + 1.1, L / 2 + w / 2, y + 1.1);
+};
+
+/** Une cellule de tableau : cadre fin, fond éventuel, texte centré (ou à gauche). */
+const cellule = (
+  doc: jsPDF, x: number, y: number, w: number, h: number, texte: string,
+  o: { fond?: string; gras?: boolean; taille?: number; gauche?: boolean; couleur?: string } = {},
+) => {
+  if (o.fond) { doc.setFillColor(o.fond); doc.rect(x, y, w, h, 'F'); }
+  doc.setDrawColor(TRAIT);
+  doc.setLineWidth(0.2);
+  doc.rect(x, y, w, h, 'S');
+  if (!texte) return;
+  doc.setFont('helvetica', o.gras ? 'bold' : 'normal');
+  // Le texte entier, jamais coupé : on rétrécit la police jusqu'à ce qu'il tienne dans la case.
+  let taille = o.taille ?? 8.6;
+  doc.setFontSize(taille);
+  let lignes = doc.splitTextToSize(texte, w - 2) as string[];
+  while (taille > 5 && (lignes.length * taille * 0.37 > h - 0.6 || lignes.length > 3)) {
+    taille -= 0.4;
+    doc.setFontSize(taille);
+    lignes = doc.splitTextToSize(texte, w - 2) as string[];
+  }
+  doc.setTextColor(o.couleur ?? ENCRE);
+  const hauteurTexte = lignes.length * taille * 0.36;
+  let yy = y + h / 2 - hauteurTexte / 2 + taille * 0.3;
+  for (const l of lignes) {
+    if (o.gauche) doc.text(l, x + 1.6, yy);
+    else doc.text(l, x + w / 2, yy, { align: 'center' });
+    yy += taille * 0.37;
+  }
+};
+
+// ─── Bulletin de période (format IFHO) ───────────────────────────────────────
 
 const pageBulletin = (doc: jsPDF, d: DonneesBulletins, b: BulletinEleve, c: Palette) => {
-  enTete(doc, d.ecole, c);
-  let y = HAUT_BANDEAU + 14;
-  dessinerTitre(doc, c, 'BULLETIN DE NOTES', M, y, 19, 0.4);
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(10);
-  doc.setTextColor(c.accent);
-  const dates = d.periode.debut || d.periode.fin ? `  (du ${dateCourte(d.periode.debut) || '…'} au ${dateCourte(d.periode.fin) || '…'})` : '';
-  doc.text(`${d.periode.nom}${dates}`, M, y + 10);
-  y += 17;
-
-  y = encadre(doc, c, y, [
-    ['Élève', `${b.eleve.nom} ${b.eleve.prenoms}`],
-    ['Matricule', b.eleve.matricule],
-    ['Formation', `${d.formation} — ${d.niveau}`],
-    ['Promotion', d.promotion],
-  ]);
-
-  // ── Tableau des matières ──
-  const cols = [U - 78, 22, 28, 28];
-  const xs = [M, M + cols[0], M + cols[0] + cols[1], M + cols[0] + cols[1] + cols[2]];
-  doc.setFillColor(c.fonce);
-  doc.rect(M, y, U, 8, 'F');
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(8.6);
-  doc.setTextColor('#FFFFFF');
-  doc.text('MATIÈRE', xs[0] + 3, y + 5.4);
-  doc.text('COEF.', xs[1] + cols[1] / 2, y + 5.4, { align: 'center' });
-  doc.text('MOYENNE /20', xs[2] + cols[2] / 2, y + 5.4, { align: 'center' });
-  doc.text('POINTS', xs[3] + cols[3] / 2, y + 5.4, { align: 'center' });
+  cadrePage(doc, c);
+  let y = enTeteCentre(doc, d.ecole, c);
+  titreSouligne(doc, 'BULLETIN DE COMPOSITION', y);
   y += 8;
-  // Un programme long resserre ses lignes : le bulletin tient toujours sur UNE page.
-  const hLigne = Math.min(7.4, 118 / Math.max(1, b.lignes.length));
-  const taille = Math.min(9.6, hLigne * 1.3);
-  const base = hLigne * 0.68;
-  b.lignes.forEach((l, i) => {
-    if (i % 2 === 1) { doc.setFillColor(c.pale); doc.rect(M, y, U, hLigne, 'F'); }
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(taille);
-    doc.setTextColor(ENCRE);
-    ecrireAjuste(doc, l.stage ? `${l.matiere} (stage)` : l.matiere, xs[0] + 3, y + base, cols[0] - 6, { taille, tailleMin: Math.min(7, taille) });
-    doc.text(String(l.coefficient).replace('.', ','), xs[1] + cols[1] / 2, y + base, { align: 'center' });
-    doc.setFont('helvetica', 'bold');
-    doc.setTextColor(l.moyenne == null ? GRIS : l.moyenne >= 10 ? '#15803D' : '#B91C1C');
-    doc.text(note(l.moyenne), xs[2] + cols[2] / 2, y + base, { align: 'center' });
-    doc.setFont('helvetica', 'normal');
-    doc.setTextColor(ENCRE);
-    doc.text(l.moyenne == null ? '—' : note(l.moyenne * l.coefficient), xs[3] + cols[3] / 2, y + base, { align: 'center' });
-    y += hLigne;
-  });
-  doc.setDrawColor(c.trait);
-  doc.setLineWidth(0.3);
-  doc.line(M, y, L - M, y);
+  titreSouligne(doc, `${d.periode.nom.toUpperCase()}${d.anneeScolaire ? ` ${d.anneeScolaire.replace('-', ' - ')}` : ''}`, y, 11);
   y += 6;
 
-  // ── Résultat ──
-  doc.setFillColor(c.pale);
-  doc.setDrawColor(c.accent);
+  // ── Identité ──
+  const MX = 12;
+  const UX = L - 2 * MX;
+  doc.setDrawColor(ENCRE);
   doc.setLineWidth(0.4);
-  doc.roundedRect(M, y, U, 22, 2, 2, 'FD');
-  const quart = U / 4;
-  const bloc = (i: number, nom: string, valeur: string, fort = false) => {
-    const cx = M + quart * i + quart / 2;
-    etiquette(doc, nom, cx, y + 7, GRIS, 'center');
-    doc.setFont(fort ? 'times' : 'helvetica', 'bold');
-    doc.setFontSize(fort ? 17 : 12);
-    doc.setTextColor(fort ? c.fonce : ENCRE);
-    doc.text(valeur, cx, y + 16, { align: 'center' });
+  doc.roundedRect(MX + 2, y, UX - 4, 17, 3, 3, 'S');
+  const champ = (nom: string, valeur: string, x: number, yy: number) => {
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.setTextColor(ENCRE);
+    doc.text(`${nom} : `, x, yy);
+    const w = doc.getTextWidth(`${nom} : `);
+    doc.setFont('helvetica', 'normal');
+    ecrireAjuste(doc, valeur || '—', x + w, yy, 92 - w, { taille: 10, tailleMin: 7 });
   };
-  bloc(0, 'Moyenne générale', b.moyenneGenerale == null ? '—' : `${note(b.moyenneGenerale)} /20`, true);
-  bloc(1, 'Rang', b.rang == null ? '—' : `${rangOrdinal(b.rang)} / ${d.effectifClasse}`);
-  bloc(2, 'Moyenne de la promotion', d.moyennePromotion == null ? '—' : note(d.moyennePromotion));
-  bloc(3, 'Coefficients notés', String(b.totalCoefficients).replace('.', ','));
-  y += 28;
+  const e = b.eleve;
+  champ('Prénom(s)', e.prenoms, MX + 7, y + 7);
+  champ('Nom', e.nom.toUpperCase(), MX + 7, y + 13.2);
+  const naissance = e.dateNaissance ? `${dateCourte(e.dateNaissance)}${e.lieuNaissance ? ` à ${e.lieuNaissance}` : ''}` : '';
+  champ('Né(e) le', naissance, MX + 98, y + 7);
+  champ('Classe', `${d.niveau}  ·  Matricule ${e.matricule}`, MX + 98, y + 13.2);
+  y += 21;
 
-  doc.setFont('helvetica', 'italic');
-  doc.setFontSize(7.8);
-  doc.setTextColor(GRIS);
-  const rappel = doc.splitTextToSize(
-    `Moyenne de chaque matière : ${d.formule}. Une matière (stage) prend la note du stage. Une note manquante n'est jamais comptée 0 : elle n'entre pas dans la moyenne.`,
-    U,
-  ) as string[];
-  rappel.forEach(l => { doc.text(l, M, y); y += 3.8; });
+  // ── Tableau ──
+  const fixe = { moy: 16, coef: 11, pts: 17, appr: 24 };
+  const nbColonnesNotes = d.colonnes.reduce((t, col) => t + (col.nbNotes > 1 ? col.nbNotes + 1 : 1), 0);
+  const wNote = Math.min(15, (UX - 42 - fixe.moy - fixe.coef - fixe.pts - fixe.appr) / Math.max(1, nbColonnesNotes));
+  const wMat = UX - nbColonnesNotes * wNote - fixe.moy - fixe.coef - fixe.pts - fixe.appr;
+  const fondEntete = c.pale;
+  const hEntete = 12;
+  let x = MX;
+  cellule(doc, x, y, wMat, hEntete, 'MATIÈRES', { fond: fondEntete, gras: true }); x += wMat;
+  for (const col of d.colonnes) {
+    if (col.nbNotes > 1) {
+      const wGroupe = (col.nbNotes + 1) * wNote;
+      // Comme IFHO : « NOTES » au-dessus des devoirs quand une seule catégorie a plusieurs notes.
+      const groupes = d.colonnes.filter(k => k.nbNotes > 1).length;
+      cellule(doc, x, y, wGroupe, hEntete / 2, groupes === 1 ? 'NOTES' : col.nom.toUpperCase(), { fond: fondEntete, gras: true, taille: 7.6 });
+      for (let i = 1; i <= col.nbNotes; i++) cellule(doc, x + (i - 1) * wNote, y + hEntete / 2, wNote, hEntete / 2, `${col.abrege} ${i}`, { fond: fondEntete, gras: true, taille: 7.4 });
+      cellule(doc, x + col.nbNotes * wNote, y + hEntete / 2, wNote, hEntete / 2, `MOY ${col.abrege}`, { fond: fondEntete, gras: true, taille: 6.8 });
+      x += wGroupe;
+    } else {
+      cellule(doc, x, y, wNote, hEntete, col.abrege, { fond: fondEntete, gras: true, taille: 7.8 });
+      x += wNote;
+    }
+  }
+  cellule(doc, x, y, fixe.moy, hEntete, 'MOY GEN', { fond: fondEntete, gras: true, taille: 7.8 }); x += fixe.moy;
+  cellule(doc, x, y, fixe.coef, hEntete, 'COEF', { fond: fondEntete, gras: true, taille: 7.8 }); x += fixe.coef;
+  cellule(doc, x, y, fixe.pts, hEntete, 'MOY × COEF', { fond: fondEntete, gras: true, taille: 7.4 }); x += fixe.pts;
+  cellule(doc, x, y, fixe.appr, hEntete, 'APPRÉCIATIONS', { fond: fondEntete, gras: true, taille: 7.4 });
+  y += hEntete;
 
-  signatureDirection(doc, d.ecole, c, Math.min(Math.max(y + 8, 222), 244));
-  piedDePage(doc, d.ecole, c, `Bulletin de ${b.eleve.nom} ${b.eleve.prenoms} — ${d.periode.nom}`);
+  // Un programme long resserre ses lignes : le bulletin tient sur UNE page.
+  const hLigne = Math.min(7.2, 118 / Math.max(1, b.lignes.length + 1));
+  const taille = Math.min(8.6, hLigne * 1.25);
+  b.lignes.forEach((l, i) => {
+    const fond = i % 2 === 1 ? c.pale : undefined;
+    x = MX;
+    cellule(doc, x, y, wMat, hLigne, l.matiere.toUpperCase(), { fond, taille: Math.min(taille, 8) }); x += wMat;
+    if (l.stage) {
+      const w = nbColonnesNotes * wNote;
+      cellule(doc, x, y, w, hLigne, l.moyenne === null ? '' : 'note du stage', { fond, taille: taille - 1, couleur: GRIS });
+      x += w;
+    } else {
+      l.cellules.forEach((cel, k) => {
+        const col = d.colonnes[k];
+        const n = col.nbNotes;
+        for (let j = 0; j < n; j++) cellule(doc, x + j * wNote, y, wNote, hLigne, cel.notes[j] ?? '', { fond, taille });
+        if (n > 1) cellule(doc, x + n * wNote, y, wNote, hLigne, cel.moyenne === null ? '' : note(cel.moyenne), { fond, taille });
+        x += (n > 1 ? n + 1 : 1) * wNote;
+      });
+    }
+    cellule(doc, x, y, fixe.moy, hLigne, l.moyenne === null ? '' : note(l.moyenne), { fond, gras: true, taille }); x += fixe.moy;
+    cellule(doc, x, y, fixe.coef, hLigne, String(l.coefficient).replace('.', ','), { fond, gras: true, taille }); x += fixe.coef;
+    cellule(doc, x, y, fixe.pts, hLigne, l.moyenne === null ? '' : note(l.moyenne * l.coefficient), { fond, taille }); x += fixe.pts;
+    cellule(doc, x, y, fixe.appr, hLigne, l.appreciation, { fond, taille });
+    y += hLigne;
+  });
+  // Total
+  x = MX;
+  cellule(doc, x, y, wMat, hLigne, 'TOTAL', { gras: true, taille }); x += wMat;
+  cellule(doc, x, y, nbColonnesNotes * wNote + fixe.moy, hLigne, '', {}); x += nbColonnesNotes * wNote + fixe.moy;
+  cellule(doc, x, y, fixe.coef, hLigne, String(b.totalCoefficients).replace('.', ','), { gras: true, taille }); x += fixe.coef;
+  cellule(doc, x, y, fixe.pts, hLigne, note(b.totalPoints), { gras: true, taille }); x += fixe.pts;
+  cellule(doc, x, y, fixe.appr, hLigne, '', {});
+  y += hLigne;
+
+  // Moyenne de la période + appréciations du conseil de classe (à la main)
+  const hBloc = 16;
+  cellule(doc, MX, y, wMat, hBloc, `Moyenne ${d.periode.nom}`, { gras: true, taille: 9 });
+  cellule(doc, MX + wMat, y, 26, hBloc, b.moyenneGenerale === null ? '—' : note(b.moyenneGenerale), { gras: true, taille: 11 });
+  cellule(doc, MX + wMat + 26, y, 34, hBloc, 'Appréciations du conseil de classe', { gras: true, taille: 8.2 });
+  cellule(doc, MX + wMat + 60, y, UX - wMat - 60, hBloc, '', {});
+  y += hBloc + 5;
+
+  // Rappel des périodes et moyenne générale (dès la 2e période)
+  if (b.recapitulatif.length > 1) {
+    for (const r of b.recapitulatif) {
+      cellule(doc, MX, y, 46, 5.6, `Moyenne ${r.periode}`, { gras: true, taille: 8.6 });
+      cellule(doc, MX + 46, y, 28, 5.6, r.moyenne === null ? '—' : note(r.moyenne), { gras: true, taille: 8.6 });
+      y += 5.6;
+    }
+    cellule(doc, MX, y, 46, 5.6, 'Moyenne Générale', { gras: true, taille: 8.6 });
+    cellule(doc, MX + 46, y, 28, 5.6, b.moyenneAnnuelle === null ? '—' : note(b.moyenneAnnuelle), { gras: true, taille: 8.6 });
+    y += 5.6;
+  }
+
+  // Signatures
+  const ySign = Math.min(Math.max(y + 6, 228), 250);
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(ENCRE);
+  doc.text('LE DIRECTEUR DES ÉTUDES', MX + 30, ySign, { align: 'center' });
+  doc.text('LE DIRECTEUR GÉNÉRAL', L - MX - 30, ySign, { align: 'center' });
+  if (d.ecole.directeurEtudes) doc.text(d.ecole.directeurEtudes, MX + 30, ySign + 24, { align: 'center' });
+  if (d.ecole.directeurGeneral) doc.text(d.ecole.directeurGeneral, L - MX - 30, ySign + 24, { align: 'center' });
+
+  piedEcole(doc, d.ecole, c);
 };
 
 /** Un bulletin par élève, chacun sur sa page, dans un seul PDF. */
@@ -215,6 +350,171 @@ export async function genererBulletinsPdf(d: DonneesBulletins): Promise<jsPDF> {
   d.eleves.forEach((b, i) => {
     if (i > 0) doc.addPage('a4', 'portrait');
     pageBulletin(doc, d, b, c);
+  });
+  return doc;
+}
+
+// ─── Relevé de notes d'examen (format des relevés CAP / examen blanc) ────────
+
+export interface TourReleve {
+  nom: string;
+  lignes: { discipline: string; coefficient: number; note: string; points: string; ne?: string }[];
+  total: number;
+  totalMax: number;
+  totalDemande: number;
+  moyenne: number | null;
+  /** Avant le dernier tour : ADMISSIBLE / NON ADMISSIBLE ; `undefined` pour le dernier. */
+  decision?: string;
+}
+
+export interface CandidatReleve {
+  nom: string; prenoms: string; matricule: string; dateNaissance?: string; lieuNaissance?: string;
+  tours: TourReleve[];
+  totalGeneral: number;
+  totalGeneralMax: number;
+  totalGeneralDemande: number;
+  moyenneGenerale: number | null;
+  decision: string;
+  mention?: string;
+}
+
+export interface DonneesReleves {
+  ecole: InfosEcole;
+  /** « EXAMEN BLANC » ou « EXAMEN ». */
+  typeLibelle: string;
+  diplome: string;
+  option?: string;
+  session?: string;
+  date?: string;
+  centre: string;
+  presidentJury?: string;
+  /** Une colonne NE si au moins une épreuve a une note éliminatoire. */
+  avecNE: boolean;
+  candidats: CandidatReleve[];
+}
+
+const titreTour = (nom: string) => (/tour/i.test(nom) ? `ÉPREUVES DU ${nom.toUpperCase()}` : `ÉPREUVES : ${nom.toUpperCase()}`);
+const nombre = (n: number) => (Math.round(n * 100) / 100).toString().replace('.', ',');
+
+/** Un tableau de tour ; renvoie le y du bas. */
+const tableauTour = (doc: jsPDF, c: Palette, t: TourReleve, x: number, y: number, w: number, avecNE: boolean, hLigne: number): number => {
+  const wCoef = 11, wNote = 12, wPts = 13, wNE = avecNE ? 10 : 0;
+  const wDisc = w - wCoef - wNote - wPts - wNE;
+  cellule(doc, x, y, w, 7, titreTour(t.nom), { fond: c.pale, gras: true, taille: 8.6 });
+  y += 7;
+  let xx = x;
+  const entete = [['DISCIPLINE', wDisc], ['COEF', wCoef], ['NOTE', wNote], ['POINTS', wPts], ...(avecNE ? [['NE', wNE]] : [])] as [string, number][];
+  for (const [lib, lw] of entete) { cellule(doc, xx, y, lw, 6, lib, { gras: true, taille: 7.4 }); xx += lw; }
+  y += 6;
+  for (const l of t.lignes) {
+    xx = x;
+    const valeurs: [string, number, boolean][] = [[l.discipline, wDisc, true], [String(l.coefficient).replace('.', ','), wCoef, false], [l.note, wNote, false], [l.points, wPts, false], ...(avecNE ? [[l.ne ?? '', wNE, false] as [string, number, boolean]] : [])];
+    for (const [v, lw, gauche] of valeurs) { cellule(doc, xx, y, lw, hLigne, v, { taille: 8.2, gauche }); xx += lw; }
+    y += hLigne;
+  }
+  return y;
+};
+
+const lignesSynthese = (doc: jsPDF, x: number, y: number, w: number, lignes: [string, string][]): number => {
+  for (const [lib, val] of lignes) {
+    cellule(doc, x, y, w * 0.58, 6.2, lib, { gras: true, taille: 8.2 });
+    cellule(doc, x + w * 0.58, y, w * 0.42, 6.2, val, { gras: true, taille: 8.6 });
+    y += 6.2;
+  }
+  return y;
+};
+
+const pageReleve = (doc: jsPDF, d: DonneesReleves, k: CandidatReleve, c: Palette) => {
+  cadrePage(doc, c);
+  let y = enTeteCentre(doc, d.ecole, c);
+  const MX = 12;
+  const UX = L - 2 * MX;
+
+  // Titre encadré
+  doc.setDrawColor(c.accent);
+  doc.setLineWidth(0.5);
+  doc.roundedRect(MX + 14, y, UX - 28, 23, 4, 4, 'S');
+  titreSouligne(doc, 'RELEVÉ DE NOTES', y + 7, 12.5);
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(10.5); doc.setTextColor(ENCRE);
+  centreAjuste(doc, `${d.typeLibelle} : ${d.diplome}`, y + 14, UX - 36, 10.5);
+  const ligne2 = [d.option && `Option ${d.option}`, d.session].filter(Boolean).join(' ');
+  if (ligne2) centreAjuste(doc, ligne2, y + 19.5, UX - 36, 10);
+  y += 31;
+
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.setTextColor(ENCRE);
+  doc.text('IDENTIFICATION DU CANDIDAT :', MX + 2, y);
+  if (d.date) doc.text(`DATE : ${dateCourte(d.date)}`, L - MX - 2, y, { align: 'right' });
+  y += 4;
+
+  // Identité
+  const champs: [string, string][] = [
+    ['Matricule', k.matricule], ['Prénom(s)', k.prenoms], ['Nom', k.nom.toUpperCase()],
+    ['Date et lieu de naissance', k.dateNaissance ? `${dateCourte(k.dateNaissance)}${k.lieuNaissance ? ` à ${k.lieuNaissance}` : ''}` : '—'],
+    ["Centre d'examen", d.centre],
+  ];
+  doc.setFillColor(c.pale);
+  doc.setDrawColor(TRAIT); doc.setLineWidth(0.2);
+  doc.rect(MX + 2, y, UX - 4, champs.length * 6.4 + 3, 'FD');
+  champs.forEach(([lib, val], i) => {
+    const yy = y + 6 + i * 6.4;
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(9.4); doc.setTextColor(ENCRE);
+    doc.text(lib, MX + 7, yy);
+    doc.setFont('helvetica', 'normal');
+    ecrireAjuste(doc, val || '—', MX + 70, yy, UX - 76, { taille: 9.4, tailleMin: 7 });
+  });
+  y += champs.length * 6.4 + 9;
+
+  // Tours : deux côte à côte (comme les relevés d'IFHO), sinon l'un sous l'autre.
+  const lignesMax = Math.max(...k.tours.map(t => t.lignes.length));
+  const hLigne = Math.min(6, 70 / Math.max(1, lignesMax));
+  const syntheseTour = (t: TourReleve): [string, string][] => [
+    [`Total ${t.nom}`, `${nombre(t.total)} / ${nombre(t.totalMax)}`],
+    ['Total demandé', nombre(t.totalDemande)],
+    [`Moyenne ${t.nom}`, t.moyenne === null ? '—' : note(t.moyenne)],
+    ...(t.decision ? [['Décision du jury', t.decision] as [string, string]] : []),
+  ];
+  const syntheseFinale: [string, string][] = [
+    ...(k.tours.length > 1 ? [['Total général', `${nombre(k.totalGeneral)} / ${nombre(k.totalGeneralMax)}`] as [string, string], ['Total général demandé', nombre(k.totalGeneralDemande)] as [string, string]] : []),
+    [k.tours.length > 1 ? 'Moyenne générale' : 'Moyenne', k.moyenneGenerale === null ? '—' : note(k.moyenneGenerale)],
+    ['Décision du jury', k.decision],
+    ['Mention', k.mention ?? ''],
+  ];
+
+  if (k.tours.length === 2) {
+    const w = (UX - 6) / 2;
+    const [t1, t2] = k.tours;
+    const yBas1 = tableauTour(doc, c, t1, MX, y, w, d.avecNE, hLigne);
+    const yBas2 = tableauTour(doc, c, t2, MX + w + 6, y, w, d.avecNE, hLigne);
+    let yb = Math.max(yBas1, yBas2) + 3;
+    lignesSynthese(doc, MX, yb, w, syntheseTour(t1));
+    yb = lignesSynthese(doc, MX + w + 6, yb, w, [...syntheseTour(t2).slice(0, 1), ...syntheseFinale]);
+    y = yb;
+  } else {
+    for (const [i, t] of k.tours.entries()) {
+      y = tableauTour(doc, c, t, MX, y, UX, d.avecNE, hLigne) + 2;
+      if (i < k.tours.length - 1) y = lignesSynthese(doc, MX + UX / 2, y, UX / 2, syntheseTour(t)) + 4;
+    }
+    y = lignesSynthese(doc, MX + UX / 2, y, UX / 2, k.tours.length > 1 ? [...syntheseTour(k.tours[k.tours.length - 1]).slice(0, 1), ...syntheseFinale] : syntheseFinale);
+  }
+
+  // Président du jury
+  const ySign = Math.min(y + 12, 250);
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.setTextColor(ENCRE);
+  doc.text('Le Président du Jury', L - MX - 34, ySign, { align: 'center' });
+  const w = doc.getTextWidth('Le Président du Jury');
+  doc.setLineWidth(0.3); doc.line(L - MX - 34 - w / 2, ySign + 1, L - MX - 34 + w / 2, ySign + 1);
+  if (d.presidentJury) { doc.setFont('helvetica', 'normal'); doc.text(d.presidentJury, L - MX - 34, ySign + 22, { align: 'center' }); }
+
+  piedEcole(doc, d.ecole, c);
+};
+
+/** Un relevé par candidat, chacun sur sa page, dans un seul PDF. */
+export async function genererRelevesPdf(d: DonneesReleves): Promise<jsPDF> {
+  const c = await palette(d.ecole);
+  const doc = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' });
+  d.candidats.forEach((k, i) => {
+    if (i > 0) doc.addPage('a4', 'portrait');
+    pageReleve(doc, d, k, c);
   });
   return doc;
 }

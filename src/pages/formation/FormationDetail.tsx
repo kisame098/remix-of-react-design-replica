@@ -300,7 +300,7 @@ const FormationDetail = () => {
                 </p>
                 <Button size="sm" variant="outline" className="gap-2" disabled={isApplyingDefaut} onClick={handleAppliquerDefaut}>
                   {isApplyingDefaut && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-                  Utiliser la formule courante (contrôle continu 30 % · TP 30 % · examen blanc 10 % · examen final 30 %)
+                  Utiliser la formule du bulletin (devoirs 50 % · composition 50 %)
                 </Button>
               </div>
             ) : (

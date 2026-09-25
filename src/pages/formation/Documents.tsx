@@ -222,7 +222,18 @@ const DocumentsEleve = ({ eleveId, promotionId, estDirecteur, logo, donnees, onR
             </div>
             {examensCandidat.map(x => (
               <div key={x.id} className="flex items-center justify-between gap-3 flex-wrap border-t pt-3">
-                <div className="text-sm"><span className="font-medium">Convocation</span> <span className="text-muted-foreground">— {LIBELLES_TYPE_EXAMEN[x.type]} « {x.name} »</span></div>
+                <div className="text-sm"><span className="font-medium">{LIBELLES_TYPE_EXAMEN[x.type]}</span> <span className="text-muted-foreground">« {x.name} »</span></div>
+                <div className="flex items-center gap-2">
+                <BoutonDocument
+                  titre={`Relevé de notes — ${x.name}`} nomFichier={`Releve_${nom}`} className="gap-1.5"
+                  fabriquer={async () => {
+                    const d = donnees.releves(x.id, [eleveId]);
+                    if (!d) throw new Error('Examen introuvable');
+                    return (await pdf()).genererRelevesPdf(d);
+                  }}
+                >
+                  <Printer className="h-3.5 w-3.5" />Relevé de notes
+                </BoutonDocument>
                 <BoutonDocument
                   titre={`Convocation — ${x.name}`} nomFichier={`Convocation_${nom}`} className="gap-1.5"
                   fabriquer={async () => {
@@ -233,6 +244,7 @@ const DocumentsEleve = ({ eleveId, promotionId, estDirecteur, logo, donnees, onR
                 >
                   <Printer className="h-3.5 w-3.5" />Convocation
                 </BoutonDocument>
+                </div>
               </div>
             ))}
             {stages.map(s => {

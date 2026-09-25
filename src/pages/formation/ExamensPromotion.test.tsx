@@ -127,6 +127,16 @@ describe('ExamensPromotion — la grille d\'un examen', () => {
     expect(screen.getByText('1 refusé')).toBeInTheDocument();
   });
 
+  it('deux tours : moyenne exigée au 1er tour non atteinte → « Non admissible », Ajourné proposé', async () => {
+    ex.tours = [{ ...ex.tours[0], moyenneExigee: 14 }, ex.tours[1]];   // Diop a 12 à l'écrit
+    const user = userEvent.setup();
+    rendre();
+    await user.click(screen.getByRole('button', { name: /Résultats/ }));
+    expect(screen.getByText('moy. exigée 14')).toBeInTheDocument();
+    expect(within(ligne('Diop')).getByText('Non admissible')).toBeInTheDocument();
+    expect(within(ligne('Diop')).getByText('Ajourné (proposé)')).toBeInTheDocument();
+  });
+
   it('le directeur ajoute une épreuve à la matière : nom et coefficient repris du programme', async () => {
     const user = userEvent.setup();
     rendre();

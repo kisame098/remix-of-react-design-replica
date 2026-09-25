@@ -17,7 +17,7 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from '@/hooks/use-toast';
 import {
-  triExamens, triTours, triEpreuves, epreuvesDepuisProgramme, etatCandidat, propositionJury, decisionRetenue, mentionRetenue,
+  triExamens, triTours, triEpreuves, epreuvesDepuisProgramme, bilanCandidat, decisionRetenue, mentionRetenue,
   bilanExamen, analyserSaisieNoteExamen, peutGererMatieres, LIBELLES_TYPE_EXAMEN, triPeriodes, type Decision, type StatutNoteExamen,
 } from '@/lib/formationPro';
 import { GrilleExamen } from '@/components/formation/GrilleExamen';
@@ -96,11 +96,10 @@ const ExamensPromotion = () => {
 
   // Ce que la grille affiche : sert au bilan et au verrouillage.
   const decisions = useMemo(() => candidats.map(s => {
-    const etat = etatCandidat(epreuvesExamen, ex.notes, s.id);
-    const proposition = propositionJury(etat, examen?.seuilAdmission ?? 10);
+    const { etat, proposition } = bilanCandidat(tours, epreuvesExamen, ex.notes, s.id, examen?.seuilAdmission ?? 10);
     const resultat = ex.resultats.find(r => examen && r.examenId === examen.id && r.studentEnrollmentId === s.id);
     return { eleve: s, etat, decision: decisionRetenue(resultat, proposition), mention: mentionRetenue(resultat, proposition) };
-  }), [candidats, epreuvesExamen, ex.notes, ex.resultats, examen]);
+  }), [candidats, tours, epreuvesExamen, ex.notes, ex.resultats, examen]);
   const bilan = bilanExamen(decisions.map(d => d.decision));
 
   // ── Dialogues ────────────────────────────────────────────────────────────
@@ -413,9 +412,26 @@ const ExamensPromotion = () => {
                 </Card>
               ) : vueEffective.kind === 'resultats' ? (
                 <>
-                  <h2 className="text-xl font-bold flex items-center gap-2"><Trophy className="h-5 w-5 text-primary" />Résultats — {examen.name}</h2>
+                  <div className="flex items-center justify-between gap-3 flex-wrap">
+                    <h2 className="text-xl font-bold flex items-center gap-2"><Trophy className="h-5 w-5 text-primary" />Résultats — {examen.name}</h2>
+                    <BoutonDocument
+                      titre={`Relevés de notes — ${examen.name}`}
+                      description="Un relevé par candidat : épreuves de chaque tour, totaux, total demandé, décision et mention."
+                      nomFichier={`Releves_${examen.name}`}
+                      disabled={candidats.length === 0}
+                      fabriquer={async () => {
+                        const d = documents.releves(examen.id);
+                        if (!d) throw new Error('Examen introuvable');
+                        const { genererRelevesPdf } = await import('@/lib/documentsFormationProPdf');
+                        return genererRelevesPdf(d);
+                      }}
+                      className="gap-1.5"
+                    >
+                      <FileText className="h-3.5 w-3.5" />Relevés de notes
+                    </BoutonDocument>
+                  </div>
                   <ResultatsExamen
-                    examen={examen} epreuves={epreuvesExamen} candidats={candidats}
+                    examen={examen} epreuves={epreuvesExamen} tours={tours} candidats={candidats}
                     matieres={matieresNiveau.filter(m => epreuvesExamen.some(e => e.niveauMatiereId === m.id))}
                     onChoisirMatiere={id => setVue(id ? { kind: 'matiere', id } : { kind: 'autres' })}
                   />

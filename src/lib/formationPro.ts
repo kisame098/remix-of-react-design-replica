@@ -27,6 +27,10 @@ export interface Formation {
   duration?: string;
   entryLevel?: string;
   description?: string;
+  /** Intitulé complet du diplôme, pour le titre des relevés (« Brevet d'Étude Professionnelle (BEP) »). */
+  intituleDiplome?: string;
+  /** Option du diplôme (« RESTAURATION »). */
+  optionDiplome?: string;
   active: boolean;
   ordering: number;
   createdAt: string;
@@ -383,16 +387,15 @@ export const pourcentageValide = (v: number): boolean => Number.isFinite(v) && v
 
 /**
  * Formule par défaut appliquée à toute nouvelle formation — jamais un barème
- * vide à définir de zéro. Reprend la répartition la plus courante en
- * hôtellerie-restauration (contrôle continu / TP / examen blanc / examen
- * final) ; le directeur la personnalise ensuite si besoin, formation par
- * formation — jamais un barème partagé entre formations.
+ * vide à définir de zéro. C'est celle du bulletin de composition d'IFHO
+ * (second semestre 2023-2024) : moyenne de la matière = (moyenne des devoirs
+ * + composition) / 2. Les examens ont leur propre relevé et n'entrent pas
+ * dans le bulletin de semestre. Le directeur la personnalise ensuite si
+ * besoin, formation par formation — jamais un barème partagé entre formations.
  */
 export const DEFAUT_BAREME_CATEGORIES: readonly { name: string; pourcentage: number; sourceExamen?: TypeExamen }[] = [
-  { name: 'Contrôle continu', pourcentage: 30 },
-  { name: 'TP', pourcentage: 30 },
-  { name: 'Examen blanc', pourcentage: 10, sourceExamen: 'blanc' },
-  { name: 'Examen final', pourcentage: 30, sourceExamen: 'officiel' },
+  { name: 'Devoirs', pourcentage: 50 },
+  { name: 'Composition', pourcentage: 50 },
 ];
 
 export const sommeBareme = (categories: BaremeCategorie[]): number =>
@@ -680,6 +683,10 @@ export interface Examen {
   dateFin?: string;
   verrouille: boolean;
   verrouilleLe?: string;
+  /** Centre d'examen imprimé sur le relevé (vide : le nom de l'école). */
+  centre?: string;
+  /** Nom du président du jury, sous sa signature. */
+  presidentJury?: string;
   createdAt: string;
 }
 
@@ -688,6 +695,11 @@ export interface ExamenTour {
   examenId: string;
   name: string;
   ordering: number;
+  /**
+   * Moyenne à atteindre dans CE tour (relevé CAP : 12 au 1er tour, 10 au 2e).
+   * `undefined` : le seuil d'admission de l'examen.
+   */
+  moyenneExigee?: number;
 }
 
 export interface ExamenEpreuve {
@@ -1093,4 +1105,98 @@ export const recapitulatifComplet = (p: {
     p.eleveIds, p.matieres, p.categories, f.evaluations.filter(e => e.periodeId === p.periodeId), f.notes,
     notesImposeesParStages(p.matieres, p.stages.filter(s => s.promotionId === p.promotionId), p.periodeId),
   );
+};
+
+// ─── Examens à plusieurs tours : admissibilité, puis admission ──────────────
+// Lu sur les relevés d'IFHO (CAP DECPC 2022) :
+//   1er tour : total 166 ≥ total demandé 156 (13 coef. × 12)  → ADMISSIBLE
+//   final    : total général 249 ≥ total général demandé 226
+//              (156 + 7 coef. × 10)                             → ADMIS
+//   moyenne générale 249 / 20 coef. = 12,45 → mention Assez bien
+// Chaque tour a SA moyenne exigée ; les points sont les notes ramenées sur 20
+// multipliées par le coefficient ; une note sous la note éliminatoire (NE) de
+// son épreuve refuse le candidat.
+
+export interface BilanTour {
+  tour: ExamenTour;
+  epreuves: ExamenEpreuve[];
+  etat: EtatCandidat;
+  /** Points obtenus : Σ (note sur 20 × coefficient) des épreuves notées. */
+  total: number;
+  /** Σ des coefficients de TOUTES les épreuves du tour. */
+  totalCoefficients: number;
+  moyenneExigee: number;
+  /** Σ coefficients × moyenne exigée. */
+  totalDemande: number;
+  /** Toutes les épreuves du tour ont une note (ni vide, ni absence). */
+  complet: boolean;
+  /** `null` tant que le tour n'est pas complet. */
+  atteint: boolean | null;
+}
+
+export interface BilanCandidat {
+  /** L'état sur toutes les épreuves de l'examen (moyenne générale, éliminatoires…). */
+  etat: EtatCandidat;
+  tours: BilanTour[];
+  totalGeneral: number;
+  totalGeneralDemande: number;
+  proposition: Proposition;
+}
+
+const pointsEpreuves = (epreuves: ExamenEpreuve[], notes: ExamenNote[], sid: string): number =>
+  epreuves.reduce((t, ep) => {
+    const n = notes.find(x => x.epreuveId === ep.id && x.studentEnrollmentId === sid);
+    return n?.statut === 'note' && n.valeur != null ? t + convertirSur20(n.valeur, ep.bareme) * ep.coefficient : t;
+  }, 0);
+
+export const bilanCandidat = (
+  tours: ExamenTour[], epreuves: ExamenEpreuve[], notes: ExamenNote[], studentEnrollmentId: string, seuilExamen: number,
+): BilanCandidat => {
+  const bilans: BilanTour[] = triTours(tours)
+    .map(tour => {
+      const eps = triEpreuves(epreuves.filter(e => e.tourId === tour.id));
+      const etat = etatCandidat(eps, notes, studentEnrollmentId);
+      const totalCoefficients = eps.reduce((t, e) => t + e.coefficient, 0);
+      const moyenneExigee = tour.moyenneExigee ?? seuilExamen;
+      const total = pointsEpreuves(eps, notes, studentEnrollmentId);
+      const complet = etat.epreuvesManquantes.length === 0 && etat.epreuvesAbsent.length === 0;
+      const totalDemande = totalCoefficients * moyenneExigee;
+      return { tour, epreuves: eps, etat, total, totalCoefficients, moyenneExigee, totalDemande, complet, atteint: complet ? total >= totalDemande - 1e-9 : null };
+    })
+    .filter(b => b.epreuves.length > 0);
+
+  const toutes = bilans.flatMap(b => b.epreuves);
+  const etat = etatCandidat(toutes, notes, studentEnrollmentId);
+  const totalGeneral = bilans.reduce((t, b) => t + b.total, 0);
+  const totalGeneralDemande = bilans.reduce((t, b) => t + b.totalDemande, 0);
+
+  const proposition = ((): Proposition => {
+    if (etat.epreuvesEliminatoires.length > 0) return { decision: 'refuse', mention: null, motif: 'Note éliminatoire' };
+    // Les tours avant le dernier décident de l'admissibilité, dans l'ordre.
+    for (const b of bilans.slice(0, -1)) {
+      if (!b.complet) return propositionIncomplete(b);
+      if (!b.atteint) return { decision: 'ajourne', mention: null, motif: `Non admissible (${b.tour.name})` };
+    }
+    const dernier = bilans[bilans.length - 1];
+    if (!dernier) return { decision: null, mention: null };
+    if (!dernier.complet) {
+      const r = propositionIncomplete(dernier);
+      return bilans.length > 1 && dernier.etat.epreuvesManquantes.length === dernier.epreuves.length
+        ? { ...r, motif: `Admissible — ${dernier.tour.name} à saisir` } : r;
+    }
+    return totalGeneral >= totalGeneralDemande - 1e-9
+      ? { decision: 'admis', mention: mentionPourMoyenne(etat.moyenne) }
+      : { decision: 'ajourne', mention: null };
+  })();
+
+  return { etat, tours: bilans, totalGeneral, totalGeneralDemande, proposition };
+};
+
+const propositionIncomplete = (b: BilanTour): Proposition => {
+  if (b.etat.epreuvesManquantes.length > 0) {
+    const n = b.etat.epreuvesManquantes.length;
+    return { decision: null, mention: null, motif: `${n} épreuve${n > 1 ? 's' : ''} sans note (${b.tour.name})` };
+  }
+  const n = b.etat.epreuvesAbsent.length;
+  return { decision: null, mention: null, motif: `Absent à ${n} épreuve${n > 1 ? 's' : ''} (${b.tour.name}) — au jury de décider` };
 };

@@ -27,6 +27,7 @@ const sb = supabase as any;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const mapFormation = (r: any): Formation => ({
   id: r.id, name: r.name, diplomaType: r.diploma_type ?? undefined, duration: r.duration ?? undefined,
+  intituleDiplome: r.intitule_diplome ?? undefined, optionDiplome: r.option_diplome ?? undefined,
   entryLevel: r.entry_level ?? undefined, description: r.description ?? undefined,
   active: r.active ?? true, ordering: r.ordering ?? 0, createdAt: r.created_at,
 });
@@ -46,7 +47,10 @@ const mapOption = (r: any): ChoixOption & { choixId: string } => ({
   id: r.id, choixId: r.choix_id, subjectName: r.subject_name,
 });
 
-type DonneesFormation = { name: string; diplomaType?: string; duration?: string; entryLevel?: string; description?: string; active?: boolean };
+type DonneesFormation = {
+  name: string; diplomaType?: string; duration?: string; entryLevel?: string; description?: string; active?: boolean;
+  intituleDiplome?: string; optionDiplome?: string;
+};
 type DonneesNiveau = { name: string; description?: string };
 type DonneesNiveauMatiere = { type: NiveauMatiereType; coefficient: number; volumeHoraire?: number; nature: NiveauMatiereNature; categorie?: string };
 type DonneesPromotion = {
@@ -279,6 +283,9 @@ export const FormationProProvider = ({ children }: { children: ReactNode }) => {
       school_id: schoolId, name: data.name.trim(), diploma_type: data.diplomaType?.trim() || null,
       duration: data.duration?.trim() || null, entry_level: data.entryLevel?.trim() || null,
       description: data.description?.trim() || null, active: data.active ?? true, ordering,
+      // Colonnes facultatives (formation_pro_releves.sql) : envoyées seulement si renseignées.
+      ...(data.intituleDiplome?.trim() ? { intitule_diplome: data.intituleDiplome.trim() } : {}),
+      ...(data.optionDiplome?.trim() ? { option_diplome: data.optionDiplome.trim() } : {}),
     }).select().single();
     if (error) throw error;
     const formation = mapFormation(row);
@@ -298,6 +305,8 @@ export const FormationProProvider = ({ children }: { children: ReactNode }) => {
     if (data.duration !== undefined) patch.duration = data.duration.trim() || null;
     if (data.entryLevel !== undefined) patch.entry_level = data.entryLevel.trim() || null;
     if (data.description !== undefined) patch.description = data.description.trim() || null;
+    if (data.intituleDiplome !== undefined) patch.intitule_diplome = data.intituleDiplome.trim() || null;
+    if (data.optionDiplome !== undefined) patch.option_diplome = data.optionDiplome.trim() || null;
     if (data.active !== undefined) patch.active = data.active;
     const { error } = await sb.from('fp_formations').update(patch).eq('id', id).eq('school_id', schoolId);
     if (error) throw error;
