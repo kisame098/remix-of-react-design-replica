@@ -24,12 +24,15 @@ const sb = supabase as any;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const mapExamen = (r: any): Examen => ({
   id: r.id, promotionId: r.promotion_id, name: r.name, type: r.type, reference: r.reference ?? undefined,
-  periodeId: r.periode_id ?? undefined,
+  periodeId: r.periode_id ?? undefined, centre: r.centre ?? undefined, presidentJury: r.president_jury ?? undefined,
   seuilAdmission: Number(r.seuil_admission), dateDebut: r.date_debut ?? undefined, dateFin: r.date_fin ?? undefined,
   verrouille: !!r.verrouille, verrouilleLe: r.verrouille_le ?? undefined, createdAt: r.created_at,
 });
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-const mapTour = (r: any): ExamenTour => ({ id: r.id, examenId: r.examen_id, name: r.name, ordering: r.ordering ?? 0 });
+const mapTour = (r: any): ExamenTour => ({
+  id: r.id, examenId: r.examen_id, name: r.name, ordering: r.ordering ?? 0,
+  moyenneExigee: r.moyenne_exigee == null ? undefined : Number(r.moyenne_exigee),
+});
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const mapEpreuve = (r: any): ExamenEpreuve => ({
   id: r.id, tourId: r.tour_id, niveauMatiereId: r.niveau_matiere_id ?? undefined, nom: r.nom,
@@ -52,6 +55,7 @@ const mapResultat = (r: any): ExamenResultat => ({
 
 export type DonneesExamen = {
   name: string; type: TypeExamen; reference?: string; periodeId?: string; seuilAdmission: number; dateDebut?: string; dateFin?: string;
+  centre?: string; presidentJury?: string;
 };
 export type DonneesEpreuve = {
   nom: string; coefficient: number; bareme: number; seuilEliminatoire?: number; niveauMatiereId?: string;
@@ -96,7 +100,8 @@ interface ExamensContextType {
   deleteExamen: (id: string) => Promise<void>;
 
   addTour: (examenId: string, name: string) => Promise<ExamenTour>;
-  updateTour: (id: string, name: string) => Promise<void>;
+  /** Renommer le tour, et/ou fixer sa moyenne exigée (`null` : celle de l'examen). */
+  updateTour: (id: string, data: { name?: string; moyenneExigee?: number | null }) => Promise<void>;
   deleteTour: (id: string) => Promise<void>;
 
   addEpreuve: (tourId: string, data: DonneesEpreuve) => Promise<ExamenEpreuve>;
@@ -171,6 +176,8 @@ export const ExamensProvider = ({ children }: { children?: ReactNode }) => {
     const { data: row, error } = await sb.from('fp_examens').insert({
       school_id: sid, promotion_id: promotionId, name: data.name.trim(), type: data.type,
       reference: data.reference?.trim() || null, periode_id: data.periodeId || null, seuil_admission: data.seuilAdmission,
+      ...(data.centre?.trim() ? { centre: data.centre.trim() } : {}),
+      ...(data.presidentJury?.trim() ? { president_jury: data.presidentJury.trim() } : {}),
       date_debut: data.dateDebut || null, date_fin: data.dateFin || null,
     }).select().single();
     if (error) throw error;
@@ -210,6 +217,8 @@ export const ExamensProvider = ({ children }: { children?: ReactNode }) => {
     if (data.type !== undefined) patch.type = data.type;
     if ('reference' in data) patch.reference = data.reference?.trim() || null;
     if ('periodeId' in data) patch.periode_id = data.periodeId || null;
+    if ('centre' in data) patch.centre = data.centre?.trim() || null;
+    if ('presidentJury' in data) patch.president_jury = data.presidentJury?.trim() || null;
     if (data.seuilAdmission !== undefined) patch.seuil_admission = data.seuilAdmission;
     if ('dateDebut' in data) patch.date_debut = data.dateDebut || null;
     if ('dateFin' in data) patch.date_fin = data.dateFin || null;
@@ -245,12 +254,19 @@ export const ExamensProvider = ({ children }: { children?: ReactNode }) => {
     return tour;
   }, [schoolId]);
 
-  const updateTour = useCallback(async (id: string, name: string) => {
+  const updateTour = useCallback(async (id: string, data: { name?: string; moyenneExigee?: number | null }) => {
     if (!schoolId) throw new Error('Non connecté à une école');
     const sid = schoolId;
-    const { error } = await sb.from('fp_examen_tours').update({ name: name.trim() }).eq('id', id).eq('school_id', sid);
+    const patch: Record<string, unknown> = {};
+    if (data.name !== undefined) patch.name = data.name.trim();
+    if (data.moyenneExigee !== undefined) patch.moyenne_exigee = data.moyenneExigee;
+    const { error } = await sb.from('fp_examen_tours').update(patch).eq('id', id).eq('school_id', sid);
     if (error) throw error;
-    setTours(prev => prev.map(t => t.id === id ? { ...t, name: name.trim() } : t));
+    setTours(prev => prev.map(t => t.id === id ? {
+      ...t,
+      ...(data.name !== undefined ? { name: data.name.trim() } : {}),
+      ...(data.moyenneExigee !== undefined ? { moyenneExigee: data.moyenneExigee ?? undefined } : {}),
+    } : t));
   }, [schoolId]);
 
   const deleteTour = useCallback(async (id: string) => {

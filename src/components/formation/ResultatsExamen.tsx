@@ -6,8 +6,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Search, ArrowUpDown } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import {
-  type Examen, type ExamenEpreuve, type NiveauMatiere, type Decision, type Mention,
-  etatCandidat, propositionJury, decisionRetenue, mentionRetenue, LIBELLES_DECISION, LIBELLES_MENTION,
+  type Examen, type ExamenEpreuve, type ExamenTour, type NiveauMatiere, type Decision, type Mention,
+  etatCandidat, bilanCandidat, decisionRetenue, mentionRetenue, LIBELLES_DECISION, LIBELLES_MENTION,
 } from '@/lib/formationPro';
 
 const format = (n: number) => (Math.round(n * 100) / 100).toString().replace('.', ',');
@@ -21,6 +21,8 @@ interface Props {
   examen: Examen;
   /** Toutes les épreuves de l'examen. */
   epreuves: ExamenEpreuve[];
+  /** Les tours de l'examen : chacun a sa moyenne exigée (admissibilité avant le dernier). */
+  tours: ExamenTour[];
   /** Les matières qui ont au moins une épreuve dans l'examen, dans l'ordre du programme. */
   matieres: NiveauMatiere[];
   candidats: Student[];
@@ -33,24 +35,27 @@ interface Props {
  * décision et la mention — PROPOSÉES par le logiciel, que le jury garde ou
  * change dans la case. Figé une fois l'examen verrouillé.
  */
-export const ResultatsExamen = ({ examen, epreuves, matieres, candidats, onChoisirMatiere }: Props) => {
+export const ResultatsExamen = ({ examen, epreuves, tours, matieres, candidats, onChoisirMatiere }: Props) => {
   const { notes, resultats, choisirDecision } = useExamens();
   const verrouille = examen.verrouille;
   const horsProgramme = epreuves.filter(e => !e.niveauMatiereId);
 
   const lignesBrutes = useMemo(() => candidats.map(s => {
-    const etat = etatCandidat(epreuves, notes, s.id);
-    const proposition = propositionJury(etat, examen.seuilAdmission);
+    const bilan = bilanCandidat(tours, epreuves, notes, s.id, examen.seuilAdmission);
+    const { etat, proposition } = bilan;
     const resultat = resultats.find(r => r.examenId === examen.id && r.studentEnrollmentId === s.id);
     const parMatiere = new Map(matieres.map(m => [m.id, etatCandidat(epreuves.filter(e => e.niveauMatiereId === m.id), notes, s.id)]));
     return {
-      eleve: s, etat, proposition, resultat, parMatiere,
+      eleve: s, etat, proposition, resultat, parMatiere, bilan,
       horsProgramme: horsProgramme.length > 0 ? etatCandidat(horsProgramme, notes, s.id) : null,
       moyenne: verrouille && resultat ? resultat.moyenne ?? null : etat.moyenne,
       decision: decisionRetenue(resultat, proposition),
       mention: mentionRetenue(resultat, proposition),
     };
-  }), [candidats, epreuves, notes, examen.seuilAdmission, examen.id, resultats, verrouille, matieres, horsProgramme]);
+  }), [candidats, epreuves, tours, notes, examen.seuilAdmission, examen.id, resultats, verrouille, matieres, horsProgramme]);
+  // Plusieurs tours : une colonne par tour (moyenne, admissible ou non).
+  const toursAffiches = lignesBrutes[0]?.bilan.tours ?? [];
+  const plusieursTours = toursAffiches.length > 1;
 
   const [recherche, setRecherche] = useState('');
   const [tri, setTri] = useState<Tri>('defaut');
@@ -124,7 +129,13 @@ export const ResultatsExamen = ({ examen, epreuves, matieres, candidats, onChois
                   <button onClick={() => onChoisirMatiere(null)} className="text-xs font-medium text-foreground hover:text-primary hover:underline">Autres épreuves</button>
                 </th>
               )}
-              <th className="min-w-[80px] px-3 text-center font-semibold border-l border-b bg-muted/60">Moyenne<div className="text-xs font-normal text-muted-foreground">/20</div></th>
+              {plusieursTours && toursAffiches.map(bt => (
+                <th key={bt.tour.id} className="min-w-[90px] px-2 text-center font-semibold border-l border-b bg-muted/40">
+                  <div className="text-xs">{bt.tour.name}</div>
+                  <div className="text-[11px] font-normal text-muted-foreground">moy. exigée {format(bt.moyenneExigee)}</div>
+                </th>
+              ))}
+              <th className="min-w-[80px] px-3 text-center font-semibold border-l border-b bg-muted/60">Moyenne<div className="text-xs font-normal text-muted-foreground">{plusieursTours ? 'générale /20' : '/20'}</div></th>
               <th className="min-w-[150px] px-2 text-center font-semibold border-b bg-muted/60">Décision</th>
               <th className="min-w-[130px] px-2 text-center font-semibold border-b bg-muted/60">Mention</th>
             </tr>
@@ -134,7 +145,7 @@ export const ResultatsExamen = ({ examen, epreuves, matieres, candidats, onChois
               <tr><td colSpan={99} className="text-center py-8 text-muted-foreground">
                 {candidats.length === 0 ? 'Aucun candidat — ajoutez-en avec le bouton « Candidats ».' : `Aucun candidat trouvé pour « ${recherche} »`}
               </td></tr>
-            ) : lignes.map(({ eleve: s, etat, proposition, resultat, parMatiere, horsProgramme: autres, moyenne, decision, mention, rang }) => (
+            ) : lignes.map(({ eleve: s, etat, proposition, resultat, parMatiere, horsProgramme: autres, moyenne, decision, mention, rang, bilan }) => (
               <tr key={s.id} className="border-b last:border-b-0 hover:bg-muted/20">
                 {afficherRang && <td className="text-center font-bold bg-primary/5">{rang ?? '—'}</td>}
                 <td className="sticky left-0 z-10 bg-background px-3 py-1.5 border-r">
@@ -143,6 +154,17 @@ export const ResultatsExamen = ({ examen, epreuves, matieres, candidats, onChois
                 </td>
                 {matieres.map(m => celluleNote(parMatiere.get(m.id), m.id))}
                 {autres && celluleNote(autres, 'autres')}
+                {plusieursTours && bilan.tours.map((bt, i) => {
+                  const dernier = i === bilan.tours.length - 1;
+                  return (
+                    <td key={bt.tour.id} className="text-center border-l bg-muted/10">
+                      <div className={`font-semibold ${couleur(bt.etat.moyenne, bt.moyenneExigee)}`}>{bt.etat.moyenne === null ? '—' : format(bt.etat.moyenne)}</div>
+                      {!dernier && bt.atteint !== null && (
+                        <div className={`text-[10px] font-semibold uppercase ${bt.atteint ? 'text-green-700' : 'text-red-600'}`}>{bt.atteint ? 'Admissible' : 'Non admissible'}</div>
+                      )}
+                    </td>
+                  );
+                })}
                 <td className={`text-center font-semibold border-l bg-muted/30 ${couleur(moyenne, examen.seuilAdmission)}`}>
                   {moyenne === null ? '—' : format(moyenne)}
                   {etat.epreuvesEliminatoires.length > 0 && <div className="text-[10px] font-semibold uppercase text-red-600">Éliminé</div>}

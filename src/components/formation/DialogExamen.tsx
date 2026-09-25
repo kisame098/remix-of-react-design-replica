@@ -33,6 +33,8 @@ export const DialogExamen = ({ open, onOpenChange, examen, nbExistants, periodes
   const [name, setName] = useState('');
   const [type, setType] = useState<TypeExamen>('blanc');
   const [reference, setReference] = useState('');
+  const [centre, setCentre] = useState('');
+  const [presidentJury, setPresidentJury] = useState('');
   const [seuil, setSeuil] = useState('10');
   const [dateDebut, setDateDebut] = useState('');
   const [dateFin, setDateFin] = useState('');
@@ -45,6 +47,8 @@ export const DialogExamen = ({ open, onOpenChange, examen, nbExistants, periodes
     setName(examen?.name ?? '');
     setType(examen?.type ?? 'blanc');
     setReference(examen?.reference ?? '');
+    setCentre(examen?.centre ?? '');
+    setPresidentJury(examen?.presidentJury ?? '');
     setSeuil(String(examen?.seuilAdmission ?? 10).replace('.', ','));
     setDateDebut(examen?.dateDebut ?? '');
     setDateFin(examen?.dateFin ?? '');
@@ -70,7 +74,7 @@ export const DialogExamen = ({ open, onOpenChange, examen, nbExistants, periodes
     setEnregistrement(true);
     try {
       await onValider({
-        name: name.trim(), type, reference: type === 'officiel' ? reference : '', seuilAdmission,
+        name: name.trim(), type, reference, seuilAdmission, centre, presidentJury,
         periodeId: periodeId === AUCUNE ? '' : periodeId,
         dateDebut: dateDebut || undefined, dateFin: dateFin || undefined,
       }, !examen && depuisProgramme && resumeProgramme !== '');
@@ -118,12 +122,21 @@ export const DialogExamen = ({ open, onOpenChange, examen, nbExistants, periodes
               ))}
             </div>
           </div>
-          {type === 'officiel' && (
+          <div className="space-y-2">
+            <Label htmlFor="examen-ref">Session (facultatif)</Label>
+            <Input id="examen-ref" placeholder="Ex : session 2024" value={reference} onChange={e => setReference(e.target.value)} />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
             <div className="space-y-2">
-              <Label htmlFor="examen-ref">Référence de session (facultatif)</Label>
-              <Input id="examen-ref" placeholder="Ex : Session juin 2027" value={reference} onChange={e => setReference(e.target.value)} />
+              <Label htmlFor="examen-centre">Centre d'examen</Label>
+              <Input id="examen-centre" placeholder="Nom de l'école" value={centre} onChange={e => setCentre(e.target.value)} />
             </div>
-          )}
+            <div className="space-y-2">
+              <Label htmlFor="examen-president">Président du jury</Label>
+              <Input id="examen-president" placeholder="Facultatif" value={presidentJury} onChange={e => setPresidentJury(e.target.value)} />
+            </div>
+          </div>
+          <p className="text-xs text-muted-foreground -mt-2">Session, centre et président du jury figurent sur le relevé de notes de l'examen.</p>
           <div className="space-y-2">
             <Label>Compte dans la moyenne de</Label>
             <Select value={periodeId} onValueChange={setPeriodeId}>

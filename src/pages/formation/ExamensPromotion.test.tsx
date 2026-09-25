@@ -41,7 +41,7 @@ const exInitial = () => ({
   tours: [
     { id: 't1', examenId: 'x1', name: 'Écrit', ordering: 0 },
     { id: 't2', examenId: 'x1', name: 'Pratique', ordering: 1 },
-  ],
+  ] as { id: string; examenId: string; name: string; ordering: number; moyenneExigee?: number }[],
   epreuves: [
     { id: 'ep1', tourId: 't1', niveauMatiereId: 'nm1', nom: 'Français', coefficient: 2, bareme: 20, ordering: 0 },
     { id: 'ep2', tourId: 't2', niveauMatiereId: 'nm2', nom: 'TP Cuisine', coefficient: 4, bareme: 20, seuilEliminatoire: 8, ordering: 0 },
@@ -125,6 +125,16 @@ describe('ExamensPromotion — la grille d\'un examen', () => {
     expect(within(ligne('Fall')).getByText('Refusé (proposé)')).toBeInTheDocument();
     expect(screen.getByText('1 admis')).toBeInTheDocument();
     expect(screen.getByText('1 refusé')).toBeInTheDocument();
+  });
+
+  it('deux tours : moyenne exigée au 1er tour non atteinte → « Non admissible », Ajourné proposé', async () => {
+    ex.tours = [{ ...ex.tours[0], moyenneExigee: 14 }, ex.tours[1]];   // Diop a 12 à l'écrit
+    const user = userEvent.setup();
+    rendre();
+    await user.click(screen.getByRole('button', { name: /Résultats/ }));
+    expect(screen.getByText('moy. exigée 14')).toBeInTheDocument();
+    expect(within(ligne('Diop')).getByText('Non admissible')).toBeInTheDocument();
+    expect(within(ligne('Diop')).getByText('Ajourné (proposé)')).toBeInTheDocument();
   });
 
   it('le directeur ajoute une épreuve à la matière : nom et coefficient repris du programme', async () => {

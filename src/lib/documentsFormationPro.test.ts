@@ -1,9 +1,10 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import {
-  numeroDocument, accord, estDiplomeDEtat, titreDiplome, raisonNonEmettable, bulletinsDepuisRecapitulatif,
-  rangOrdinal, planningExamen,
+  numeroDocument, accord, estDiplomeDEtat, titreDiplome, raisonNonEmettable, construireBulletins,
+  rangOrdinal, planningExamen, appreciationMoyenne, abregeCategorie,
 } from './documentsFormationPro';
+import { recapitulatifPeriode, type BaremeCategorie, type Evaluation, type Note } from './formationPro';
 
 describe('documents officiels — numéro et accords', () => {
   it('même forme que les reçus : préfixe, année, 5 chiffres', () => {
@@ -49,36 +50,71 @@ describe('documents officiels — qui peut être émis, et quand', () => {
   });
 });
 
-describe('bulletins — à partir du récapitulatif de la période', () => {
+describe('bulletin — vérifié sur le bulletin de composition d\'IFHO (S2 2023-2024)', () => {
+  const cats: BaremeCategorie[] = [
+    { id: 'dev', formationId: 'f', name: 'Devoirs', pourcentage: 50, ordering: 0 },
+    { id: 'comp', formationId: 'f', name: 'Composition', pourcentage: 50, ordering: 1 },
+  ];
+  const ev = (id: string, matiere: string, categorieId: string, date: string): Evaluation => ({
+    id, promotionId: 'p', niveauMatiereId: matiere, periodeId: 's2', categorieId, type: '', title: id, date, bareme: 20, poids: 1, createdAt: date,
+  });
   const matieres = [
-    { id: 'b', matiereName: 'Stage', coefficient: 3, nature: 'stage' as const, ordering: 1 },
-    { id: 'a', matiereName: 'Français', coefficient: 2, nature: 'theorique' as const, ordering: 0 },
+    { id: 'fr', matiereName: 'Français', coefficient: 2, nature: 'theorique' as const, ordering: 0 },
+    { id: 'cond', matiereName: 'Conduite', coefficient: 1, nature: 'theorique' as const, ordering: 1 },
+    { id: 'stg', matiereName: 'Stage', coefficient: 3, nature: 'stage' as const, ordering: 2 },
   ];
-  const eleves = [
-    { id: 's2', lastName: 'Fall', firstName: 'Moussa', studentId: 'ETU-2' },
-    { id: 's1', lastName: 'Diop', firstName: 'Awa', studentId: 'ETU-1', dateOfBirth: '2005-03-02' },
-    { id: 's3', lastName: 'Sy', firstName: 'Ali', studentId: 'ETU-3' },
-  ];
-  const recap = [
-    { studentEnrollmentId: 's1', parMatiere: { a: 12, b: 16 }, generale: 14.4, rang: 1 },
-    { studentEnrollmentId: 's2', parMatiere: { a: 10, b: null }, generale: 10, rang: 2 },
-    { studentEnrollmentId: 's3', parMatiere: { a: null, b: null }, generale: null, rang: null },
-  ];
-  const r = bulletinsDepuisRecapitulatif(recap, matieres, eleves);
+  const evaluations = [ev('d1', 'fr', 'dev', '2024-03-01'), ev('d2', 'fr', 'dev', '2024-04-01'), ev('c', 'fr', 'comp', '2024-05-01'), ev('cc', 'cond', 'comp', '2024-05-02')];
+  const n = (evaluationId: string, valeur: number): Note => ({ id: evaluationId, evaluationId, studentEnrollmentId: 's1', valeur, statut: 'note' });
+  const notes = [n('d1', 18), n('d2', 16), n('c', 16), n('cc', 18)];
+  const eleves = [{ id: 's1', lastName: 'Niang', firstName: 'Sokhna', studentId: 'M1', dateOfBirth: '1997-12-21', placeOfBirth: 'Médina Gounass' }];
+  const recapS2 = recapitulatifPeriode(['s1'], matieres.slice(0, 2), cats, evaluations, notes);
+  const r = construireBulletins({
+    matieres, categories: cats, evaluations, notes, eleves,
+    recaps: [
+      { periode: 'Semestre 1', lignes: [{ studentEnrollmentId: 's1', parMatiere: {}, generale: 15.55, rang: 1 }] },
+      { periode: 'Semestre 2', lignes: recapS2 },
+    ],
+  });
+  const b = r.bulletins[0];
 
-  it('un bulletin par élève, par ordre alphabétique, matières dans l\'ordre du programme', () => {
-    expect(r.bulletins.map(b => b.eleve.nom)).toEqual(['Diop', 'Fall', 'Sy']);
-    expect(r.bulletins[0].lignes.map(l => l.matiere)).toEqual(['Français', 'Stage']);
-    expect(r.bulletins[0].lignes[1].stage).toBe(true);
+  it('colonnes : DEV 1, DEV 2 (+ MOY DEV) puis COMP', () => {
+    expect(r.colonnes.map(c => [c.abrege, c.nbNotes])).toEqual([['DEV', 2], ['COMP', 1]]);
   });
-  it('le total des coefficients ne compte que les matières notées', () => {
-    expect(r.bulletins[0].totalCoefficients).toBe(5);
-    expect(r.bulletins[1].totalCoefficients).toBe(2);
+  it('ligne Français : 18 et 16 → moy dev 17 ; comp 16 → moyenne 16,50 ; × 2 = 33 ; Très bien', () => {
+    const fr = b.lignes[0];
+    expect(fr.cellules[0]).toEqual({ notes: ['18,00', '16,00'], moyenne: 17 });
+    expect(fr.cellules[1]).toEqual({ notes: ['16,00'], moyenne: 16 });
+    expect(fr.moyenne).toBe(16.5);
+    expect(fr.moyenne! * fr.coefficient).toBe(33);
+    expect(fr.appreciation).toBe('Très bien');
   });
-  it('effectif classé et moyenne de la promotion : les élèves sans note n\'y entrent pas', () => {
-    expect(r.effectifClasse).toBe(2);
-    expect(r.moyennePromotion).toBeCloseTo(12.2);
-    expect(r.bulletins[2].rang).toBeNull();
+  it('« Conduite » : une seule note, elle est la moyenne', () => {
+    expect(b.lignes[1].moyenne).toBe(18);
+  });
+  it('matière Stage sans note : pas comptée dans les coefficients', () => {
+    expect(b.lignes[2].stage).toBe(true);
+    expect(b.totalCoefficients).toBe(3);
+    expect(b.totalPoints).toBe(51);
+  });
+  it('rappel des semestres et moyenne générale = moyenne des semestres', () => {
+    expect(b.recapitulatif).toEqual([{ periode: 'Semestre 1', moyenne: 15.55 }, { periode: 'Semestre 2', moyenne: 17 }]);
+    expect(b.moyenneAnnuelle).toBeCloseTo(16.275);
+    // Sur le bulletin d'IFHO : (15,55 + 14,07) / 2 = 14,81
+    expect((15.55 + 14.07) / 2).toBeCloseTo(14.81, 2);
+  });
+  it('appréciations : 12 / 14 / 16 lues sur le bulletin', () => {
+    expect(appreciationMoyenne(12.5)).toBe('Assez bien');
+    expect(appreciationMoyenne(14.25)).toBe('Bien');
+    expect(appreciationMoyenne(16.5)).toBe('Très bien');
+    expect(appreciationMoyenne(null)).toBe('');
+  });
+  it('abréviations des catégories', () => {
+    expect(abregeCategorie('Devoirs')).toBe('DEV');
+    expect(abregeCategorie('Composition')).toBe('COMP');
+    expect(abregeCategorie('Contrôle continu')).toBe('CC');
+    expect(abregeCategorie('Examen final')).toBe('EF');
+    expect(abregeCategorie('Examen blanc')).toBe('EB');
+    expect(abregeCategorie('TP')).toBe('TP');
   });
 });
 

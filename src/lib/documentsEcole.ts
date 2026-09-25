@@ -23,6 +23,11 @@ export interface InfosEcole {
   autorisation?: string;
   /** N° du registre de commerce (Paramètres > École). */
   rc?: string;
+  /** Signataires des bulletins (Paramètres > École). */
+  directeurEtudes?: string;
+  directeurGeneral?: string;
+  /** Pied de page libre des documents : adresse, banque, e-mail, téléphone… une info par ligne. */
+  piedDePage?: string;
   /** Logo en data URL (Paramètres > École) — jamais un lien distant. */
   logo?: string | null;
 }
@@ -46,6 +51,9 @@ export const CLE_ADRESSE_ECOLE = 'adresse';
 export const CLE_NINEA_ECOLE = 'ninea';
 export const CLE_AUTORISATION_ECOLE = 'autorisationOuverture';
 export const CLE_RC_ECOLE = 'registreCommerce';
+export const CLE_DIRECTEUR_ETUDES = 'directeurEtudes';
+export const CLE_DIRECTEUR_GENERAL = 'directeurGeneral';
+export const CLE_PIED_DOCUMENTS = 'piedDocuments';
 
 export const infosEcole = (school: EcoleSource | null | undefined): InfosEcole => ({
   nom: texte(school?.name) ?? 'École',
@@ -57,6 +65,9 @@ export const infosEcole = (school: EcoleSource | null | undefined): InfosEcole =
   ninea: texte(school?.settings?.[CLE_NINEA_ECOLE]),
   autorisation: texte(school?.settings?.[CLE_AUTORISATION_ECOLE]),
   rc: texte(school?.settings?.[CLE_RC_ECOLE]),
+  directeurEtudes: texte(school?.settings?.[CLE_DIRECTEUR_ETUDES]),
+  directeurGeneral: texte(school?.settings?.[CLE_DIRECTEUR_GENERAL]),
+  piedDePage: texte(school?.settings?.[CLE_PIED_DOCUMENTS]),
   logo: school?.logo_url || null,
 });
 

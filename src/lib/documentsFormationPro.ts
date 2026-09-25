@@ -1,7 +1,8 @@
 import type { InfosEcole } from '@/lib/documentsEcole';
 import {
   type Examen, type ExamenEpreuve, type ExamenResultat, type ExamenTour, type LigneRecapitulatif, type Mention,
-  type NiveauMatiere, type TypeExamen, LIBELLES_MENTION, LIBELLES_TYPE_EXAMEN, triEpreuves, triTours,
+  type NiveauMatiere, type TypeExamen, type BaremeCategorie, type Evaluation, type Note,
+  LIBELLES_MENTION, LIBELLES_TYPE_EXAMEN, triEpreuves, triTours, triEvaluationsChronologique, moyenneCategorie, convertirSur20,
 } from '@/lib/formationPro';
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -102,18 +103,72 @@ export interface DocumentOfficiel {
 export const libelleMention = (m?: Mention) => (m ? LIBELLES_MENTION[m] : undefined);
 export const libelleTypeExamen = (t: TypeExamen) => LIBELLES_TYPE_EXAMEN[t];
 
-// ─── Bulletin de période ─────────────────────────────────────────────────────
+// ─── Bulletin de période (format IFHO) ───────────────────────────────────────
+// Lu sur le bulletin du second semestre 2023-2024 d'IFHO (ligne Français) :
+//   DEV 1 18 · DEV 2 16 → MOY DEV 17 ; COMP 16 → MOY GEN (17 + 16) / 2 = 16,50
+//   × coef 2 = 33,00 ; total 365,88 / 26 coef. = 14,07 (moyenne du semestre)
+//   moyenne générale = (S1 15,55 + S2 14,07) / 2 = 14,81
+// Les colonnes suivent la formule de la formation : chaque catégorie donne ses
+// évaluations (DEV 1, DEV 2…) puis leur moyenne ; « Devoirs 50 % ·
+// Composition 50 % » reproduit exactement ce bulletin.
 
-export interface LigneBulletin { matiere: string; coefficient: number; moyenne: number | null; stage: boolean }
+/** Appréciation d'une moyenne. 12 / 14 / 16 : lues sur le bulletin d'IFHO ; Passable (10) et Insuffisant : supposés. */
+export const appreciationMoyenne = (m: number | null): string => {
+  if (m === null) return '';
+  if (m >= 16) return 'Très bien';
+  if (m >= 14) return 'Bien';
+  if (m >= 12) return 'Assez bien';
+  if (m >= 10) return 'Passable';
+  return 'Insuffisant';
+};
+
+/**
+ * Abréviation d'une catégorie, pour les sous-colonnes du bulletin DÉTAILLÉ
+ * (CC 1, CC 2, TP 1…). Le bulletin par défaut, lui, écrit le nom entier.
+ */
+export const abregeCategorie = (nom: string): string => {
+  const mots = nom.trim().split(/\s+/).filter(Boolean);
+  const norme = sansAccents(mots[0] ?? '');
+  if (mots.length > 1) return mots.map(m => m[0]).join('').toUpperCase();
+  if (norme.startsWith('dev')) return 'DEV';
+  if (norme.startsWith('comp')) return 'COMP';
+  if (norme.startsWith('interro')) return 'INT';
+  return (mots[0] ?? '').slice(0, 4).toUpperCase();
+};
+
+export interface ColonneBulletin {
+  categorieId: string;
+  nom: string;
+  abrege: string;
+  /** Nombre de colonnes de notes (le maximum d'évaluations d'une matière dans la période). */
+  nbNotes: number;
+}
+
+export interface CelluleCategorie { notes: string[]; moyenne: number | null }
+
+export interface LigneBulletin {
+  matiere: string;
+  coefficient: number;
+  /** Matière « Stage » : seule la moyenne (note du stage) est remplie. */
+  stage: boolean;
+  cellules: CelluleCategorie[];
+  moyenne: number | null;
+  appreciation: string;
+}
 
 export interface BulletinEleve {
   studentEnrollmentId: string;
-  eleve: { nom: string; prenoms: string; matricule: string; dateNaissance?: string };
+  eleve: { nom: string; prenoms: string; matricule: string; dateNaissance?: string; lieuNaissance?: string };
   lignes: LigneBulletin[];
   moyenneGenerale: number | null;
   rang: number | null;
   /** Coefficients des seules matières notées (celles qui comptent dans la moyenne). */
   totalCoefficients: number;
+  totalPoints: number;
+  /** Les périodes jusqu'à celle du bulletin, avec la moyenne de l'élève. */
+  recapitulatif: { periode: string; moyenne: number | null }[];
+  /** Moyenne des périodes (affichée dès la 2e période). */
+  moyenneAnnuelle: number | null;
 }
 
 export interface DonneesBulletins {
@@ -122,41 +177,92 @@ export interface DonneesBulletins {
   niveau: string;
   promotion: string;
   periode: { nom: string; debut?: string; fin?: string };
-  /** « Contrôle continu 30 % · TP 30 % · … » — rappelé en bas du bulletin. */
+  anneeScolaire?: string;
+  colonnes: ColonneBulletin[];
+  /**
+   * `false` (par défaut) : une colonne par partie de la formule, avec sa
+   * seule moyenne (CONTRÔLE CONTINU, TP, EXAMEN BLANC, EXAMEN FINAL).
+   * `true` : en plus, chaque note de chaque partie (CC 1, CC 2… puis MOY).
+   */
+  detail?: boolean;
+  /** « Devoirs 50 % · Composition 50 % » — rappelé en petit. */
   formule: string;
-  /** Nombre d'élèves classés (ayant au moins une note). */
   effectifClasse: number;
   moyennePromotion: number | null;
   eleves: BulletinEleve[];
 }
 
-/** Un bulletin par élève, dans l'ordre alphabétique, à partir du récapitulatif de la période. */
-export const bulletinsDepuisRecapitulatif = (
-  recap: LigneRecapitulatif[],
-  matieres: Pick<NiveauMatiere, 'id' | 'matiereName' | 'coefficient' | 'nature' | 'ordering'>[],
-  eleves: { id: string; lastName: string; firstName: string; studentId: string; dateOfBirth?: string }[],
-): { bulletins: BulletinEleve[]; effectifClasse: number; moyennePromotion: number | null } => {
-  const triees = [...matieres].sort((a, b) => a.ordering - b.ordering);
-  const parEleve = new Map(recap.map(l => [l.studentEnrollmentId, l]));
-  const classes = recap.filter(l => l.generale !== null);
-  const bulletins = [...eleves]
+type EleveSource = { id: string; lastName: string; firstName: string; studentId: string; dateOfBirth?: string; placeOfBirth?: string };
+
+const formatNote = (n: number) => (Math.round(n * 100) / 100).toFixed(2).replace('.', ',');
+
+/**
+ * Tous les bulletins d'une promotion pour une période. `evaluations` : celles
+ * de la formule pour la promotion et la période (saisies + examens, voir
+ * evaluationsDeLaFormule) ; `recaps` : le récapitulatif de chaque période
+ * jusqu'à celle-ci incluse (la dernière = la période du bulletin).
+ */
+export const construireBulletins = (p: {
+  matieres: Pick<NiveauMatiere, 'id' | 'matiereName' | 'coefficient' | 'nature' | 'ordering'>[];
+  categories: BaremeCategorie[];
+  evaluations: Evaluation[];
+  notes: Note[];
+  eleves: EleveSource[];
+  recaps: { periode: string; lignes: LigneRecapitulatif[] }[];
+}): { colonnes: ColonneBulletin[]; bulletins: BulletinEleve[]; effectifClasse: number; moyennePromotion: number | null } => {
+  const matieres = [...p.matieres].sort((a, b) => a.ordering - b.ordering);
+  const categories = [...p.categories].sort((a, b) => a.ordering - b.ordering);
+  const evalsDe = (matiereId: string, categorieId: string) =>
+    triEvaluationsChronologique(p.evaluations.filter(e => e.niveauMatiereId === matiereId && e.categorieId === categorieId));
+  const colonnes = categories.map(c => ({
+    categorieId: c.id,
+    nom: c.name,
+    abrege: abregeCategorie(c.name),
+    nbNotes: Math.max(1, ...matieres.map(m => evalsDe(m.id, c.id).length)),
+  }));
+  const courant = p.recaps[p.recaps.length - 1]?.lignes ?? [];
+  const parEleve = new Map(courant.map(l => [l.studentEnrollmentId, l]));
+  const classes = courant.filter(l => l.generale !== null);
+
+  const bulletins = [...p.eleves]
     .sort((a, b) => a.lastName.localeCompare(b.lastName, 'fr') || a.firstName.localeCompare(b.firstName, 'fr'))
     .map(e => {
       const l = parEleve.get(e.id);
-      const lignes = triees.map(m => ({ matiere: m.matiereName, coefficient: m.coefficient, moyenne: l?.parMatiere[m.id] ?? null, stage: m.nature === 'stage' }));
+      const lignes: LigneBulletin[] = matieres.map(m => {
+        const stage = m.nature === 'stage';
+        const moyenne = l?.parMatiere[m.id] ?? null;
+        const cellules = colonnes.map(col => {
+          if (stage) return { notes: [], moyenne: null };
+          const evs = evalsDe(m.id, col.categorieId);
+          const notes = evs.map(ev => {
+            const n = p.notes.find(x => x.evaluationId === ev.id && x.studentEnrollmentId === e.id);
+            if (!n) return '';
+            if (n.statut === 'note' && n.valeur != null) return formatNote(convertirSur20(n.valeur, ev.bareme));
+            return n.statut === 'non_evalue' ? 'NE' : 'Abs';
+          });
+          return { notes, moyenne: evs.length ? moyenneCategorie(evs, p.notes, col.categorieId, e.id) : null };
+        });
+        return { matiere: m.matiereName, coefficient: m.coefficient, stage, cellules, moyenne, appreciation: appreciationMoyenne(moyenne) };
+      });
+      const notees = lignes.filter(x => x.moyenne !== null);
+      const recapitulatif = p.recaps.map(r => ({ periode: r.periode, moyenne: r.lignes.find(x => x.studentEnrollmentId === e.id)?.generale ?? null }));
+      const moyennesPeriodes = recapitulatif.map(r => r.moyenne).filter((m): m is number => m !== null);
       return {
         studentEnrollmentId: e.id,
-        eleve: { nom: e.lastName, prenoms: e.firstName, matricule: e.studentId, dateNaissance: e.dateOfBirth || undefined },
+        eleve: { nom: e.lastName, prenoms: e.firstName, matricule: e.studentId, dateNaissance: e.dateOfBirth || undefined, lieuNaissance: e.placeOfBirth || undefined },
         lignes,
         moyenneGenerale: l?.generale ?? null,
         rang: l?.rang ?? null,
-        totalCoefficients: lignes.filter(x => x.moyenne !== null).reduce((t, x) => t + x.coefficient, 0),
+        totalCoefficients: notees.reduce((t, x) => t + x.coefficient, 0),
+        totalPoints: notees.reduce((t, x) => t + (x.moyenne as number) * x.coefficient, 0),
+        recapitulatif,
+        moyenneAnnuelle: moyennesPeriodes.length ? moyennesPeriodes.reduce((a, b) => a + b, 0) / moyennesPeriodes.length : null,
       };
     });
   return {
-    bulletins,
+    colonnes, bulletins,
     effectifClasse: classes.length,
-    moyennePromotion: classes.length ? classes.reduce((t, l) => t + (l.generale as number), 0) / classes.length : null,
+    moyennePromotion: classes.length ? classes.reduce((t, x) => t + (x.generale as number), 0) / classes.length : null,
   };
 };
 

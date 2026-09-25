@@ -380,11 +380,13 @@ describe('validation du barème et des évaluations', () => {
     expect(pourcentageValide(101)).toBe(false);
     expect(pourcentageValide(-5)).toBe(false);
   });
-  it('la formule par défaut appliquée à toute nouvelle formation fait bien 100 %', () => {
-    expect(DEFAUT_BAREME_CATEGORIES.reduce((s, c) => s + c.pourcentage, 0)).toBe(100);
+  it('la formule par défaut est celle confirmée par le directeur d\'IFHO : 30 / 30 / 10 / 30, examens remplis par Examens', () => {
+    expect(DEFAUT_BAREME_CATEGORIES.map(c => [c.name, c.pourcentage, c.sourceExamen])).toEqual([
+      ['Contrôle continu', 30, undefined], ['TP', 30, undefined], ['Examen blanc', 10, 'blanc'], ['Examen final', 30, 'officiel'],
+    ]);
   });
 
-  it('sommeBareme et baremeComplet — le barème IFHO (30/30/10/30) fait bien 100', () => {
+  it('sommeBareme et baremeComplet — un barème à quatre catégories (30/30/10/30) fait bien 100', () => {
     const bareme = [
       categorie({ id: 'cc', name: 'Contrôle continu', pourcentage: 30 }),
       categorie({ id: 'tp', name: 'TP', pourcentage: 30 }),
@@ -928,5 +930,100 @@ describe('garde-fous — stages : isolation, carnet sans doublon, une note sur 2
   });
   it('une seule note, entre 0 et 20, vide tant que le stage n\'est pas noté', () => {
     expect(sql).toContain('note is null or (note >= 0 and note <= 20)');
+  });
+});
+
+import { bilanCandidat, type ExamenTour } from './formationPro';
+
+describe('bilanCandidat — examens à deux tours, vérifié sur les relevés d\'IFHO', () => {
+  // Relevé CAP Restauration, DECPC, session 2022.
+  const tours: ExamenTour[] = [
+    { id: 't1', examenId: 'x', name: '1er tour', ordering: 0, moyenneExigee: 12 },
+    { id: 't2', examenId: 'x', name: '2e tour', ordering: 1, moyenneExigee: 10 },
+  ];
+  const e = (id: string, tourId: string, coefficient: number, seuilEliminatoire?: number) =>
+    epreuve({ id, tourId, coefficient, bareme: 20, seuilEliminatoire });
+  const epreuvesCap = [
+    e('tc', 't1', 4, 8), e('pat', 't1', 3, 8), e('serv', 't1', 4, 8), e('entr', 't1', 2, 8),
+    e('math', 't2', 1), e('fr', 't2', 1), e('ang', 't2', 1), e('nut', 't2', 2, 5), e('tech', 't2', 2, 5),
+  ];
+  const notesCap: [string, number][] = [['tc', 12], ['pat', 18], ['serv', 10], ['entr', 12], ['math', 14.5], ['fr', 16], ['ang', 14.5], ['nut', 6], ['tech', 13]];
+  const n = (liste: [string, number][]) => liste.map(([ep, v], i) => noteEx({ id: `n${i}`, epreuveId: ep, valeur: v }));
+
+  it('CAP : 1er tour 166 ≥ 156 → admissible ; total général 249 ≥ 226 → admis, assez bien', () => {
+    const b = bilanCandidat(tours, epreuvesCap, n(notesCap), 's1', 10);
+    expect(b.tours[0].total).toBe(166);
+    expect(b.tours[0].totalDemande).toBe(156);
+    expect(b.tours[0].atteint).toBe(true);
+    expect(b.tours[0].etat.moyenne).toBeCloseTo(12.769, 2);
+    expect(b.tours[1].total).toBe(83);
+    expect(b.totalGeneral).toBe(249);
+    expect(b.totalGeneralDemande).toBe(226);
+    expect(b.etat.moyenne).toBeCloseTo(12.45, 2);
+    expect(b.proposition).toEqual({ decision: 'admis', mention: 'assez_bien' });
+  });
+
+  it('non admissible au 1er tour → ajourné, sans attendre le 2e tour', () => {
+    const b = bilanCandidat(tours, epreuvesCap, n([['tc', 10], ['pat', 11], ['serv', 10], ['entr', 11]]), 's1', 10);
+    expect(b.tours[0].atteint).toBe(false);
+    expect(b.proposition.decision).toBe('ajourne');
+    expect(b.proposition.motif).toMatch(/Non admissible/);
+  });
+
+  it('admissible, 2e tour pas encore saisi : pas de décision, on le dit', () => {
+    const b = bilanCandidat(tours, epreuvesCap, n(notesCap.slice(0, 4)), 's1', 10);
+    expect(b.proposition.decision).toBeNull();
+    expect(b.proposition.motif).toMatch(/Admissible — 2e tour à saisir/);
+  });
+
+  it('une note sous la NE de son épreuve refuse le candidat (Nutrition < 5)', () => {
+    const notes = notesCap.map(([ep, v]) => [ep, ep === 'nut' ? 4 : v] as [string, number]);
+    expect(bilanCandidat(tours, epreuvesCap, n(notes), 's1', 10).proposition.decision).toBe('refuse');
+  });
+
+  it('examen blanc BEP d\'IFHO (tout à 10) : 80/160 puis 230/460 → admis', () => {
+    const toursBep: ExamenTour[] = [{ id: 't1', examenId: 'x', name: '1er tour', ordering: 0 }, { id: 't2', examenId: 'x', name: '2e tour', ordering: 1 }];
+    const eps = [
+      e('a', 't1', 1), e('b', 't1', 2), e('c', 't1', 1), e('d', 't1', 1), e('f', 't1', 1), e('g', 't1', 2),
+      e('h', 't2', 1), e('i', 't2', 1), e('j', 't2', 1), e('k', 't2', 2), e('l', 't2', 5), e('m', 't2', 5),
+    ];
+    const b = bilanCandidat(toursBep, eps, n(eps.map(x => [x.id, 10] as [string, number])), 's1', 10);
+    expect([b.tours[0].total, b.tours[0].totalDemande * 2]).toEqual([80, 160]);
+    expect([b.tours[1].total, b.totalGeneral, b.totalGeneralDemande * 2]).toEqual([150, 230, 460]);
+    expect(b.proposition.decision).toBe('admis');
+  });
+
+  it('un seul tour : même résultat que le seuil d\'admission de l\'examen', () => {
+    const b = bilanCandidat([{ id: 't1', examenId: 'x', name: 'Écrit', ordering: 0 }], [e('a', 't1', 2)], n([['a', 9.5]]), 's1', 10);
+    expect(b.proposition.decision).toBe('ajourne');
+  });
+});
+
+import { formuleAppliquee, libelleFormuleAppliquee } from './formationPro';
+
+describe('formule appliquée — ce qui n\'a pas été fait voit son poids réparti', () => {
+  const cats = [
+    categorie({ id: 'cc', name: 'Contrôle continu', pourcentage: 30, ordering: 0 }),
+    categorie({ id: 'tp', name: 'TP', pourcentage: 30, ordering: 1 }),
+    categorie({ id: 'eb', name: 'Examen blanc', pourcentage: 10, ordering: 2, sourceExamen: 'blanc' }),
+    categorie({ id: 'ef', name: 'Examen final', pourcentage: 30, ordering: 3, sourceExamen: 'officiel' }),
+  ];
+  const evs = (...ids: string[]) => ids.map(categorieId => ({ categorieId }));
+
+  it('tout fait : 30 / 30 / 10 / 30', () => {
+    expect(formuleAppliquee(cats, evs('cc', 'tp', 'eb', 'ef')).map(l => l.poidsApplique)).toEqual([30, 30, 10, 30]);
+  });
+  it('pas d\'examen blanc : ses 10 % sont répartis (30/90 = 33,33 % chacun)', () => {
+    const f = formuleAppliquee(cats, evs('cc', 'tp', 'ef'));
+    expect(f.map(l => Math.round(l.poidsApplique * 100) / 100)).toEqual([33.33, 33.33, 0, 33.33]);
+    expect(libelleFormuleAppliquee(f)).toBe('Contrôle continu 33,33 % · TP 33,33 % · Examen final 33,33 % — poids réparti : Examen blanc (non faite)');
+  });
+  it('seulement le contrôle continu et l\'examen final (ex-« devoirs + composition ») : 50 / 50', () => {
+    expect(formuleAppliquee(cats, evs('cc', 'ef')).map(l => l.poidsApplique)).toEqual([50, 0, 0, 50]);
+  });
+  it('l\'école peut écarter une partie faite : elle ne compte pas, et on le dit', () => {
+    const f = formuleAppliquee(cats, evs('cc', 'tp', 'eb', 'ef'), ['eb']);
+    expect(f[2]).toMatchObject({ ecartee: true, retenue: false, poidsApplique: 0 });
+    expect(libelleFormuleAppliquee(f)).toContain('Examen blanc (non comptée)');
   });
 });

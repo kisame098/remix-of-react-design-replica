@@ -16,7 +16,7 @@ import { toast } from '@/hooks/use-toast';
 import {
   type Examen, type ExamenEpreuve, type ExamenNote, type ExamenTour, type NiveauMatiere,
   analyserSaisieNoteExamen, texteDeLaNote, etatCandidat, triEpreuves,
-  nomEpreuveValide, baremeValide, coefficientValide, seuilEliminatoireValide, nomTourValide,
+  nomEpreuveValide, baremeValide, coefficientValide, seuilEliminatoireValide, nomTourValide, seuilAdmissionValide,
 } from '@/lib/formationPro';
 import { cleCase, type SauvegardeNotes } from './useSauvegardeNotes';
 
@@ -154,7 +154,7 @@ export const GrilleExamen = ({ examen, tours, epreuves, matiere, matieres, candi
               <th rowSpan={2} className="sticky left-0 z-10 bg-muted min-w-[170px] px-3 py-2 text-left font-medium text-muted-foreground border-b border-r">Candidat</th>
               {colonnes.map(({ tour, epreuves: eps }) => (
                 <th key={tour.id} colSpan={eps.length} className="px-2 pt-2 pb-1 border-l border-b text-left">
-                  {modifiable ? <EnTeteTour tour={tour} nbEpreuves={epreuvesDuTour(tour.id)} /> : <span className="font-semibold text-foreground whitespace-nowrap">{tour.name}</span>}
+                  {modifiable ? <EnTeteTour tour={tour} nbEpreuves={epreuvesDuTour(tour.id)} seuilExamen={examen.seuilAdmission} /> : <span className="font-semibold text-foreground whitespace-nowrap">{tour.name}</span>}
                 </th>
               ))}
               <th rowSpan={2} className="min-w-[90px] px-3 text-center font-semibold border-l border-b bg-muted/60">
@@ -399,28 +399,48 @@ const EnTeteEpreuve = ({ epreuve: ep, modifiable, matieres, ouvrirDemande, onOuv
 };
 
 /** Nom d'un tour — le directeur le renomme ou le supprime. */
-const EnTeteTour = ({ tour, nbEpreuves }: { tour: ExamenTour; nbEpreuves: number }) => {
+const EnTeteTour = ({ tour, nbEpreuves, seuilExamen }: { tour: ExamenTour; nbEpreuves: number; seuilExamen: number }) => {
   const { updateTour, deleteTour } = useExamens();
   const [ouvert, setOuvert] = useState(false);
   const [nom, setNom] = useState(tour.name);
+  const [exigee, setExigee] = useState('');
   const [confirmer, setConfirmer] = useState(false);
 
   const renommer = async () => {
     if (!nomTourValide(nom)) return;
-    try { await updateTour(tour.id, nom); setOuvert(false); }
+    const moyenneExigee = exigee.trim() === '' ? null : Number(exigee.replace(',', '.'));
+    if (moyenneExigee !== null && !seuilAdmissionValide(moyenneExigee)) {
+      toast({ title: 'Erreur', description: 'La moyenne exigée doit être entre 0 et 20 (ou vide).', variant: 'destructive' });
+      return;
+    }
+    try { await updateTour(tour.id, { name: nom, moyenneExigee }); setOuvert(false); }
     catch (err) { toast({ title: 'Erreur', description: String(err), variant: 'destructive' }); }
   };
 
   return (
     <>
-      <Popover open={ouvert} onOpenChange={o => { if (o) setNom(tour.name); setOuvert(o); }}>
+      <Popover open={ouvert} onOpenChange={o => {
+        if (o) { setNom(tour.name); setExigee(tour.moyenneExigee == null ? '' : String(tour.moyenneExigee).replace('.', ',')); }
+        setOuvert(o);
+      }}>
         <PopoverTrigger asChild>
-          <button className="font-semibold text-foreground whitespace-nowrap rounded px-1 hover:bg-muted" title="Renommer ou supprimer ce tour">{tour.name}</button>
+          <button className="font-semibold text-foreground whitespace-nowrap rounded px-1 hover:bg-muted" title="Renommer ce tour, régler sa moyenne exigée ou le supprimer">
+            {tour.name}
+            {tour.moyenneExigee != null && <span className="font-normal text-muted-foreground"> · moy. exigée {String(tour.moyenneExigee).replace('.', ',')}</span>}
+          </button>
         </PopoverTrigger>
-        <PopoverContent className="w-64 space-y-3">
+        <PopoverContent className="w-72 space-y-3">
           <div className="space-y-1.5">
             <Label htmlFor={`tour-${tour.id}`}>Nom du tour</Label>
             <Input id={`tour-${tour.id}`} value={nom} onChange={e => setNom(e.target.value)} onKeyDown={e => e.key === 'Enter' && void renommer()} />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor={`exigee-${tour.id}`}>Moyenne exigée pour ce tour</Label>
+            <Input id={`exigee-${tour.id}`} inputMode="decimal" placeholder={`${String(seuilExamen).replace('.', ',')} (celle de l'examen)`} value={exigee} onChange={e => setExigee(e.target.value)} />
+            <p className="text-xs text-muted-foreground">
+              Total demandé = coefficients du tour × cette moyenne. Avant le dernier tour, elle décide de l'admissibilité
+              (ex. CAP : 12 au 1er tour, 10 au 2e).
+            </p>
           </div>
           <div className="flex items-center justify-between gap-2">
             <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive gap-1.5" onClick={() => setConfirmer(true)}>

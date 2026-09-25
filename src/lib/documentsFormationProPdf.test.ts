@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-  genererBulletinsPdf, genererConvocationsPdf, genererAttestationStagePdf, genererDocumentOfficielPdf, dateEnLettres,
+  genererBulletinsPdf, genererConvocationsPdf, genererAttestationStagePdf, genererDocumentOfficielPdf, dateEnLettres, genererRelevesPdf,
 } from './documentsFormationProPdf';
 import type { DocumentOfficiel } from './documentsFormationPro';
 
@@ -22,38 +22,85 @@ describe('dateEnLettres', () => {
   });
 });
 
-describe('PDF — bulletins', () => {
-  it('une page par élève, avec la moyenne générale et le rang', async () => {
-    const doc = await genererBulletinsPdf({
-      ecole, formation: 'CAP Restauration', niveau: 'CAP 1', promotion: 'Promo 2026',
-      periode: { nom: 'Semestre 1', debut: '2026-09-01', fin: '2027-01-31' },
-      formule: 'Contrôle continu 30 % · TP 30 %', effectifClasse: 2, moyennePromotion: 12.2,
-      eleves: [
-        { studentEnrollmentId: 's1', eleve: { nom: 'Diop', prenoms: 'Awa', matricule: 'ETU-1' }, lignes: [
-          { matiere: 'Français', coefficient: 2, moyenne: 12, stage: false },
-          { matiere: 'Stage', coefficient: 3, moyenne: 16, stage: true },
-        ], moyenneGenerale: 14.4, rang: 1, totalCoefficients: 5 },
-        { studentEnrollmentId: 's2', eleve: { nom: 'Fall', prenoms: 'Moussa', matricule: 'ETU-2' }, lignes: [
-          { matiere: 'Français', coefficient: 2, moyenne: 10, stage: false },
-          { matiere: 'Stage', coefficient: 3, moyenne: null, stage: true },
-        ], moyenneGenerale: 10, rang: 2, totalCoefficients: 2 },
-      ],
-    });
-    expect(doc.getNumberOfPages()).toBe(2);
+describe('PDF — bulletins (format IFHO)', () => {
+  const ligne = (matiere: string, notes: string[], comp: string, moyenne: number | null, coefficient: number) => ({
+    matiere, coefficient, stage: false, moyenne, appreciation: moyenne === null ? '' : 'Bien',
+    cellules: [{ notes, moyenne: moyenne }, { notes: [comp], moyenne: null }],
+  });
+  const donnees = (lignes: ReturnType<typeof ligne>[], recap = [{ periode: 'Semestre 1', moyenne: 15.55 }, { periode: 'Semestre 2', moyenne: 14.07 }]) => ({
+    ecole, formation: 'BEP Restauration', niveau: 'BEP 2', promotion: 'Promo 2023',
+    periode: { nom: 'Second semestre' }, anneeScolaire: '2023-2024',
+    colonnes: [{ categorieId: 'dev', nom: 'Devoirs', abrege: 'DEV', nbNotes: 2 }, { categorieId: 'comp', nom: 'Composition', abrege: 'COMP', nbNotes: 1 }],
+    detail: true,
+    formule: 'Devoirs 50 % · Composition 50 %', effectifClasse: 2, moyennePromotion: 12,
+    eleves: [{ studentEnrollmentId: 's1', eleve: { nom: 'Niang', prenoms: 'Sokhna', matricule: 'M1', dateNaissance: '1997-12-21' }, lignes,
+      moyenneGenerale: 14.07, rang: 1, totalCoefficients: 26, totalPoints: 365.88, recapitulatif: recap, moyenneAnnuelle: 14.81 }],
+  });
+
+  it('en-tête de l\'école, titre, colonnes DEV / COMP, totaux, semestres et moyenne générale', async () => {
+    const doc = await genererBulletinsPdf(donnees([ligne('Français', ['18,00', '16,00'], '16,00', 16.5, 2)]));
     const t = texte(doc);
-    expect(t).toContain('BULLETIN DE NOTES');
-    expect(t).toContain('14,40 /20');
-    expect(t).toContain('1er / 2');
-    expect(t).toContain('AUT-42');
+    expect(t).toContain('BULLETIN DE COMPOSITION');
+    expect(t).toContain('SECOND SEMESTRE 2023 - 2024');
+    expect(t).toContain('DEV 1');
+    expect(t).toContain('DEVOIRS');
+    expect(t).toContain('COMPOSITION');
+    expect(t).toContain('365,88');
+    expect(t).toContain('Moyenne Semestre 1');
+    expect(t).toContain('14,81');
+    expect(t).toContain('LE DIRECTEUR DES');
+    expect(t).toContain('N° Aut : AUT-42');
+  });
+
+  it('par défaut : une colonne par partie avec son nom entier et sa seule moyenne, pas de DEV 1 / DEV 2', async () => {
+    const francais = { ...ligne('Français', ['18,00', '16,00'], '', 16.5, 2), cellules: [{ notes: ['18,00', '16,00'], moyenne: 17 }, { notes: ['16,00'], moyenne: 16 }] };
+    const d = { ...donnees([francais]), detail: false,
+      colonnes: [
+        { categorieId: 'cc', nom: 'Contrôle continu', abrege: 'CC', nbNotes: 2 }, { categorieId: 'tp', nom: 'TP', abrege: 'TP', nbNotes: 1 },
+      ] };
+    const t = texte(await genererBulletinsPdf(d));
+    // Le nom entier (sur deux lignes dans l'en-tête étroit).
+    expect(t).toContain('CONTRÔLE');
+    expect(t).toContain('CONTINU');
+    expect(t).not.toContain('CC 1');
+    expect(t).toContain('17,00');   // la moyenne du contrôle continu (18 et 16)
+    expect(t).not.toContain('18,00');
   });
 
   it('un programme de 30 matières tient sur une seule page', async () => {
-    const lignes = Array.from({ length: 30 }, (_, i) => ({ matiere: `Matière ${i + 1}`, coefficient: 1, moyenne: 11, stage: false }));
-    const doc = await genererBulletinsPdf({
-      ecole, formation: 'F', niveau: 'N', promotion: 'P', periode: { nom: 'S1' }, formule: '', effectifClasse: 1, moyennePromotion: 11,
-      eleves: [{ studentEnrollmentId: 's1', eleve: { nom: 'A', prenoms: 'B', matricule: 'M' }, lignes, moyenneGenerale: 11, rang: 1, totalCoefficients: 30 }],
-    });
+    const lignes = Array.from({ length: 30 }, (_, i) => ligne(`Matière ${i + 1}`, ['11,00', '12,00'], '11,00', 11, 1));
+    const doc = await genererBulletinsPdf(donnees(lignes));
     expect(doc.getNumberOfPages()).toBe(1);
+  });
+});
+
+describe('PDF — relevé de notes d\'examen (format CAP / examen blanc)', () => {
+  it('tours côte à côte, totaux demandés, admissibilité, décision et mention', async () => {
+    const doc = await genererRelevesPdf({
+      ecole, typeLibelle: 'EXAMEN BLANC', diplome: "Brevet d'Étude Professionnelle (BEP)", option: 'RESTAURATION', session: 'session 2024',
+      date: '2024-06-19', centre: 'IFHO', presidentJury: 'M. Diallo', avecNE: true,
+      candidats: [{
+        nom: 'Gueye', prenoms: 'Babacar', matricule: 'BC000', dateNaissance: '1998-04-10', lieuNaissance: 'Dakar',
+        tours: [
+          { nom: '1er tour', lignes: [{ discipline: 'Techniques culinaires', coefficient: 4, note: '12', points: '48', ne: '< 8' }], total: 166, totalMax: 260, totalDemande: 156, moyenne: 12.76, decision: 'ADMISSIBLE' },
+          { nom: '2e tour', lignes: [{ discipline: 'Mathématiques', coefficient: 1, note: '14,5', points: '14,5' }], total: 83, totalMax: 140, totalDemande: 70, moyenne: 11.86 },
+        ],
+        totalGeneral: 249, totalGeneralMax: 400, totalGeneralDemande: 226, moyenneGenerale: 12.45, decision: 'ADMIS', mention: 'ASSEZ BIEN',
+      }],
+    });
+    const t = texte(doc);
+    expect(t).toContain('RELEVÉ DE NOTES');
+    expect(t).toContain('EXAMEN BLANC');
+    expect(t).toContain('Option RESTAURATION session 2024');
+    expect(t).toContain('DATE : 19/06/2024');
+    expect(t).toContain('ÉPREUVES DU 1ER TOUR');
+    expect(t).toContain('ÉPREUVES DU 2E TOUR');
+    expect(t).toContain('166 / 260');
+    expect(t).toContain('ADMISSIBLE');
+    expect(t).toContain('249 / 400');
+    expect(t).toContain('226');
+    expect(t).toContain('ASSEZ BIEN');
+    expect(t).toContain('M. Diallo');
   });
 });
 
