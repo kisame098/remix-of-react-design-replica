@@ -368,7 +368,7 @@ const Formations = () => {
             </div>
             <div className="space-y-2">
               <Label htmlFor="formation-description">Description (optionnel)</Label>
-              <Textarea id="formation-description" placeholder="Ex : coefficients confirmés par le relevé DECPC 2022…" value={description} onChange={e => setDescription(e.target.value)} rows={2} />
+              <Textarea id="formation-description" placeholder="Facultatif" value={description} onChange={e => setDescription(e.target.value)} rows={2} />
             </div>
             <Button onClick={handleSave} className="w-full" disabled={isSaving}>
               {isSaving && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
@@ -404,8 +404,7 @@ const Formations = () => {
             <DialogTitle>Modèles hôtellerie-restauration</DialogTitle>
             <DialogDescription>
               Matières et coefficients d'une maquette pédagogique type — entièrement modifiables et supprimables une fois importés.
-              Chaque modèle crée un premier niveau à dupliquer pour les années suivantes. Les coefficients « constatés » viennent
-              d'un document officiel ; les autres sont proposés, à valider par votre établissement.
+              Chaque modèle crée un premier niveau à dupliquer pour les années suivantes.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-2 max-h-80 overflow-y-auto pr-1">
@@ -414,7 +413,7 @@ const Formations = () => {
                 <input type="checkbox" className="mt-1" checked={modelesSelectionnes.has(m.name)} onChange={() => toggleModele(m.name)} />
                 <div className="min-w-0">
                   <p className="text-sm font-medium">{m.name}</p>
-                  <p className="text-xs text-muted-foreground">{m.description}</p>
+                  <p className="text-xs text-muted-foreground">{[m.diplomaType, m.duration].filter(Boolean).join(' · ')}</p>
                 </div>
               </label>
             ))}
@@ -431,17 +430,15 @@ const Formations = () => {
 
 // ─── Modèles hôtellerie-restauration (maquette IFHO) ─────────────────────────
 // Un modèle = une formation avec un premier niveau importable, exactement au
-// format d'un export. Les coefficients du CAP sont confirmés par un relevé de
-// notes officiel DECPC (session 2022) — signalé dans la description, jamais
-// dans un calcul. Le premier niveau se duplique ensuite pour créer les
+// format d'un export, sans texte de description (l'école écrit la sienne si
+// elle le souhaite). Le premier niveau se duplique ensuite pour créer les
 // années suivantes (CAP 1 → CAP 2 → CAP 3).
 const MODELES_IFHO: {
-  name: string; diplomaType?: string; duration?: string; entryLevel?: string; description: string;
+  name: string; diplomaType?: string; duration?: string; entryLevel?: string;
   niveaux: { name: string; matieres: { name: string; type: NiveauMatiereType; coefficient: number; volumeHoraire?: number; nature: NiveauMatiereNature; categorie: string }[]; choixGroups: { label: string; coefficient: number; options: string[] }[] }[];
 }[] = [
   {
     name: 'CAP Restauration', diplomaType: 'Diplôme d\'État', duration: '3 ans', entryLevel: 'CM2 à 4e secondaire',
-    description: 'Coefficients confirmés par un relevé de notes officiel DECPC (session 2022).',
     niveaux: [{
       name: 'Niveau 1',
       matieres: [
@@ -461,7 +458,6 @@ const MODELES_IFHO: {
   },
   {
     name: 'BEP Hôtellerie-Restauration', diplomaType: 'Diplôme d\'État', duration: '2 ans', entryLevel: 'BFEM requis',
-    description: 'Coefficients en partie confirmés par un bulletin IFHO transmis ; les autres sont proposés, à valider auprès de la DECPC. Le total d\'heures indicatif transmis (1 035 h) diffère légèrement de la somme des matières.',
     niveaux: [{
       name: 'Niveau 1',
       matieres: [
@@ -487,7 +483,6 @@ const MODELES_IFHO: {
   },
   {
     name: 'BT Hôtellerie-Tourisme', diplomaType: 'Diplôme d\'État', duration: '2 ans', entryLevel: 'BAC requis',
-    description: 'Coefficients proposés (maquette interne), à valider auprès de la DECPC.',
     niveaux: [{
       name: 'Niveau 1',
       matieres: [
@@ -517,7 +512,6 @@ const MODELES_IFHO: {
   },
   {
     name: 'DTS Gestion Hôtelière', diplomaType: 'Diplôme de l\'établissement', duration: '2 ans', entryLevel: 'Terminale',
-    description: 'Coefficients proposés (maquette interne), à valider auprès de la DECPC. Le total d\'heures indicatif transmis (1 525 h) diffère légèrement de la somme des matières.',
     niveaux: [{
       name: 'Niveau 1',
       matieres: [
@@ -547,7 +541,6 @@ const MODELES_IFHO: {
   },
   {
     name: 'DQP Polyvalent Restauration', diplomaType: 'Attestation', duration: '12 mois', entryLevel: undefined,
-    description: 'Coefficients proposés (maquette interne), à valider auprès de la DECPC. Le total d\'heures indicatif transmis (815 h) diffère légèrement de la somme des matières.',
     niveaux: [{
       name: 'Cycle unique',
       matieres: [
@@ -572,7 +565,6 @@ const MODELES_IFHO: {
   },
   {
     name: 'CPS Pâtissier', diplomaType: 'Attestation', duration: '6 mois', entryLevel: undefined,
-    description: 'Coefficients proposés (maquette interne), à valider auprès de la DECPC.',
     niveaux: [{
       name: 'Cycle unique',
       matieres: [
@@ -597,7 +589,6 @@ const MODELES_IFHO: {
   },
   {
     name: 'CPS Cuisinier', diplomaType: 'Attestation', duration: '6 mois', entryLevel: undefined,
-    description: 'Coefficients proposés (maquette interne), à valider auprès de la DECPC. Le total d\'heures indicatif transmis (835 h) diffère légèrement de la somme des matières.',
     niveaux: [{
       name: 'Cycle unique',
       matieres: [
@@ -625,7 +616,6 @@ const MODELES_IFHO: {
   },
   {
     name: 'CPS Serveur / Barman', diplomaType: 'Attestation', duration: '6 mois', entryLevel: undefined,
-    description: 'Coefficients proposés (maquette interne), à valider auprès de la DECPC.',
     niveaux: [{
       name: 'Cycle unique',
       matieres: [
@@ -651,7 +641,6 @@ const MODELES_IFHO: {
   },
   {
     name: 'EQM — Employé Qualifié de Maison', diplomaType: 'Attestation', duration: 'variable', entryLevel: undefined,
-    description: 'Coefficients proposés (maquette interne), à valider auprès de la DECPC.',
     niveaux: [{
       name: 'Cycle unique',
       matieres: [
