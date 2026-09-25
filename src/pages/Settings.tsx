@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
-import { CLE_ADRESSE_ECOLE, CLE_NINEA_ECOLE } from '@/lib/documentsEcole';
+import { CLE_ADRESSE_ECOLE, CLE_NINEA_ECOLE, CLE_AUTORISATION_ECOLE, CLE_RC_ECOLE } from '@/lib/documentsEcole';
 import { useSchoolYear } from '@/contexts/SchoolYearContext';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
@@ -93,6 +93,8 @@ const SettingsPage = () => {
   // figurent dans l'en-tête des reçus et des fiches d'inscription.
   const [adresseEcole, setAdresseEcole] = useState('');
   const [nineaEcole, setNineaEcole] = useState('');
+  const [autorisationEcole, setAutorisationEcole] = useState('');
+  const [rcEcole, setRcEcole] = useState('');
   const [savingSchool, setSavingSchool] = useState(false);
   const [uploadingLogo, setUploadingLogo] = useState(false);
 
@@ -107,6 +109,8 @@ const SettingsPage = () => {
       });
       setAdresseEcole(typeof school.settings?.[CLE_ADRESSE_ECOLE] === 'string' ? school.settings[CLE_ADRESSE_ECOLE] as string : '');
       setNineaEcole(typeof school.settings?.[CLE_NINEA_ECOLE] === 'string' ? school.settings[CLE_NINEA_ECOLE] as string : '');
+      setAutorisationEcole(typeof school.settings?.[CLE_AUTORISATION_ECOLE] === 'string' ? school.settings[CLE_AUTORISATION_ECOLE] as string : '');
+      setRcEcole(typeof school.settings?.[CLE_RC_ECOLE] === 'string' ? school.settings[CLE_RC_ECOLE] as string : '');
     }
   }, [school]);
 
@@ -114,7 +118,10 @@ const SettingsPage = () => {
     setSavingSchool(true);
     try {
       await updateSchool(schoolForm);
-      await updateSchoolSettings({ [CLE_ADRESSE_ECOLE]: adresseEcole.trim(), [CLE_NINEA_ECOLE]: nineaEcole.trim() });
+      await updateSchoolSettings({
+        [CLE_ADRESSE_ECOLE]: adresseEcole.trim(), [CLE_NINEA_ECOLE]: nineaEcole.trim(),
+        [CLE_AUTORISATION_ECOLE]: autorisationEcole.trim(), [CLE_RC_ECOLE]: rcEcole.trim(),
+      });
       toast({ title: 'École mise à jour' });
     } catch {
       toast({ title: 'Erreur', description: 'Impossible de sauvegarder', variant: 'destructive' });
@@ -385,6 +392,17 @@ const SettingsPage = () => {
                     Le logo, l'adresse et ce numéro figurent dans l'en-tête des reçus de paiement et des fiches d'inscription.
                   </p>
                 </div>
+                <div className="space-y-1.5">
+                  <Label>N° d'autorisation d'ouverture <span className="font-normal text-muted-foreground">(facultatif)</span></Label>
+                  <Input value={autorisationEcole} onChange={e => setAutorisationEcole(e.target.value)} />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Registre de commerce (RC) <span className="font-normal text-muted-foreground">(facultatif)</span></Label>
+                  <Input value={rcEcole} onChange={e => setRcEcole(e.target.value)} />
+                </div>
+                <p className="text-xs text-muted-foreground sm:col-span-2 -mt-2">
+                  L'autorisation et le RC figurent au pied des documents officiels (attestations, diplômes).
+                </p>
               </div>
             </CardContent>
             <CardFooter className="justify-end border-t bg-muted/30 py-4">

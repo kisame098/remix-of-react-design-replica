@@ -12,7 +12,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import {
   Plus, Loader2, Check, AlertCircle, ArrowLeft, ChevronRight, Pencil, Trash2, CalendarRange, Lock, LockOpen, Users, FileCheck2, Wand2,
-  Trophy, BookOpen,
+  Trophy, BookOpen, FileText,
 } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from '@/hooks/use-toast';
@@ -22,6 +22,8 @@ import {
 } from '@/lib/formationPro';
 import { GrilleExamen } from '@/components/formation/GrilleExamen';
 import { ResultatsExamen } from '@/components/formation/ResultatsExamen';
+import { BoutonDocument } from '@/components/formation/BoutonDocument';
+import { useDonneesDocuments } from '@/hooks/useDocumentsFormation';
 import { DialogExamen } from '@/components/formation/DialogExamen';
 import { DialogCandidats } from '@/components/formation/DialogCandidats';
 import { useSauvegardeNotes } from '@/components/formation/useSauvegardeNotes';
@@ -49,6 +51,7 @@ const ExamensPromotion = () => {
   const { loading: chargementFp, promotions, formations, niveaux, niveauMatieres, periodes, baremeCategories } = useFormationPro();
   const ex = useExamens();
   const { students } = useSchool();
+  const documents = useDonneesDocuments();
 
   const promotion = promotions.find(p => p.id === promotionId);
   const niveau = promotion ? niveaux.find(n => n.id === promotion.niveauId) : undefined;
@@ -263,6 +266,22 @@ const ExamensPromotion = () => {
               <Button variant="outline" size="sm" className="h-8 gap-1.5" onClick={() => setDialogCandidats(true)}>
                 <Users className="h-3.5 w-3.5" />Candidats ({candidats.length})
               </Button>
+              <BoutonDocument
+                titre={`Convocations — ${examen.name}`}
+                description="Une convocation par candidat, avec le planning des épreuves (date, heure, salle)."
+                nomFichier={`Convocations_${examen.name}`}
+                disabled={candidats.length === 0 || epreuvesExamen.length === 0}
+                title={candidats.length === 0 || epreuvesExamen.length === 0 ? 'Il faut des candidats et des épreuves.' : undefined}
+                fabriquer={async () => {
+                  const d = documents.convocations(examen.id);
+                  if (!d) throw new Error('Examen introuvable');
+                  const { genererConvocationsPdf } = await import('@/lib/documentsFormationProPdf');
+                  return genererConvocationsPdf(d);
+                }}
+                className="h-8 gap-1.5"
+              >
+                <FileText className="h-3.5 w-3.5" />Convocations
+              </BoutonDocument>
               {!examen.verrouille && (
                 <Button variant="ghost" size="icon" className="h-8 w-8" title="Modifier l'examen" onClick={() => setDialogExamen('edit')}>
                   <Pencil className="h-3.5 w-3.5" />

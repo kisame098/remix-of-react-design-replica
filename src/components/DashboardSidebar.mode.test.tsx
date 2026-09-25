@@ -29,7 +29,8 @@ describe('DashboardSidebar selon le mode', () => {
     expect(screen.getByText('Promotions').closest('a')).not.toHaveTextContent('En dév.');
     expect(screen.getByText('Évaluations').closest('a')).not.toHaveTextContent('En dév.');
     expect(screen.getByText('Formation professionnelle')).toBeInTheDocument();
-    expect(screen.getAllByText('En dév.')).toHaveLength(2);
+    expect(screen.getAllByText('En dév.')).toHaveLength(1);
+    expect(screen.getByText('Documents').closest('a')).not.toHaveTextContent('En dév.');
     expect(screen.getByText('Stages').closest('a')).not.toHaveTextContent('En dév.');
     expect(screen.getByText('Examens').closest('a')).not.toHaveTextContent('En dév.');
     expect(screen.getByText('Formations')).toBeInTheDocument();

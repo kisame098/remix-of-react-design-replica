@@ -50,7 +50,8 @@ describe('menu par mode', () => {
     expect(parTitre.get('Évaluations')?.bientot).toBeUndefined();
     expect(parTitre.get('Examens')?.bientot).toBeUndefined();
     expect(parTitre.get('Stages')?.bientot).toBeUndefined();
-    for (const t of ['Documents']) expect(parTitre.get(t)?.bientot).toBe(true);
+    expect(parTitre.get('Documents')?.bientot).toBeUndefined();
+    expect(parTitre.get("Vue d'ensemble")?.bientot).toBe(true);
   });
 
   it('adresses uniques, permissions valides', () => {

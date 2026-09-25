@@ -16,7 +16,7 @@
 // ═══════════════════════════════════════════════════════════════════════════
 
 /** Fichiers chargés au clic, depuis une page qui reste à l'écran. */
-export const FICHIERS_D_ACTION = /assets\/(recuPdf|ficheInscriptionPdf)-/;
+export const FICHIERS_D_ACTION = /assets\/(recuPdf|ficheInscriptionPdf|documentsFormationProPdf)-/;
 
 const message = (erreur: unknown): string =>
   erreur instanceof Error ? erreur.message

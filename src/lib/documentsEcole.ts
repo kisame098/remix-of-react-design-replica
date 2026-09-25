@@ -19,6 +19,10 @@ export interface InfosEcole {
   adresse?: string;
   /** N° d'agrément / NINEA (Paramètres > École). */
   ninea?: string;
+  /** N° d'autorisation d'ouverture (Paramètres > École) — documents officiels de la formation professionnelle. */
+  autorisation?: string;
+  /** N° du registre de commerce (Paramètres > École). */
+  rc?: string;
   /** Logo en data URL (Paramètres > École) — jamais un lien distant. */
   logo?: string | null;
 }
@@ -40,6 +44,8 @@ const texte = (v: unknown): string | undefined =>
 /** Adresse et NINEA vivent dans `schools.settings` (voir Paramètres > École). */
 export const CLE_ADRESSE_ECOLE = 'adresse';
 export const CLE_NINEA_ECOLE = 'ninea';
+export const CLE_AUTORISATION_ECOLE = 'autorisationOuverture';
+export const CLE_RC_ECOLE = 'registreCommerce';
 
 export const infosEcole = (school: EcoleSource | null | undefined): InfosEcole => ({
   nom: texte(school?.name) ?? 'École',
@@ -49,6 +55,8 @@ export const infosEcole = (school: EcoleSource | null | undefined): InfosEcole =
   email: texte(school?.email),
   adresse: texte(school?.settings?.[CLE_ADRESSE_ECOLE]),
   ninea: texte(school?.settings?.[CLE_NINEA_ECOLE]),
+  autorisation: texte(school?.settings?.[CLE_AUTORISATION_ECOLE]),
+  rc: texte(school?.settings?.[CLE_RC_ECOLE]),
   logo: school?.logo_url || null,
 });
 
