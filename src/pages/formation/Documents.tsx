@@ -21,6 +21,7 @@ import {
 } from '@/lib/documentsFormationPro';
 import { dateDakar } from '@/lib/documentsEcole';
 import { BoutonDocument } from '@/components/formation/BoutonDocument';
+import { BoutonBulletins } from '@/components/formation/BoutonBulletins';
 import { useDonneesDocuments, useDocumentsOfficiels } from '@/hooks/useDocumentsFormation';
 
 const ICONES: Record<TypeDocumentOfficiel, typeof FileText> = {
@@ -207,16 +208,10 @@ const DocumentsEleve = ({ eleveId, promotionId, estDirecteur, logo, donnees, onR
                     <SelectTrigger className="h-8 w-40 text-sm" aria-label="Période"><SelectValue /></SelectTrigger>
                     <SelectContent>{periodes.map(p => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}</SelectContent>
                   </Select>
-                  <BoutonDocument
-                    titre="Bulletin de notes" nomFichier={`Bulletin_${nom}`} className="gap-1.5"
-                    fabriquer={async () => {
-                      const d = donnees.bulletins(promotionId, periodeId, [eleveId]);
-                      if (!d) throw new Error('Période introuvable');
-                      return (await pdf()).genererBulletinsPdf(d);
-                    }}
-                  >
-                    <Printer className="h-3.5 w-3.5" />Bulletin
-                  </BoutonDocument>
+                  <BoutonBulletins
+                    promotionId={promotionId} periodeId={periodeId} periodeNom={periodes.find(p => p.id === periodeId)?.name ?? ''}
+                    eleveIds={[eleveId]} libelle="Bulletin" nomFichier={`Bulletin_${nom}`} className="gap-1.5"
+                  />
                 </div>
               )}
             </div>

@@ -41,7 +41,7 @@ const exInitial = () => ({
   tours: [
     { id: 't1', examenId: 'x1', name: 'Écrit', ordering: 0 },
     { id: 't2', examenId: 'x1', name: 'Pratique', ordering: 1 },
-  ],
+  ] as { id: string; examenId: string; name: string; ordering: number; moyenneExigee?: number }[],
   epreuves: [
     { id: 'ep1', tourId: 't1', niveauMatiereId: 'nm1', nom: 'Français', coefficient: 2, bareme: 20, ordering: 0 },
     { id: 'ep2', tourId: 't2', niveauMatiereId: 'nm2', nom: 'TP Cuisine', coefficient: 4, bareme: 20, seuilEliminatoire: 8, ordering: 0 },

@@ -387,15 +387,18 @@ export const pourcentageValide = (v: number): boolean => Number.isFinite(v) && v
 
 /**
  * Formule par défaut appliquée à toute nouvelle formation — jamais un barème
- * vide à définir de zéro. C'est celle du bulletin de composition d'IFHO
- * (second semestre 2023-2024) : moyenne de la matière = (moyenne des devoirs
- * + composition) / 2. Les examens ont leur propre relevé et n'entrent pas
- * dans le bulletin de semestre. Le directeur la personnalise ensuite si
- * besoin, formation par formation — jamais un barème partagé entre formations.
+ * vide à définir de zéro. Confirmée par le directeur d'IFHO (septembre 2026) :
+ * contrôle continu 30 %, TP 30 %, examen blanc 10 %, examen final 30 % — les
+ * deux derniers remplis par la rubrique Examens. Une partie qui n'a pas été
+ * faite dans la période (pas de TP, pas d'examen blanc…) voit son poids
+ * réparti sur les autres : voir formuleAppliquee. Le directeur la personnalise
+ * ensuite si besoin, formation par formation.
  */
 export const DEFAUT_BAREME_CATEGORIES: readonly { name: string; pourcentage: number; sourceExamen?: TypeExamen }[] = [
-  { name: 'Devoirs', pourcentage: 50 },
-  { name: 'Composition', pourcentage: 50 },
+  { name: 'Contrôle continu', pourcentage: 30 },
+  { name: 'TP', pourcentage: 30 },
+  { name: 'Examen blanc', pourcentage: 10, sourceExamen: 'blanc' },
+  { name: 'Examen final', pourcentage: 30, sourceExamen: 'officiel' },
 ];
 
 export const sommeBareme = (categories: BaremeCategorie[]): number =>
@@ -1199,4 +1202,43 @@ const propositionIncomplete = (b: BilanTour): Proposition => {
   }
   const n = b.etat.epreuvesAbsent.length;
   return { decision: null, mention: null, motif: `Absent à ${n} épreuve${n > 1 ? 's' : ''} (${b.tour.name}) — au jury de décider` };
+};
+
+// ─── Formule appliquée : ce qui n'a pas été fait voit son poids réparti ─────
+// L'école n'a pas toujours le temps de tout faire (pas de TP ce semestre,
+// pas d'examen blanc…) : le bulletin doit sortir quand même, juste. Une
+// catégorie sans aucune évaluation dans la période, ou écartée par l'école,
+// ne compte pas ; les autres gardent leurs proportions (30/30/30 → 1/3 chacun).
+
+export interface CategorieAppliquee {
+  categorie: BaremeCategorie;
+  /** Évaluations (ou épreuves d'examen) de la période dans cette catégorie. */
+  nbEvaluations: number;
+  /** Écartée par l'école pour ce bulletin. */
+  ecartee: boolean;
+  /** Retenue : faite dans la période et non écartée. */
+  retenue: boolean;
+  /** Poids réel après répartition (0 si non retenue). */
+  poidsApplique: number;
+}
+
+export const formuleAppliquee = (
+  categories: BaremeCategorie[], evaluationsPeriode: Pick<Evaluation, 'categorieId'>[], ecartees: string[] = [],
+): CategorieAppliquee[] => {
+  const lignes = [...categories].sort((a, b) => a.ordering - b.ordering).map(c => {
+    const nbEvaluations = evaluationsPeriode.filter(e => e.categorieId === c.id).length;
+    const ecartee = ecartees.includes(c.id);
+    return { categorie: c, nbEvaluations, ecartee, retenue: nbEvaluations > 0 && !ecartee, poidsApplique: 0 };
+  });
+  const total = lignes.filter(l => l.retenue).reduce((t, l) => t + l.categorie.pourcentage, 0);
+  for (const l of lignes) l.poidsApplique = l.retenue && total > 0 ? (l.categorie.pourcentage * 100) / total : 0;
+  return lignes;
+};
+
+/** « Contrôle continu 42,86 % · TP 42,86 % · Examen final… » — la formule réellement appliquée, dite en clair. */
+export const libelleFormuleAppliquee = (f: CategorieAppliquee[]): string => {
+  const pct = (n: number) => `${(Math.round(n * 100) / 100).toString().replace('.', ',')} %`;
+  const retenues = f.filter(l => l.retenue).map(l => `${l.categorie.name} ${pct(l.poidsApplique)}`).join(' · ');
+  const absentes = f.filter(l => !l.retenue).map(l => `${l.categorie.name} (${l.ecartee ? 'non comptée' : 'non faite'})`);
+  return absentes.length ? `${retenues} — poids réparti : ${absentes.join(', ')}` : retenues;
 };

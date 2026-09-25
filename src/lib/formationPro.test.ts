@@ -380,9 +380,10 @@ describe('validation du barème et des évaluations', () => {
     expect(pourcentageValide(101)).toBe(false);
     expect(pourcentageValide(-5)).toBe(false);
   });
-  it('la formule par défaut est celle du bulletin d\'IFHO : devoirs 50 % · composition 50 %, sans examen', () => {
-    expect(DEFAUT_BAREME_CATEGORIES.map(c => [c.name, c.pourcentage])).toEqual([['Devoirs', 50], ['Composition', 50]]);
-    expect(DEFAUT_BAREME_CATEGORIES.some(c => c.sourceExamen)).toBe(false);
+  it('la formule par défaut est celle confirmée par le directeur d\'IFHO : 30 / 30 / 10 / 30, examens remplis par Examens', () => {
+    expect(DEFAUT_BAREME_CATEGORIES.map(c => [c.name, c.pourcentage, c.sourceExamen])).toEqual([
+      ['Contrôle continu', 30, undefined], ['TP', 30, undefined], ['Examen blanc', 10, 'blanc'], ['Examen final', 30, 'officiel'],
+    ]);
   });
 
   it('sommeBareme et baremeComplet — un barème à quatre catégories (30/30/10/30) fait bien 100', () => {
@@ -995,5 +996,34 @@ describe('bilanCandidat — examens à deux tours, vérifié sur les relevés d\
   it('un seul tour : même résultat que le seuil d\'admission de l\'examen', () => {
     const b = bilanCandidat([{ id: 't1', examenId: 'x', name: 'Écrit', ordering: 0 }], [e('a', 't1', 2)], n([['a', 9.5]]), 's1', 10);
     expect(b.proposition.decision).toBe('ajourne');
+  });
+});
+
+import { formuleAppliquee, libelleFormuleAppliquee } from './formationPro';
+
+describe('formule appliquée — ce qui n\'a pas été fait voit son poids réparti', () => {
+  const cats = [
+    categorie({ id: 'cc', name: 'Contrôle continu', pourcentage: 30, ordering: 0 }),
+    categorie({ id: 'tp', name: 'TP', pourcentage: 30, ordering: 1 }),
+    categorie({ id: 'eb', name: 'Examen blanc', pourcentage: 10, ordering: 2, sourceExamen: 'blanc' }),
+    categorie({ id: 'ef', name: 'Examen final', pourcentage: 30, ordering: 3, sourceExamen: 'officiel' }),
+  ];
+  const evs = (...ids: string[]) => ids.map(categorieId => ({ categorieId }));
+
+  it('tout fait : 30 / 30 / 10 / 30', () => {
+    expect(formuleAppliquee(cats, evs('cc', 'tp', 'eb', 'ef')).map(l => l.poidsApplique)).toEqual([30, 30, 10, 30]);
+  });
+  it('pas d\'examen blanc : ses 10 % sont répartis (30/90 = 33,33 % chacun)', () => {
+    const f = formuleAppliquee(cats, evs('cc', 'tp', 'ef'));
+    expect(f.map(l => Math.round(l.poidsApplique * 100) / 100)).toEqual([33.33, 33.33, 0, 33.33]);
+    expect(libelleFormuleAppliquee(f)).toBe('Contrôle continu 33,33 % · TP 33,33 % · Examen final 33,33 % — poids réparti : Examen blanc (non faite)');
+  });
+  it('seulement le contrôle continu et l\'examen final (ex-« devoirs + composition ») : 50 / 50', () => {
+    expect(formuleAppliquee(cats, evs('cc', 'ef')).map(l => l.poidsApplique)).toEqual([50, 0, 0, 50]);
+  });
+  it('l\'école peut écarter une partie faite : elle ne compte pas, et on le dit', () => {
+    const f = formuleAppliquee(cats, evs('cc', 'tp', 'eb', 'ef'), ['eb']);
+    expect(f[2]).toMatchObject({ ecartee: true, retenue: false, poidsApplique: 0 });
+    expect(libelleFormuleAppliquee(f)).toContain('Examen blanc (non comptée)');
   });
 });

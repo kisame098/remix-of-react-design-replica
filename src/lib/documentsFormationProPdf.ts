@@ -318,7 +318,14 @@ const pageBulletin = (doc: jsPDF, d: DonneesBulletins, b: BulletinEleve, c: Pale
   cellule(doc, MX + wMat, y, 26, hBloc, b.moyenneGenerale === null ? '—' : note(b.moyenneGenerale), { gras: true, taille: 11 });
   cellule(doc, MX + wMat + 26, y, 34, hBloc, 'Appréciations du conseil de classe', { gras: true, taille: 8.2 });
   cellule(doc, MX + wMat + 60, y, UX - wMat - 60, hBloc, '', {});
-  y += hBloc + 5;
+  y += hBloc + 3;
+  // La formule réellement appliquée ce semestre (ce qui n'a pas été fait a vu son poids réparti).
+  if (d.formule) {
+    doc.setFont('helvetica', 'italic'); doc.setFontSize(7); doc.setTextColor(GRIS);
+    const lignes = (doc.splitTextToSize(`Formule appliquée : ${d.formule}`, UX) as string[]).slice(0, 2);
+    lignes.forEach(l => { doc.text(l, MX, y + 2); y += 3.2; });
+  }
+  y += 3;
 
   // Rappel des périodes et moyenne générale (dès la 2e période)
   if (b.recapitulatif.length > 1) {

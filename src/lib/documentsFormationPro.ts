@@ -122,10 +122,18 @@ export const appreciationMoyenne = (m: number | null): string => {
   return 'Insuffisant';
 };
 
-/** « Devoirs » → DEV, « Composition » → COMP, « Contrôle continu » → CC, « TP » → TP. */
+/**
+ * Libellé d'une catégorie en tête de colonne du bulletin. Comme le veut
+ * l'école : le contrôle continu s'imprime en devoirs (DEV 1, DEV 2…) et
+ * l'examen final en composition (COMP).
+ */
 export const abregeCategorie = (nom: string): string => {
   const mots = nom.trim().split(/\s+/).filter(Boolean);
   const norme = sansAccents(mots[0] ?? '');
+  const complet = sansAccents(nom.trim());
+  if (complet.startsWith('controle continu')) return 'DEV';
+  if (complet.startsWith('examen final')) return 'COMP';
+  if (complet.startsWith('examen blanc')) return 'EX. BLANC';
   if (mots.length > 1) return mots.map(m => m[0]).join('').toUpperCase();
   if (norme.startsWith('dev')) return 'DEV';
   if (norme.startsWith('comp')) return 'COMP';

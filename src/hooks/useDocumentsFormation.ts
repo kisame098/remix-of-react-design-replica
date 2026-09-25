@@ -10,6 +10,7 @@ import { infosEcole, type EcoleSource } from '@/lib/documentsEcole';
 import {
   recapitulatifComplet, evaluationsDepuisExamens, evaluationsDeLaFormule, dureeStageJours, libelleDuree, triPeriodes, LIBELLES_RYTHME,
   bilanCandidat, decisionRetenue, mentionRetenue, convertirSur20, texteDeLaNote, LIBELLES_DECISION, LIBELLES_MENTION,
+  formuleAppliquee, libelleFormuleAppliquee, type CategorieAppliquee,
 } from '@/lib/formationPro';
 import {
   construireBulletins, planningExamen, libelleTypeExamen,
@@ -41,7 +42,22 @@ export const useDonneesDocuments = () => {
     return { promotion, niveau, formation };
   };
 
-  const bulletins = (promotionId: string, periodeId: string, eleveIds?: string[]): DonneesBulletins | null => {
+  /** La formule telle qu'elle s'appliquera pour cette période : ce qui a été fait, ce qui ne l'a pas été. */
+  const formule = (promotionId: string, periodeId: string, ecartees: string[] = []): CategorieAppliquee[] => {
+    const { formation } = contexte(promotionId);
+    if (!formation) return [];
+    const categories = fp.baremeCategories.filter(c => c.formationId === formation.id);
+    const depuisExamens = evaluationsDepuisExamens(promotionId, categories, ex.examens, ex.tours, ex.epreuves, ex.notes);
+    const f = evaluationsDeLaFormule(fp.evaluations.filter(e => e.promotionId === promotionId), fp.notes, categories, depuisExamens);
+    return formuleAppliquee(categories, f.evaluations.filter(e => e.periodeId === periodeId), ecartees);
+  };
+
+  /**
+   * Bulletins d'une période. `ecartees` : catégories que l'école choisit de ne
+   * pas compter ce semestre (leur poids est réparti) ; une catégorie sans
+   * aucune évaluation dans la période est écartée d'office.
+   */
+  const bulletins = (promotionId: string, periodeId: string, eleveIds?: string[], ecartees: string[] = []): DonneesBulletins | null => {
     const { promotion, niveau, formation } = contexte(promotionId);
     const periode = fp.periodes.find(p => p.id === periodeId);
     if (!promotion || !niveau || !formation || !periode) return null;
@@ -60,9 +76,21 @@ export const useDonneesDocuments = () => {
         evaluations: fp.evaluations, notes: fp.notes, depuisExamens, stages: st.stages,
       }),
     }));
-    const formule = evaluationsDeLaFormule(fp.evaluations.filter(e => e.promotionId === promotionId), fp.notes, categories, depuisExamens);
+    const toutes = evaluationsDeLaFormule(fp.evaluations.filter(e => e.promotionId === promotionId), fp.notes, categories, depuisExamens);
+    const evaluationsPeriode = toutes.evaluations.filter(e => e.periodeId === periodeId);
+    // La période du bulletin : seulement les catégories faites et non écartées.
+    const appliquee = formuleAppliquee(categories, evaluationsPeriode, ecartees);
+    const retenues = appliquee.filter(l => l.retenue).map(l => l.categorie);
+    const idsRetenues = new Set(retenues.map(c => c.id));
+    recaps[recaps.length - 1] = {
+      periode: recaps[recaps.length - 1].periode,
+      lignes: recapitulatifComplet({
+        promotionId, periodeId, eleveIds: eleves.map(s => s.id), matieres, categories: retenues,
+        evaluations: fp.evaluations, notes: fp.notes, depuisExamens, stages: st.stages,
+      }),
+    };
     const r = construireBulletins({
-      matieres, categories, evaluations: formule.evaluations.filter(e => e.periodeId === periodeId), notes: formule.notes,
+      matieres, categories: retenues, evaluations: evaluationsPeriode.filter(e => idsRetenues.has(e.categorieId)), notes: toutes.notes,
       eleves, recaps,
     });
     return {
@@ -70,7 +98,7 @@ export const useDonneesDocuments = () => {
       periode: { nom: periode.name, debut: periode.startDate, fin: periode.endDate },
       anneeScolaire: currentYear?.id,
       colonnes: r.colonnes,
-      formule: categories.map(c => `${c.name} ${c.pourcentage} %`).join(' · '),
+      formule: libelleFormuleAppliquee(appliquee),
       effectifClasse: r.effectifClasse, moyennePromotion: r.moyennePromotion,
       eleves: eleveIds ? r.bulletins.filter(b => eleveIds.includes(b.studentEnrollmentId)) : r.bulletins,
     };
@@ -193,7 +221,7 @@ export const useDonneesDocuments = () => {
     };
   };
 
-  return { ecole, bulletins, convocations, releves, attestationStage, contenuOfficiel, periodesDe: (promotionId: string) => triPeriodes(fp.periodes.filter(p => p.promotionId === promotionId)) };
+  return { ecole, formule, bulletins, convocations, releves, attestationStage, contenuOfficiel, periodesDe: (promotionId: string) => triPeriodes(fp.periodes.filter(p => p.promotionId === promotionId)) };
 };
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

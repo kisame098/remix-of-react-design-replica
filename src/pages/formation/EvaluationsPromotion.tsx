@@ -19,8 +19,7 @@ import { triPeriodes, baremeComplet, sommeBareme, analyserSaisieNote, evaluation
 import { GrilleNotesMatiere } from '@/components/formation/GrilleNotesMatiere';
 import { RecapitulatifPeriode } from '@/components/formation/RecapitulatifPeriode';
 import { NotesStageMatiere } from '@/components/formation/NotesStageMatiere';
-import { BoutonDocument } from '@/components/formation/BoutonDocument';
-import { useDonneesDocuments } from '@/hooks/useDocumentsFormation';
+import { BoutonBulletins } from '@/components/formation/BoutonBulletins';
 import { DialogPeriode } from '@/components/formation/DialogPeriode';
 import { useSauvegardeNotes } from '@/components/formation/useSauvegardeNotes';
 
@@ -51,7 +50,6 @@ const EvaluationsPromotion = () => {
   const { students } = useSchool();
   const examens = useExamens();
   const stagesCtx = useStages();
-  const documents = useDonneesDocuments();
   const sauvegarde = useSauvegardeNotes({ enregistrer: saisirNote, supprimer: supprimerNote, analyser: analyserSaisieNote });
 
   const promotion = promotions.find(p => p.id === promotionId);
@@ -286,20 +284,10 @@ const EvaluationsPromotion = () => {
                     <h2 className="text-xl font-bold flex items-center gap-2"><Trophy className="h-5 w-5 text-primary" />Récapitulatif — {periode.name}</h2>
                     <p className="text-sm text-muted-foreground">Moyennes par matière, moyenne générale et rang.</p>
                   </div>
-                  <BoutonDocument
-                    titre={`Bulletins — ${periode.name}`}
-                    description={`Un bulletin par élève de ${promotion.name}, dans un seul PDF.`}
-                    nomFichier={`Bulletins_${promotion.name}_${periode.name}`}
-                    fabriquer={async () => {
-                      const d = documents.bulletins(promotion.id, periode.id);
-                      if (!d) throw new Error('Données introuvables');
-                      const { genererBulletinsPdf } = await import('@/lib/documentsFormationProPdf');
-                      return genererBulletinsPdf(d);
-                    }}
-                    className="gap-1.5"
-                  >
-                    <FileText className="h-3.5 w-3.5" />Bulletins de la promotion
-                  </BoutonDocument>
+                  <BoutonBulletins
+                    promotionId={promotion.id} periodeId={periode.id} periodeNom={periode.name}
+                    libelle="Bulletins de la promotion" nomFichier={`Bulletins_${promotion.name}_${periode.name}`} className="gap-1.5"
+                  />
                 </div>
                 <RecapitulatifPeriode
                   promotionId={promotion.id} periode={periode} matieres={matieres} categories={categories} depuisExamens={depuisExamens}
