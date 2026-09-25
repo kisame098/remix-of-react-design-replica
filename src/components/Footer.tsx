@@ -58,6 +58,11 @@ const Footer = () => {
                   FAQ
                 </a>
               </li>
+              <li>
+                <a href="/telecharger" className="text-sm text-muted-foreground hover:text-foreground transition-colors">
+                  Télécharger le logiciel
+                </a>
+              </li>
             </ul>
           </div>
 

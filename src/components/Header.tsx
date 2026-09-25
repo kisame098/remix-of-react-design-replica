@@ -23,7 +23,7 @@ const Header = () => {
           </Link>
 
           {/* Desktop Navigation */}
-          <nav className="hidden md:flex items-center gap-8">
+          <nav className="hidden md:flex items-center gap-6 lg:gap-8">
             <a href="#fonctionnalites" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">
               Fonctionnalités
             </a>
@@ -33,6 +33,9 @@ const Header = () => {
             <a href="#contact" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">
               Contact
             </a>
+            <Link to="/telecharger" className="text-sm font-medium text-primary hover:text-primary/80 transition-colors whitespace-nowrap">
+              Télécharger le logiciel
+            </Link>
           </nav>
 
           {/* Desktop CTA */}
@@ -77,6 +80,9 @@ const Header = () => {
               <a href="#contact" className="text-sm font-medium text-muted-foreground hover:text-foreground">
                 Contact
               </a>
+              <Link to="/telecharger" className="text-sm font-medium text-primary">
+                Télécharger le logiciel
+              </Link>
               <Link to="/auth" className="text-sm font-medium text-muted-foreground hover:text-foreground">
                 Se connecter
               </Link>
