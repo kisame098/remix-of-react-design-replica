@@ -7,7 +7,7 @@ import {
 } from '@/lib/documentsDesign';
 import { dessinerLogoEcole } from '@/lib/documentsEcole';
 import {
-  type DonneesBulletins, type BulletinEleve, type LigneConvocation, type DocumentOfficiel, type TypeDocumentOfficiel,
+  type DonneesBulletins, type BulletinEleve, type LigneConvocation, type ColonneBulletin, type DocumentOfficiel, type TypeDocumentOfficiel,
   numeroDocument, accord, rangOrdinal, titreDiplome, libelleMention, libelleTypeExamen,
 } from '@/lib/documentsFormationPro';
 
@@ -249,27 +249,29 @@ const pageBulletin = (doc: jsPDF, d: DonneesBulletins, b: BulletinEleve, c: Pale
   y += 21;
 
   // ── Tableau ──
+  // Par défaut : une colonne par partie de la formule, avec sa seule moyenne
+  // (CONTRÔLE CONTINU, TP, EXAMEN BLANC, EXAMEN FINAL). En détail : chaque
+  // note de la partie (CC 1, CC 2…) puis sa moyenne.
+  const detail = !!d.detail;
+  const largeurPartie = (col: ColonneBulletin) => (detail && col.nbNotes > 1 ? col.nbNotes + 1 : 1);
   const fixe = { moy: 16, coef: 11, pts: 17, appr: 24 };
-  const nbColonnesNotes = d.colonnes.reduce((t, col) => t + (col.nbNotes > 1 ? col.nbNotes + 1 : 1), 0);
-  const wNote = Math.min(15, (UX - 42 - fixe.moy - fixe.coef - fixe.pts - fixe.appr) / Math.max(1, nbColonnesNotes));
+  const nbColonnesNotes = d.colonnes.reduce((t, col) => t + largeurPartie(col), 0);
+  const wNote = Math.min(detail ? 15 : 22, (UX - 42 - fixe.moy - fixe.coef - fixe.pts - fixe.appr) / Math.max(1, nbColonnesNotes));
   const wMat = UX - nbColonnesNotes * wNote - fixe.moy - fixe.coef - fixe.pts - fixe.appr;
   const fondEntete = c.pale;
   const hEntete = 12;
   let x = MX;
   cellule(doc, x, y, wMat, hEntete, 'MATIÈRES', { fond: fondEntete, gras: true }); x += wMat;
   for (const col of d.colonnes) {
-    if (col.nbNotes > 1) {
-      const wGroupe = (col.nbNotes + 1) * wNote;
-      // Comme IFHO : « NOTES » au-dessus des devoirs quand une seule catégorie a plusieurs notes.
-      const groupes = d.colonnes.filter(k => k.nbNotes > 1).length;
-      cellule(doc, x, y, wGroupe, hEntete / 2, groupes === 1 ? 'NOTES' : col.nom.toUpperCase(), { fond: fondEntete, gras: true, taille: 7.6 });
-      for (let i = 1; i <= col.nbNotes; i++) cellule(doc, x + (i - 1) * wNote, y + hEntete / 2, wNote, hEntete / 2, `${col.abrege} ${i}`, { fond: fondEntete, gras: true, taille: 7.4 });
-      cellule(doc, x + col.nbNotes * wNote, y + hEntete / 2, wNote, hEntete / 2, `MOY ${col.abrege}`, { fond: fondEntete, gras: true, taille: 6.8 });
-      x += wGroupe;
+    const n = largeurPartie(col);
+    if (n > 1) {
+      cellule(doc, x, y, n * wNote, hEntete / 2, col.nom.toUpperCase(), { fond: fondEntete, gras: true, taille: 7.4 });
+      for (let i = 1; i < n; i++) cellule(doc, x + (i - 1) * wNote, y + hEntete / 2, wNote, hEntete / 2, `${col.abrege} ${i}`, { fond: fondEntete, gras: true, taille: 7.2 });
+      cellule(doc, x + (n - 1) * wNote, y + hEntete / 2, wNote, hEntete / 2, 'MOY', { fond: fondEntete, gras: true, taille: 7.2 });
     } else {
-      cellule(doc, x, y, wNote, hEntete, col.abrege, { fond: fondEntete, gras: true, taille: 7.8 });
-      x += wNote;
+      cellule(doc, x, y, wNote, hEntete, col.nom.toUpperCase(), { fond: fondEntete, gras: true, taille: 7.4 });
     }
+    x += n * wNote;
   }
   cellule(doc, x, y, fixe.moy, hEntete, 'MOY GEN', { fond: fondEntete, gras: true, taille: 7.8 }); x += fixe.moy;
   cellule(doc, x, y, fixe.coef, hEntete, 'COEF', { fond: fondEntete, gras: true, taille: 7.8 }); x += fixe.coef;
@@ -290,11 +292,16 @@ const pageBulletin = (doc: jsPDF, d: DonneesBulletins, b: BulletinEleve, c: Pale
       x += w;
     } else {
       l.cellules.forEach((cel, k) => {
-        const col = d.colonnes[k];
-        const n = col.nbNotes;
-        for (let j = 0; j < n; j++) cellule(doc, x + j * wNote, y, wNote, hLigne, cel.notes[j] ?? '', { fond, taille });
-        if (n > 1) cellule(doc, x + n * wNote, y, wNote, hLigne, cel.moyenne === null ? '' : note(cel.moyenne), { fond, taille });
-        x += (n > 1 ? n + 1 : 1) * wNote;
+        const n = largeurPartie(d.colonnes[k]);
+        const moyenne = cel.moyenne === null ? '' : note(cel.moyenne);
+        if (n > 1) {
+          for (let j = 0; j < n - 1; j++) cellule(doc, x + j * wNote, y, wNote, hLigne, cel.notes[j] ?? '', { fond, taille });
+          cellule(doc, x + (n - 1) * wNote, y, wNote, hLigne, moyenne, { fond, taille, gras: true });
+        } else {
+          // Une seule case : la moyenne de la partie (ou l'unique note, « Abs »… en détail).
+          cellule(doc, x, y, wNote, hLigne, detail && cel.notes.length === 1 && cel.moyenne === null ? cel.notes[0] : moyenne, { fond, taille });
+        }
+        x += n * wNote;
       });
     }
     cellule(doc, x, y, fixe.moy, hLigne, l.moyenne === null ? '' : note(l.moyenne), { fond, gras: true, taille }); x += fixe.moy;

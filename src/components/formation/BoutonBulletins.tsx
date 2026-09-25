@@ -33,6 +33,8 @@ export const BoutonBulletins = ({ promotionId, periodeId, periodeNom, eleveIds, 
   const [preparation, setPreparation] = useState(false);
   const [ecartees, setEcartees] = useState<string[]>([]);
   const [apercu, setApercu] = useState(false);
+  // Par défaut, la seule moyenne de chaque partie : le détail des notes remplit vite la page.
+  const [detail, setDetail] = useState(false);
 
   const formule = preparation ? donnees.formule(promotionId, periodeId, ecartees) : [];
   const retenues = formule.filter(l => l.retenue);
@@ -42,7 +44,7 @@ export const BoutonBulletins = ({ promotionId, periodeId, periodeNom, eleveIds, 
 
   return (
     <>
-      <Button variant={variant} size="sm" className={className} onClick={() => { setEcartees([]); setPreparation(true); }}>
+      <Button variant={variant} size="sm" className={className} onClick={() => { setEcartees([]); setDetail(false); setPreparation(true); }}>
         <FileText className="h-3.5 w-3.5" />{libelle}
       </Button>
 
@@ -93,6 +95,16 @@ export const BoutonBulletins = ({ promotionId, periodeId, periodeNom, eleveIds, 
             </p>
           )}
 
+          <label className="flex items-start gap-2.5 rounded-md border p-3 cursor-pointer">
+            <Checkbox checked={detail} onCheckedChange={v => setDetail(v === true)} className="mt-0.5" aria-label="Afficher le détail des notes" />
+            <span className="text-sm">
+              Afficher le détail des notes
+              <span className="block text-xs text-muted-foreground">
+                Chaque note de chaque partie (CC 1, CC 2, TP 1…) avant sa moyenne. Sinon, seule la moyenne de chaque partie est imprimée.
+              </span>
+            </span>
+          </label>
+
           <div className="flex justify-end">
             <Button disabled={retenues.length === 0} onClick={() => { setPreparation(false); setApercu(true); }} className="gap-1.5">
               <FileText className="h-4 w-4" />Générer {eleveIds ? 'le bulletin' : 'les bulletins'}
@@ -105,7 +117,7 @@ export const BoutonBulletins = ({ promotionId, periodeId, periodeNom, eleveIds, 
         ouvert={apercu} onFermer={() => setApercu(false)}
         titre={`Bulletins — ${periodeNom}`} nomFichier={nomFichier}
         generer={async () => {
-          const d = donnees.bulletins(promotionId, periodeId, eleveIds, ecartees);
+          const d = donnees.bulletins(promotionId, periodeId, eleveIds, ecartees, detail);
           if (!d) throw new Error('Données introuvables');
           const { genererBulletinsPdf } = await import('@/lib/documentsFormationProPdf');
           return genererBulletinsPdf(d);

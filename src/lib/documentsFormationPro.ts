@@ -123,17 +123,12 @@ export const appreciationMoyenne = (m: number | null): string => {
 };
 
 /**
- * Libellé d'une catégorie en tête de colonne du bulletin. Comme le veut
- * l'école : le contrôle continu s'imprime en devoirs (DEV 1, DEV 2…) et
- * l'examen final en composition (COMP).
+ * Abréviation d'une catégorie, pour les sous-colonnes du bulletin DÉTAILLÉ
+ * (CC 1, CC 2, TP 1…). Le bulletin par défaut, lui, écrit le nom entier.
  */
 export const abregeCategorie = (nom: string): string => {
   const mots = nom.trim().split(/\s+/).filter(Boolean);
   const norme = sansAccents(mots[0] ?? '');
-  const complet = sansAccents(nom.trim());
-  if (complet.startsWith('controle continu')) return 'DEV';
-  if (complet.startsWith('examen final')) return 'COMP';
-  if (complet.startsWith('examen blanc')) return 'EX. BLANC';
   if (mots.length > 1) return mots.map(m => m[0]).join('').toUpperCase();
   if (norme.startsWith('dev')) return 'DEV';
   if (norme.startsWith('comp')) return 'COMP';
@@ -184,6 +179,12 @@ export interface DonneesBulletins {
   periode: { nom: string; debut?: string; fin?: string };
   anneeScolaire?: string;
   colonnes: ColonneBulletin[];
+  /**
+   * `false` (par défaut) : une colonne par partie de la formule, avec sa
+   * seule moyenne (CONTRÔLE CONTINU, TP, EXAMEN BLANC, EXAMEN FINAL).
+   * `true` : en plus, chaque note de chaque partie (CC 1, CC 2… puis MOY).
+   */
+  detail?: boolean;
   /** « Devoirs 50 % · Composition 50 % » — rappelé en petit. */
   formule: string;
   effectifClasse: number;

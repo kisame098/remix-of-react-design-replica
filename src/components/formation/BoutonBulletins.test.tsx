@@ -45,6 +45,17 @@ const rendre = () => render(
 );
 
 describe('Préparer les bulletins', () => {
+  it('par défaut : la seule moyenne de chaque partie ; le détail des notes est une option', async () => {
+    const user = userEvent.setup();
+    rendre();
+    await user.click(screen.getByRole('button', { name: /Bulletins de la promotion/ }));
+    const detail = screen.getByRole('checkbox', { name: 'Afficher le détail des notes' });
+    expect(detail).not.toBeChecked();
+    await user.click(detail);
+    await user.click(screen.getByRole('button', { name: /Générer les bulletins/ }));
+    expect(bulletins).toHaveBeenCalledWith('p1', 's1', undefined, [], true);
+  });
+
   beforeEach(() => vi.clearAllMocks());
 
   it('dit ce qui n\'a pas été fait et montre le poids réparti (30/90 = 33,33 %)', async () => {
@@ -63,6 +74,6 @@ describe('Préparer les bulletins', () => {
     await user.click(screen.getByRole('checkbox', { name: 'Compter TP' }));
     expect(screen.getAllByText('50 %')).toHaveLength(2);
     await user.click(screen.getByRole('button', { name: /Générer les bulletins/ }));
-    expect(bulletins).toHaveBeenCalledWith('p1', 's1', undefined, ['tp']);
+    expect(bulletins).toHaveBeenCalledWith('p1', 's1', undefined, ['tp'], false);
   });
 });

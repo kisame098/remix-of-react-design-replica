@@ -111,10 +111,9 @@ describe('bulletin — vérifié sur le bulletin de composition d\'IFHO (S2 2023
   it('abréviations des catégories', () => {
     expect(abregeCategorie('Devoirs')).toBe('DEV');
     expect(abregeCategorie('Composition')).toBe('COMP');
-    // Le contrôle continu s'imprime en devoirs, l'examen final en composition (demande de l'école).
-    expect(abregeCategorie('Contrôle continu')).toBe('DEV');
-    expect(abregeCategorie('Examen final')).toBe('COMP');
-    expect(abregeCategorie('Examen blanc')).toBe('EX. BLANC');
+    expect(abregeCategorie('Contrôle continu')).toBe('CC');
+    expect(abregeCategorie('Examen final')).toBe('EF');
+    expect(abregeCategorie('Examen blanc')).toBe('EB');
     expect(abregeCategorie('TP')).toBe('TP');
   });
 });

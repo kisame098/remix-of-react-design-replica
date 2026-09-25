@@ -31,6 +31,7 @@ describe('PDF — bulletins (format IFHO)', () => {
     ecole, formation: 'BEP Restauration', niveau: 'BEP 2', promotion: 'Promo 2023',
     periode: { nom: 'Second semestre' }, anneeScolaire: '2023-2024',
     colonnes: [{ categorieId: 'dev', nom: 'Devoirs', abrege: 'DEV', nbNotes: 2 }, { categorieId: 'comp', nom: 'Composition', abrege: 'COMP', nbNotes: 1 }],
+    detail: true,
     formule: 'Devoirs 50 % · Composition 50 %', effectifClasse: 2, moyennePromotion: 12,
     eleves: [{ studentEnrollmentId: 's1', eleve: { nom: 'Niang', prenoms: 'Sokhna', matricule: 'M1', dateNaissance: '1997-12-21' }, lignes,
       moyenneGenerale: 14.07, rang: 1, totalCoefficients: 26, totalPoints: 365.88, recapitulatif: recap, moyenneAnnuelle: 14.81 }],
@@ -42,13 +43,28 @@ describe('PDF — bulletins (format IFHO)', () => {
     expect(t).toContain('BULLETIN DE COMPOSITION');
     expect(t).toContain('SECOND SEMESTRE 2023 - 2024');
     expect(t).toContain('DEV 1');
-    expect(t).toContain('MOY DEV');
-    expect(t).toContain('COMP');
+    expect(t).toContain('DEVOIRS');
+    expect(t).toContain('COMPOSITION');
     expect(t).toContain('365,88');
     expect(t).toContain('Moyenne Semestre 1');
     expect(t).toContain('14,81');
     expect(t).toContain('LE DIRECTEUR DES');
     expect(t).toContain('N° Aut : AUT-42');
+  });
+
+  it('par défaut : une colonne par partie avec son nom entier et sa seule moyenne, pas de DEV 1 / DEV 2', async () => {
+    const francais = { ...ligne('Français', ['18,00', '16,00'], '', 16.5, 2), cellules: [{ notes: ['18,00', '16,00'], moyenne: 17 }, { notes: ['16,00'], moyenne: 16 }] };
+    const d = { ...donnees([francais]), detail: false,
+      colonnes: [
+        { categorieId: 'cc', nom: 'Contrôle continu', abrege: 'CC', nbNotes: 2 }, { categorieId: 'tp', nom: 'TP', abrege: 'TP', nbNotes: 1 },
+      ] };
+    const t = texte(await genererBulletinsPdf(d));
+    // Le nom entier (sur deux lignes dans l'en-tête étroit).
+    expect(t).toContain('CONTRÔLE');
+    expect(t).toContain('CONTINU');
+    expect(t).not.toContain('CC 1');
+    expect(t).toContain('17,00');   // la moyenne du contrôle continu (18 et 16)
+    expect(t).not.toContain('18,00');
   });
 
   it('un programme de 30 matières tient sur une seule page', async () => {

@@ -57,7 +57,7 @@ export const useDonneesDocuments = () => {
    * pas compter ce semestre (leur poids est réparti) ; une catégorie sans
    * aucune évaluation dans la période est écartée d'office.
    */
-  const bulletins = (promotionId: string, periodeId: string, eleveIds?: string[], ecartees: string[] = []): DonneesBulletins | null => {
+  const bulletins = (promotionId: string, periodeId: string, eleveIds?: string[], ecartees: string[] = [], detail = false): DonneesBulletins | null => {
     const { promotion, niveau, formation } = contexte(promotionId);
     const periode = fp.periodes.find(p => p.id === periodeId);
     if (!promotion || !niveau || !formation || !periode) return null;
@@ -98,6 +98,7 @@ export const useDonneesDocuments = () => {
       periode: { nom: periode.name, debut: periode.startDate, fin: periode.endDate },
       anneeScolaire: currentYear?.id,
       colonnes: r.colonnes,
+      detail,
       formule: libelleFormuleAppliquee(appliquee),
       effectifClasse: r.effectifClasse, moyennePromotion: r.moyennePromotion,
       eleves: eleveIds ? r.bulletins.filter(b => eleveIds.includes(b.studentEnrollmentId)) : r.bulletins,
