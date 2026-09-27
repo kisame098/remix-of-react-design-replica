@@ -80,6 +80,7 @@ const PlatformStats         = lazy(() => import("./pages/platform/PlatformStats"
 const PlatformSchools       = lazy(() => import("./pages/platform/PlatformSchools"));
 const PlatformSchoolDetail  = lazy(() => import("./pages/platform/PlatformSchoolDetail"));
 const PlatformPaymentClaims = lazy(() => import("./pages/platform/PlatformPaymentClaims"));
+const PlatformProspects     = lazy(() => import("./pages/platform/PlatformProspects"));
 const NotFound              = lazy(() => import("./pages/NotFound"));
 const PortalAccueil         = lazy(() => import("./pages/portal/PortalAccueil"));
 const PortalNotes           = lazy(() => import("./pages/portal/PortalNotes"));
@@ -158,6 +159,7 @@ const App = () => (
                     <Route path="/platform/ecoles" element={<PlatformSchools />} />
                     <Route path="/platform/ecoles/:schoolId" element={<PlatformSchoolDetail />} />
                     <Route path="/platform/paiements" element={<PlatformPaymentClaims />} />
+                    <Route path="/platform/prospects" element={<PlatformProspects />} />
                   </Route>
                 </Route>
 

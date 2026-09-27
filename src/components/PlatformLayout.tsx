@@ -1,12 +1,13 @@
 import { NavLink, Outlet } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
-import { School, CreditCard, LogOut, ShieldCheck, BarChart3 } from 'lucide-react';
+import { School, CreditCard, LogOut, ShieldCheck, BarChart3, Megaphone } from 'lucide-react';
 
 const NAV_ITEMS = [
   { to: '/platform', label: 'Statistiques', icon: BarChart3, end: true },
   { to: '/platform/ecoles', label: 'Écoles', icon: School, end: false },
   { to: '/platform/paiements', label: 'Paiements', icon: CreditCard, end: false },
+  { to: '/platform/prospects', label: 'Prospects', icon: Megaphone, end: false },
 ];
 
 /**
