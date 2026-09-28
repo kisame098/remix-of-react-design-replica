@@ -11,6 +11,7 @@ import {
   MonthKey,
 } from '@/types/payment';
 import * as queries from '@/lib/paymentQueries';
+import { lireMontantsParMois, type MontantsParMois } from '@/lib/mensualites';
 import { findPreviousSchoolYear } from '@/lib/schoolYears';
 import { useEnLigne } from '@/hooks/useEnLigne';
 import { useInstantaneHorsLigne } from '@/hooks/useInstantaneHorsLigne';
@@ -24,6 +25,7 @@ const mapTuition = (r: any): TuitionConfig => ({
   academicYearLabel: r.academic_year_label,
   inscriptionFee:   Number(r.inscription_fee),
   monthlyFee:       Number(r.monthly_fee),
+  montantsParMois:  lireMontantsParMois(r.monthly_fees),
 });
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -97,7 +99,8 @@ interface PaymentContextType {
   instantaneLe: string | null;
 
   // Tuition config
-  setTuitionConfig: (classId: string, inscriptionFee: number, monthlyFee: number) => Promise<void>;
+  /** `montantsParMois` : mois personnalisés (absent = on ne touche pas à ceux enregistrés). */
+  setTuitionConfig: (classId: string, inscriptionFee: number, monthlyFee: number, montantsParMois?: MontantsParMois) => Promise<void>;
   getTuitionConfig: (classId: string) => TuitionConfig | undefined;
 
   // Annex services CRUD
@@ -276,32 +279,36 @@ export const PaymentProvider = ({ children }: { children: ReactNode }) => {
   }, [schoolId, yearLabel, currentYear, schoolYears, paymentLoading, tuitionConfigs.length]);
 
   // ── Tuition Config ──────────────────────────────────────────────────────────
-  const setTuitionConfig = useCallback(async (classId: string, inscriptionFee: number, monthlyFee: number) => {
+  const setTuitionConfig = useCallback(async (
+    classId: string, inscriptionFee: number, monthlyFee: number, montantsParMois?: MontantsParMois,
+  ) => {
     if (!schoolId || !yearLabel) return;
 
     const existing = tuitionConfigs.find(c => c.classId === classId && c.academicYearLabel === yearLabel);
+    // Colonne envoyée seulement si l'écran l'a fournie (monthly_fees, voir mensualites_par_mois.sql).
+    const colonneMois = montantsParMois ? { monthly_fees: montantsParMois } : {};
 
     if (existing) {
-      // Optimistic update
-      setTuitionConfigs(prev => prev.map(c =>
-        c.id === existing.id ? { ...c, inscriptionFee, monthlyFee } : c
-      ));
-      await supabase
+      const { error } = await supabase
         .from('tuition_configs')
         .update({
           inscription_fee: inscriptionFee,
           monthly_fee:     monthlyFee,
+          ...colonneMois,
           updated_at:      new Date().toISOString(),
         })
         .eq('id', existing.id)
         .eq('school_id', schoolId);
+      // Plus d'enregistrement « optimiste » silencieux : un tarif non enregistré
+      // doit se voir, sinon la caisse encaisserait un montant qui n'existe pas en base.
+      if (error) throw error;
+      setTuitionConfigs(prev => prev.map(c =>
+        c.id === existing.id
+          ? { ...c, inscriptionFee, monthlyFee, ...(montantsParMois ? { montantsParMois } : {}) }
+          : c
+      ));
     } else {
-      // Optimistic insert (temp id)
-      const tempId = `tmp-${Date.now()}`;
-      const optimistic: TuitionConfig = { id: tempId, classId, academicYearLabel: yearLabel, inscriptionFee, monthlyFee };
-      setTuitionConfigs(prev => [...prev, optimistic]);
-
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('tuition_configs')
         .insert({
           school_id:           schoolId,
@@ -309,13 +316,12 @@ export const PaymentProvider = ({ children }: { children: ReactNode }) => {
           class_id:            classId,
           inscription_fee:     inscriptionFee,
           monthly_fee:         monthlyFee,
+          ...colonneMois,
         })
         .select()
         .single();
-
-      if (data) {
-        setTuitionConfigs(prev => prev.map(c => c.id === tempId ? mapTuition(data) : c));
-      }
+      if (error || !data) throw error ?? new Error('Tarif non enregistré');
+      setTuitionConfigs(prev => [...prev, mapTuition(data)]);
     }
   }, [schoolId, yearLabel, tuitionConfigs]);
 

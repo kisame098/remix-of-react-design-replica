@@ -184,7 +184,9 @@ export interface TuitionConfig {
   classId: string;             // UUID (classes.id)
   academicYearLabel: string;   // "2024-2025"
   inscriptionFee: number;      // Frais d'inscription (one-time)
-  monthlyFee: number;          // Scolarité mensuelle
+  monthlyFee: number;          // Scolarité mensuelle (de base)
+  /** Mois dont le montant diffère de la mensualité de base (src/lib/mensualites.ts). */
+  montantsParMois?: Record<string, number>;
 }
 
 // ─── Annex Service ────────────────────────────────────────────────────────────

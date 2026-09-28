@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect, useCallback } from 'react';
+import { mensualiteDuMois } from '@/lib/mensualites';
 import { useSchool } from '@/contexts/SchoolContext';
 import { usePayment } from '@/contexts/PaymentContext';
 import { useSchoolYear } from '@/contexts/SchoolYearContext';
@@ -114,7 +115,7 @@ const PaymentTracking = () => {
         } else if (viewMode === 'tuition') {
           paid   = hasPaidTuitionMonth(student.id, selectedMonth);
           const cfg = student.classId ? getTuitionConfig(student.classId) : undefined;
-          amount = cfg?.monthlyFee ?? 0;
+          amount = cfg ? mensualiteDuMois(cfg, selectedMonth) : 0;
 
         } else if (viewMode === 'service' && selectedServiceId) {
           const svc = annexServices.find(s => s.id === selectedServiceId);
