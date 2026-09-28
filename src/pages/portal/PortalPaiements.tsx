@@ -91,7 +91,7 @@ export default function PortalPaiements() {
     async () => {
       const [payR, srvR, enrR, tcR, seR, recus] = await Promise.all([
         supabase.from('payments')
-          .select('id,type,service_id,month_key,amount,paid_at,method,reference,note,received_by,status,cancelled_at,cancelled_by')
+          .select('*') // '*' : inclut `partiel` (acomptes) sans dépendre de l'ordre de mise en place
           .eq('student_enrollment_id', eleveId)
           .order('paid_at', { ascending: false }),
 
@@ -135,6 +135,7 @@ export default function PortalPaiements() {
           status:      (p.status as 'confirmed' | 'cancelled') ?? 'confirmed',
           cancelledAt: p.cancelled_at ?? null,
           cancelledBy: p.cancelled_by ?? null,
+          partiel:     (p as { partiel?: boolean | null }).partiel === true,
         })),
 
         services: (srvR.data ?? []).map(s => ({
@@ -236,7 +237,7 @@ export default function PortalPaiements() {
     // Le reçu est émis un instant APRÈS l'encaissement : on relit aussi les reçus.
     void chargerRecusEleve(schoolAccount.studentEnrollmentId).then(setRecusEleve);
     const { data } = await supabase.from('payments')
-      .select('id,type,service_id,month_key,amount,paid_at,method,reference,note,received_by,status,cancelled_at,cancelled_by')
+      .select('*') // '*' : inclut `partiel` (acomptes) sans dépendre de l'ordre de mise en place
       .eq('student_enrollment_id', schoolAccount.studentEnrollmentId)
       .order('paid_at', { ascending: false });
     if (data) setPayments(data.map(p => ({
@@ -252,6 +253,7 @@ export default function PortalPaiements() {
       status:      (p.status as 'confirmed' | 'cancelled') ?? 'confirmed',
       cancelledAt: p.cancelled_at ?? null,
       cancelledBy: p.cancelled_by ?? null,
+      partiel:     (p as { partiel?: boolean | null }).partiel === true,
     })));
   };
 
@@ -359,7 +361,12 @@ export default function PortalPaiements() {
                   </div>
 
                   {/* Label */}
-                  <p className="flex-1 text-sm font-semibold text-slate-800 truncate">{item.label}</p>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold text-slate-800 truncate">{item.label}</p>
+                    {item.dejaVerse > 0 && (
+                      <p className="text-[11px] font-medium text-amber-600">Déjà versé : {fmtAmount(item.dejaVerse)} · reste à payer</p>
+                    )}
+                  </div>
 
                   {/* Amount */}
                   <p className="flex-shrink-0 text-sm font-black text-red-600">{fmtAmount(item.amount)}</p>
@@ -483,6 +490,9 @@ export default function PortalPaiements() {
                             <p className={cn('font-semibold text-sm', cancelled ? 'text-slate-400 line-through' : 'text-slate-800')}>
                               {label}
                             </p>
+                            {p.partiel && !cancelled && (
+                              <span className="text-[10px] font-bold text-amber-700 bg-amber-100 px-2 py-0.5 rounded-full">ACOMPTE</span>
+                            )}
                             {cancelled && (
                               <span className="flex items-center gap-1 text-[10px] font-bold text-red-600 bg-red-100 px-2 py-0.5 rounded-full">
                                 <XCircleIcon className="h-3 w-3" /> ANNULÉ

@@ -59,6 +59,7 @@ const mapPayment = (r: any): Payment => ({
   cancelledAt:      r.cancelled_at ?? undefined,
   cancelledBy:      r.cancelled_by ?? undefined,
   receiptId:        r.receipt_id ?? undefined,
+  partiel:          r.partiel === true,
 });
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -124,6 +125,8 @@ interface PaymentContextType {
   hasPaidInscription:  (studentId: string) => boolean;
   hasPaidTuitionMonth: (studentId: string, monthKey: MonthKey) => boolean;
   hasPaidService:      (studentId: string, serviceId: string, monthKey?: MonthKey) => boolean;
+  /** Acomptes déjà versés sur un élément non soldé (src/lib/paiementPartiel.ts). */
+  getAcomptes:         (studentId: string, element: queries.ElementPaye) => number;
 
   // Stats
   getTotalCollectedForYear: () => number;
@@ -516,6 +519,9 @@ export const PaymentProvider = ({ children }: { children: ReactNode }) => {
         reference:             data.reference ?? null,
         note:                  data.note ?? null,
         received_by:           data.receivedBy ?? null,
+        // Acompte : seulement quand c'est vrai, pour ne rien changer aux
+        // encaissements ordinaires (colonne ajoutée par paiements_partiels.sql).
+        ...(data.partiel ? { partiel: true } : {}),
       })
       .select()
       .single();
@@ -575,6 +581,10 @@ export const PaymentProvider = ({ children }: { children: ReactNode }) => {
     queries.hasPaidService(payments, yearLabel, studentId, serviceId, monthKey),
   [payments, yearLabel]);
 
+  const getAcomptes = useCallback((studentId: string, element: queries.ElementPaye): number =>
+    queries.acomptesVerses(payments, yearLabel, studentId, element),
+  [payments, yearLabel]);
+
   // ── Stats ── un paiement annulé n'est plus de l'argent réellement encaissé ───
   const getTotalCollectedForYear = useCallback((): number =>
     queries.getTotalCollectedForYear(payments, yearLabel),
@@ -607,7 +617,7 @@ export const PaymentProvider = ({ children }: { children: ReactNode }) => {
     enrollInService, unenrollFromService, getStudentEnrollment,
     isEnrolledInService, getStudentActiveServices, getAvailableServicesForStudent,
     addPayment, cancelPayment, getStudentPayments,
-    hasPaidInscription, hasPaidTuitionMonth, hasPaidService,
+    hasPaidInscription, hasPaidTuitionMonth, hasPaidService, getAcomptes,
     getTotalCollectedForYear,
     emettreRecu, getReceiptOf,
   };

@@ -49,6 +49,8 @@ export interface Payment {
   status: 'confirmed' | 'cancelled';
   cancelledAt: string | null;
   cancelledBy: string | null;
+  /** Acompte (paiement partiel) : ne solde pas l'élément. */
+  partiel?: boolean;
 }
 
 export interface AnnexSvc {

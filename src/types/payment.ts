@@ -237,6 +237,12 @@ export interface Payment {
   /** Reçu qui couvre ce paiement. Absent pour un paiement antérieur au système
    *  de reçus, ou dont le reçu n'a pas pu être émis : il se rattrape à la demande. */
   receiptId?: string;
+  /**
+   * ACOMPTE : versement partiel, qui ne solde pas l'élément (voir
+   * src/lib/paiementPartiel.ts). Absent ou false = paiement qui SOLDE
+   * l'élément — c'est le cas de tout paiement antérieur aux acomptes.
+   */
+  partiel?: boolean;
 }
 
 /**

@@ -12,7 +12,14 @@ import { numeroDeRecu } from '@/lib/recu';
 
 export type FiltreStatut = 'tous' | 'valides' | 'annules';
 
+/** Libellé d'un paiement ; un acompte (paiement partiel) est dit tel quel. */
 export const libellePaiement = (
+  p: Pick<Payment, 'type' | 'serviceId' | 'monthKey'> & Partial<Pick<Payment, 'partiel'>>,
+  services: Pick<AnnexService, 'id' | 'name'>[],
+  libelleMois: (cle?: string) => string,
+): string => libelleBrut(p, services, libelleMois) + (p.partiel ? ' (acompte)' : '');
+
+const libelleBrut = (
   p: Pick<Payment, 'type' | 'serviceId' | 'monthKey'>,
   services: Pick<AnnexService, 'id' | 'name'>[],
   libelleMois: (cle?: string) => string,

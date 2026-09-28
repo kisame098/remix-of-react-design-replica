@@ -52,6 +52,7 @@ export function useRecuFamille({ services, libelleMois }: Options): {
         cancelledAt: p.cancelledAt ?? undefined,
         cancelledBy: p.cancelledBy ?? undefined,
         receiptId: recu.id,
+        partiel: p.partiel,
       })),
     });
   }, [schoolAccount]);
