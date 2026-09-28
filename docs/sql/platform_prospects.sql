@@ -90,3 +90,10 @@ select * from (values
    E'Bonjour {{responsable}},\n\nNous serions ravis de vous présenter SenClass en 30 minutes, avec les vraies situations de {{ecole}} : inscriptions, bulletins, paiements.\n\nQuel jour et quelle heure vous conviendraient ?\n\nBien cordialement,\nL''équipe SenClass', 2)
 ) as m(nom, objet, contenu, ordre)
 where not exists (select 1 from public.platform_modeles_email);
+
+-- ─── Modèle ajouté ensuite : relancer une école inscrite devenue inactive ──
+insert into public.platform_modeles_email (nom, objet, contenu, ordre)
+select 'Relance école inscrite (vidéo)', '{{ecole}} : votre espace SenClass vous attend',
+  E'Bonjour {{responsable}},\n\nVous avez créé l''espace de {{ecole}} sur SenClass, et nous avons remarqué que vous ne l''utilisez plus ces derniers temps.\n\nPour reprendre en main facilement, voici une vidéo de démonstration qui montre comment utiliser SenClass au quotidien :\nhttps://www.youtube.com/watch?v=8kpE2SjFqjg\n\nPour vous reconnecter : https://senclass.com\n\nSi quelque chose vous a freiné, répondez simplement à cet e-mail : nous vous aiderons à tout mettre en place, à l''école ou en ligne.\n\nBien cordialement,\nL''équipe SenClass',
+  3
+where not exists (select 1 from public.platform_modeles_email where nom = 'Relance école inscrite (vidéo)');

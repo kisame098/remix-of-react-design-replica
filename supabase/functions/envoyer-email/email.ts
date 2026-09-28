@@ -33,10 +33,14 @@ export const personnaliser = (texte: string, d: Pick<Destinataire, 'ecole' | 're
 const echapper = (t: string) =>
   t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
-/** Version HTML sobre du message texte : paragraphes et retours à la ligne, rien d'autre. */
+/** Rend cliquables les adresses http(s) d'un texte déjà échappé (la ponctuation finale reste hors du lien). */
+const lierAdresses = (t: string) =>
+  t.replace(/https?:\/\/[^\s<]+?(?=[.,;:!?)]*(?:\s|<|$))/g, u => `<a href="${u}" style="color:#1d4ed8">${u}</a>`);
+
+/** Version HTML sobre du message texte : paragraphes, retours à la ligne et liens, rien d'autre. */
 export const versHtml = (texte: string): string =>
   `<div style="font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.6;color:#1f2937">${
-    texte.split(/\n{2,}/).map(p => `<p style="margin:0 0 14px">${echapper(p).replace(/\n/g, '<br>')}</p>`).join('')
+    texte.split(/\n{2,}/).map(p => `<p style="margin:0 0 14px">${lierAdresses(echapper(p)).replace(/\n/g, '<br>')}</p>`).join('')
   }</div>`;
 
 /** Vérifie une requête ; renvoie la liste des erreurs (vide si tout va bien). */

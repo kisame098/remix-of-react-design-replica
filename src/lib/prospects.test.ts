@@ -72,6 +72,13 @@ describe('envoyer-email — personnalisation et contrôles (logique de la foncti
     expect(m.html).toContain('&lt;b&gt;Awa&lt;/b&gt;');
     expect(versHtml('a\nb\n\nc')).toContain('a<br>b');
   });
+
+  it('rend les liens cliquables, sans la ponctuation finale ni de code injecté', () => {
+    const h = versHtml('La vidéo : https://www.youtube.com/watch?v=8kpE2SjFqjg.\nSite https://senclass.com');
+    expect(h).toContain('<a href="https://www.youtube.com/watch?v=8kpE2SjFqjg" style="color:#1d4ed8">https://www.youtube.com/watch?v=8kpE2SjFqjg</a>.');
+    expect(h).toContain('<a href="https://senclass.com"');
+    expect(versHtml('https://x.com/"><script>')).not.toContain('<script>');
+  });
 });
 
 import { readFileSync } from 'node:fs';
