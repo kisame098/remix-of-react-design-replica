@@ -38,7 +38,7 @@ interface RecuOuvert { paiements: Payment[]; recu: Receipt; duplicata: boolean; 
  */
 export function useRecus(): { montrerRecu: (paiements: Payment[], options?: OptionsRecu) => Promise<boolean>; dialogueRecu: ReactNode } {
   const { school } = useAuth();
-  const { students, classes } = useSchool();
+  const { tousLesEleves: students, classes } = useSchool();
   const { payments, annexServices, emettreRecu, getReceiptOf } = usePayment();
   const { currentYear } = useSchoolYear();
   const [ouvert, setOuvert] = useState<RecuOuvert | null>(null);

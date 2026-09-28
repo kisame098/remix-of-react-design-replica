@@ -45,7 +45,8 @@ const FILTRES: { id: FiltreStatut; label: string }[] = [
  */
 export default function PaymentHistory() {
   const { school } = useAuth();
-  const { students, classes } = useSchool();
+  // Historique : un élève retiré garde son nom sur ses paiements passés.
+  const { tousLesEleves: students, classes } = useSchool();
   const { payments, receipts, annexServices, paymentLoading } = usePayment();
   const { currentYear } = useSchoolYear();
   const { montrerRecu, dialogueRecu } = useRecus();

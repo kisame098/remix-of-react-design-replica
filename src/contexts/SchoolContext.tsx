@@ -10,6 +10,7 @@ import { useInstantaneHorsLigne } from '@/hooks/useInstantaneHorsLigne';
 import { supabase } from '@/integrations/supabase/client';
 import { createStudentAccount, createTeacherAccount } from '@/lib/accountUtils';
 import { fetchAllRows } from '@/lib/fetchAllRows';
+import { STATUT_ACTIF, STATUT_RETIRE, separerRetires } from '@/lib/retrait';
 import {
   getUnresolvedChoiceGroups as resolveUnresolvedChoiceGroups, occurrencesDeLaMatiere,
   lignesReglageManuel, appliquerReglageLocal,
@@ -71,6 +72,8 @@ export interface StudentEnrollment {
   classId: string | null;      // UUID → classes.id
   academicYearLabel: string;   // TEXT "2024-2025" → SchoolYear.id
   enrolledAt: string;          // ISO datetime
+  /** 'active' ou 'withdrawn' (retiré, voir src/lib/retrait.ts). Absent = actif. */
+  status?: string;
 }
 
 /**
@@ -162,6 +165,8 @@ export interface TeacherEnrollmentRecord {
   paymentType: 'hourly' | 'fixed';
   salaryAmount: number;
   enrolledAt: string;          // ISO datetime
+  /** 'active' ou 'withdrawn' (retiré, voir src/lib/retrait.ts). Absent = actif. */
+  status?: string;
 }
 
 /**
@@ -630,8 +635,19 @@ interface SchoolContextType {
   subjectSettings: SubjectSettingsData[];
 
   // Vues combinées pour l'année courante
+  /** Élèves et professeurs PRÉSENTS de l'année (les retirés n'y sont pas). */
   students: Student[];
   teachers: Teacher[];
+  /** Retirés de l'année : ni effacés, ni dans les listes (voir src/lib/retrait.ts). */
+  studentsRetires: Student[];
+  teachersRetires: Teacher[];
+  /** Présents + retirés : pour retrouver un nom dans l'historique (paiements, salaires). */
+  tousLesEleves: Student[];
+  tousLesProfs: Teacher[];
+  retirerEleve: (enrollmentId: string) => Promise<void>;
+  reintegrerEleve: (enrollmentId: string) => Promise<void>;
+  retirerProf: (enrollmentId: string) => Promise<void>;
+  reintegrerProf: (enrollmentId: string) => Promise<void>;
 
   // Données Supabase — filières
   filieres: Filiere[];
@@ -923,6 +939,7 @@ export const SchoolProvider = ({ children }: { children: ReactNode }) => {
           classId:          r.class_id ?? null,
           academicYearLabel: r.academic_year_label,
           enrolledAt:       r.enrolled_at ?? new Date().toISOString(),
+          status:           r.status ?? STATUT_ACTIF,
         })));
       }
 
@@ -933,13 +950,7 @@ export const SchoolProvider = ({ children }: { children: ReactNode }) => {
   // ── Vue combinée : élèves de l'année courante ──────────────────────────────
   // Filtre les inscriptions dont academicYearLabel correspond à currentYear.id
   // (ex: "2024-2025"), puis joint avec student_profiles.
-  const students = useMemo((): Student[] => {
-    if (!currentYear) return [];
-
-    const yearEnrollments = studentEnrollments.filter(
-      e => e.academicYearLabel === currentYear.id
-    );
-
+  const versEleves = (yearEnrollments: StudentEnrollment[]): Student[] => {
     return yearEnrollments
       .map(enrollment => {
         const record = studentRecords.find(s => s.id === enrollment.studentProfileId);
@@ -964,7 +975,18 @@ export const SchoolProvider = ({ children }: { children: ReactNode }) => {
         } satisfies Student;
       })
       .filter(Boolean) as Student[];
-  }, [currentYear, studentEnrollments, studentRecords]);
+  };
+  // Les élèves RETIRÉS (voir src/lib/retrait.ts) sont à part : absents des
+  // listes, classes, notes et impayés, mais leurs paiements passés gardent un nom.
+  const { students, studentsRetires } = useMemo(() => {
+    if (!currentYear) return { students: [] as Student[], studentsRetires: [] as Student[] };
+    const { actifs, retires } = separerRetires(studentEnrollments.filter(
+      e => e.academicYearLabel === currentYear.id
+    ));
+    return { students: versEleves(actifs), studentsRetires: versEleves(retires) };
+  }, [currentYear, studentEnrollments, studentRecords]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const tousLesEleves = useMemo(() => [...students, ...studentsRetires], [students, studentsRetires]);
 
   // ── Chargement profs depuis Supabase ──────────────────────────────────────
   // teacher_profiles : données permanentes.
@@ -1012,6 +1034,7 @@ export const SchoolProvider = ({ children }: { children: ReactNode }) => {
           paymentType:      r.payment_type  as TeacherEnrollmentRecord['paymentType'],
           salaryAmount:     Number(r.salary_amount),
           enrolledAt:       r.enrolled_at   ?? new Date().toISOString(),
+          status:           r.status        ?? STATUT_ACTIF,
         })));
       }
       setTeachersLoading(false);
@@ -1020,10 +1043,8 @@ export const SchoolProvider = ({ children }: { children: ReactNode }) => {
 
   // ── Vue combinée : enseignants de l'année courante ─────────────────────────
   // Filtre les enrollments dont academicYearLabel === currentYear.id ("2024-2025").
-  const teachers = useMemo((): Teacher[] => {
-    if (!currentYear) return [];
-    return teacherEnrollmentRecords
-      .filter(e => e.academicYearLabel === currentYear.id)
+  const versProfs = (inscriptions: TeacherEnrollmentRecord[]): Teacher[] => {
+    return inscriptions
       .map(e => {
         const record = teacherRecords.find(t => t.id === e.teacherProfileId);
         if (!record) return null;
@@ -1049,7 +1070,38 @@ export const SchoolProvider = ({ children }: { children: ReactNode }) => {
         } satisfies Teacher;
       })
       .filter(Boolean) as Teacher[];
-  }, [currentYear, teacherEnrollmentRecords, teacherRecords]);
+  };
+  // Les professeurs RETIRÉS sont à part, comme les élèves.
+  const { teachers, teachersRetires } = useMemo(() => {
+    if (!currentYear) return { teachers: [] as Teacher[], teachersRetires: [] as Teacher[] };
+    const { actifs, retires } = separerRetires(teacherEnrollmentRecords.filter(e => e.academicYearLabel === currentYear.id));
+    return { teachers: versProfs(actifs), teachersRetires: versProfs(retires) };
+  }, [currentYear, teacherEnrollmentRecords, teacherRecords]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const tousLesProfs = useMemo(() => [...teachers, ...teachersRetires], [teachers, teachersRetires]);
+
+  // ── Retirer / réintégrer (rien n'est effacé, voir src/lib/retrait.ts) ─────
+  const changerRetrait = useCallback(async (
+    genre: 'eleve' | 'prof', enrollmentId: string, retirer: boolean,
+  ): Promise<void> => {
+    if (!schoolId) return;
+    const statut = retirer ? STATUT_RETIRE : STATUT_ACTIF;
+    const table = genre === 'eleve' ? 'student_enrollments' : 'teacher_enrollments';
+    const { error } = await supabase.from(table).update({ status: statut }).eq('id', enrollmentId).eq('school_id', schoolId);
+    if (error) throw error;
+    // Le compte de connexion suit : désactivé au retrait, rétabli à la réintégration.
+    const { error: erreurCompte } = await supabase.from('school_accounts')
+      .update({ is_active: !retirer })
+      .eq(genre === 'eleve' ? 'student_enrollment_id' : 'teacher_enrollment_id', enrollmentId)
+      .eq('school_id', schoolId);
+    if (erreurCompte) throw erreurCompte;
+    if (genre === 'eleve') setStudentEnrollments(prev => prev.map(e => e.id === enrollmentId ? { ...e, status: statut } : e));
+    else setTeacherEnrollmentRecords(prev => prev.map(e => e.id === enrollmentId ? { ...e, status: statut } : e));
+  }, [schoolId]);
+  const retirerEleve = useCallback((id: string) => changerRetrait('eleve', id, true), [changerRetrait]);
+  const reintegrerEleve = useCallback((id: string) => changerRetrait('eleve', id, false), [changerRetrait]);
+  const retirerProf = useCallback((id: string) => changerRetrait('prof', id, true), [changerRetrait]);
+  const reintegrerProf = useCallback((id: string) => changerRetrait('prof', id, false), [changerRetrait]);
 
   // ── Chargement données de notes depuis Supabase ────────────────────────────
   // Déclenché à chaque changement d'école ou d'année scolaire.
@@ -3123,7 +3175,8 @@ export const SchoolProvider = ({ children }: { children: ReactNode }) => {
       studentRecords, studentEnrollments,
       teacherRecords, teacherEnrollmentRecords,
       gradePeriods, isClassInPeriod, setClassInPeriod, subjects, grades: gradesState, subjectSettings,
-      students, teachers,
+      students, teachers, studentsRetires, teachersRetires, tousLesEleves, tousLesProfs,
+      retirerEleve, reintegrerEleve, retirerProf, reintegrerProf,
       filieres, filiereMandatorySubjects, filiereFacultativeSubjects, filiereChoiceGroups, classFiliereAssignments, filiereStudentChoices,
       niveauDefaultSubjects,
       addNiveauDefaultSubject, updateNiveauDefaultSubject, deleteNiveauDefaultSubject,

@@ -19,7 +19,7 @@ let etatPaiements: Payment[] = [];
 const getReceiptOf = vi.fn();
 
 vi.mock('@/contexts/AuthContext', () => ({ useAuth: () => ({ school: { name: 'École', settings: {} } }) }));
-vi.mock('@/contexts/SchoolContext', () => ({ useSchool: () => ({ students: [], classes: [] }) }));
+vi.mock('@/contexts/SchoolContext', () => ({ useSchool: () => ({ students: [], tousLesEleves: [], classes: [] }) }));
 vi.mock('@/contexts/SchoolYearContext', () => ({ useSchoolYear: () => ({ currentYear: null }) }));
 vi.mock('@/contexts/PaymentContext', () => ({
   usePayment: () => ({ payments: etatPaiements, annexServices: [], emettreRecu, getReceiptOf }),

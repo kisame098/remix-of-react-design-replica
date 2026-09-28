@@ -18,7 +18,8 @@ const fmtDatetime = (iso: string) => new Date(iso).toLocaleString('fr-FR', { dat
 
 const PayrollLedger = () => {
   const { salaryPayments, cancelSalaryPayment, payrollEmployees } = usePayroll();
-  const { teachers } = useSchool();
+  // Historique : un professeur retiré garde son nom sur ses salaires passés.
+  const { tousLesProfs: teachers } = useSchool();
   const [filterPayeeType, setFilterPayeeType] = useState<'all' | 'teacher' | 'staff'>('all');
   const [toCancel, setToCancel] = useState<SalaryPayment | null>(null);
   const [cancelling, setCancelling] = useState(false);

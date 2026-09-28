@@ -44,6 +44,7 @@ import {
 import { Separator } from '@/components/ui/separator';
 import { useSchool, Teacher } from '@/contexts/SchoolContext';
 import { useToast } from '@/hooks/use-toast';
+import { BoutonRetirer, ListeRetires } from '@/components/retrait/Retraits';
 
 interface EditFormData {
   firstName: string;
@@ -65,7 +66,7 @@ interface EditFormData {
 type ViewMode = 'grid' | 'table';
 
 const TeacherManagement = () => {
-  const { teachers, teachersLoading, updateTeacher } = useSchool();
+  const { teachers, teachersLoading, updateTeacher, teachersRetires, retirerProf, reintegrerProf } = useSchool();
   const { toast } = useToast();
 
   const [viewMode, setViewMode] = useState<ViewMode>('grid');
@@ -240,6 +241,11 @@ const TeacherManagement = () => {
               </p>
             </div>
           </div>
+          <ListeRetires
+            genre="prof"
+            personnes={teachersRetires.map(t => ({ id: t.id, nom: `${t.firstName} ${t.lastName}`, identifiant: t.teacherId }))}
+            onReintegrer={reintegrerProf}
+          />
         </div>
 
         {/* Filters & Search Bar */}
@@ -821,6 +827,14 @@ const TeacherManagement = () => {
             </div>
 
             <DialogFooter>
+              {selectedTeacher && (
+                <BoutonRetirer
+                  genre="prof"
+                  nom={`${selectedTeacher.firstName} ${selectedTeacher.lastName}`}
+                  onRetirer={() => retirerProf(selectedTeacher.id)}
+                  onFait={() => { setIsEditOpen(false); setIsProfileOpen(false); }}
+                />
+              )}
               <Button variant="outline" onClick={() => setIsEditOpen(false)} disabled={isSaving}>
                 Annuler
               </Button>
