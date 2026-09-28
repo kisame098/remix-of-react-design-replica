@@ -23,6 +23,7 @@ import {
   getBillableMonthsFor, readBillingRules,
 } from '@/types/payment';
 import { computeDueItems, totalExigible, type DueItem } from '@/lib/dueItems';
+import { lireMontantsParMois, type MontantsParMois } from '@/lib/mensualites';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { chargerRecusEleve, type RecusEleve } from '@/lib/recusFamille';
 import { numeroDeRecu } from '@/lib/recu';
@@ -34,6 +35,8 @@ interface TuitionCfg {
   classId:        string;
   inscriptionFee: number;
   monthlyFee:     number;
+  /** Mois au montant personnalisé (src/lib/mensualites.ts). */
+  montantsParMois: MontantsParMois;
   yearLabel:      string;
 }
 
@@ -104,7 +107,7 @@ export default function PortalPaiements() {
           .eq('student_enrollment_id', eleveId),
 
         supabase.from('tuition_configs')
-          .select('id,class_id,inscription_fee,monthly_fee,academic_year_label')
+          .select('*') // '*' : inclut monthly_fees (mensualités par mois)
           .eq('school_id', ecoleId),
 
         supabase.from('student_enrollments')
@@ -155,6 +158,7 @@ export default function PortalPaiements() {
           classId:        cfg.class_id,
           inscriptionFee: cfg.inscription_fee ?? 0,
           monthlyFee:     cfg.monthly_fee ?? 0,
+          montantsParMois: lireMontantsParMois((cfg as { monthly_fees?: unknown }).monthly_fees),
           yearLabel:      cfg.academic_year_label,
         } : null,
 

@@ -22,6 +22,7 @@ import { Student } from '@/contexts/SchoolContext';
 import { useRecus } from '@/hooks/useRecus';
 import { useAnnulerPaiement } from '@/hooks/useAnnulerPaiement';
 import { resteAPayer } from '@/lib/paiementPartiel';
+import { mensualiteDuMois } from '@/lib/mensualites';
 import { filtrerHistorique, libellePaiement, numeroRecuDuPaiement } from '@/lib/historiquePaiements';
 import {
   ScanLine, History, XCircle, CheckCircle2, LogOut, AlertCircle, Loader2, Search, Trash2, Receipt as ReceiptIcon,
@@ -95,7 +96,7 @@ const Caisse = () => {
     if (intent.type === 'tuition') {
       if (!cfg || !intent.monthKey) return null;
       return {
-        type: 'tuition', monthKey: intent.monthKey, amount: cfg.monthlyFee,
+        type: 'tuition', monthKey: intent.monthKey, amount: mensualiteDuMois(cfg, intent.monthKey),
         label: `Scolarité — ${monthLabel(intent.monthKey)}`,
         alreadyPaid: hasPaidTuitionMonth(studentId, intent.monthKey),
       };

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useSchool } from '@/contexts/SchoolContext';
 import { usePayment } from '@/contexts/PaymentContext';
 import { Card, CardContent } from '@/components/ui/card';
@@ -12,7 +12,14 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Checkbox } from '@/components/ui/checkbox';
 import { Loader2, School, Plus, Pencil, Trash2, Settings2, Tag, RefreshCw, Zap, Calendar } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
-import { AnnexService, SERVICE_FREQUENCY_LABELS, ServiceFrequency } from '@/types/payment';
+import {
+  AnnexService, SERVICE_FREQUENCY_LABELS, ServiceFrequency,
+  getAcademicMonths, getSchoolBillableMonths, readExcludedBillingMonths,
+  DEFAULT_TUITION_BILLING_TIMING, type TuitionBillingTiming,
+} from '@/types/payment';
+import { useSchoolYear } from '@/contexts/SchoolYearContext';
+import { useAuth } from '@/contexts/AuthContext';
+import { mensualiteDuMois, personnalisationsAEnregistrer } from '@/lib/mensualites';
 
 // ─── Tuition Section ─────────────────────────────────────────────────────────
 const TuitionSection = () => {
@@ -22,11 +29,28 @@ const TuitionSection = () => {
   const [inscFee, setInscFee]   = useState('');
   const [monthFee, setMonthFee] = useState('');
   const [saving, setSaving]     = useState(false);
+  // Mois modifiés à la main (clé « AAAA-MM » → montant saisi). Un mois absent
+  // suit la mensualité saisie au-dessus (src/lib/mensualites.ts).
+  const [perso, setPerso]       = useState<Record<string, string>>({});
+
+  // Les mois à payer, tels que réglés dans Paramètres → Année scolaire.
+  const { currentYear } = useSchoolYear();
+  const { school } = useAuth();
+  const moisFactures = useMemo(() => {
+    if (!currentYear) return [];
+    const timing = (school?.settings?.tuitionBillingTiming as TuitionBillingTiming) ?? DEFAULT_TUITION_BILLING_TIMING;
+    return getSchoolBillableMonths(
+      getAcademicMonths(currentYear.startDate, currentYear.endDate, timing),
+      readExcludedBillingMonths(school?.settings),
+    );
+  }, [currentYear, school?.settings]);
+  const libelleMois = (cle: string) => moisFactures.find(m => m.key === cle)?.label ?? cle;
 
   const startEdit = (classId: string) => {
     const cfg = getTuitionConfig(classId);
     setInscFee(cfg ? String(cfg.inscriptionFee)  : '');
     setMonthFee(cfg ? String(cfg.monthlyFee) : '');
+    setPerso(Object.fromEntries(Object.entries(cfg?.montantsParMois ?? {}).map(([k, v]) => [k, String(v)])));
     setEditing(classId);
   };
 
@@ -39,9 +63,15 @@ const TuitionSection = () => {
     if (isNaN(monthly) || monthly < 0) {
       toast({ title: 'Erreur', description: 'Frais mensuel invalide', variant: 'destructive' }); return;
     }
+    // Seuls les mois de l'année en cours qui diffèrent de la mensualité sont gardés.
+    const saisies = Object.fromEntries(Object.entries(perso).filter(([k]) => moisFactures.some(m => m.key === k)));
+    const mois = personnalisationsAEnregistrer(monthly, saisies, libelleMois);
+    if (!mois.ok) {
+      toast({ title: 'Erreur', description: mois.erreur, variant: 'destructive' }); return;
+    }
     setSaving(true);
     try {
-      await setTuitionConfig(classId, insc, monthly);
+      await setTuitionConfig(classId, insc, monthly, mois.montants);
       setEditing(null);
       toast({ title: 'Sauvegardé', description: 'Tarifs mis à jour' });
     } catch {
@@ -88,6 +118,42 @@ const TuitionSection = () => {
                           />
                         </div>
                       </div>
+                      {moisFactures.length > 0 && monthFee.trim() !== '' && (
+                        <div className="space-y-2 rounded-lg border bg-muted/20 p-3">
+                          <div className="flex items-center justify-between gap-2">
+                            <p className="text-xs font-medium flex items-center gap-1.5">
+                              <Calendar className="h-3.5 w-3.5 text-primary" />
+                              Mensualité de chaque mois
+                            </p>
+                            {Object.keys(perso).length > 0 && (
+                              <Button type="button" variant="ghost" size="sm" className="h-7 text-xs gap-1" onClick={() => setPerso({})}>
+                                <RefreshCw className="h-3 w-3" /> Même montant partout
+                              </Button>
+                            )}
+                          </div>
+                          <p className="text-[11px] text-muted-foreground">
+                            Par défaut, chaque mois vaut la mensualité ci-dessus. Modifiez seulement les mois différents.
+                          </p>
+                          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                            {moisFactures.map(m => {
+                              const modifie = perso[m.key] !== undefined && perso[m.key] !== monthFee;
+                              return (
+                                <div key={m.key} className="space-y-0.5">
+                                  <Label className={`text-[11px] ${modifie ? 'text-primary font-semibold' : 'text-muted-foreground'}`}>
+                                    {m.label}{modifie ? ' •' : ''}
+                                  </Label>
+                                  <Input
+                                    type="number" min="0" className={`h-8 text-sm ${modifie ? 'border-primary' : ''}`}
+                                    value={perso[m.key] ?? monthFee}
+                                    onChange={e => setPerso(prev => ({ ...prev, [m.key]: e.target.value }))}
+                                    aria-label={`Mensualité de ${m.label}`}
+                                  />
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
                       <div className="flex gap-2 justify-end">
                         <Button variant="outline" size="sm" onClick={() => setEditing(null)} disabled={saving}>
                           Annuler
@@ -110,6 +176,14 @@ const TuitionSection = () => {
                             <span className="text-xs text-muted-foreground">
                               Mensuel: <span className="font-medium text-foreground">{fmt(cfg.monthlyFee)}</span>
                             </span>
+                            {(() => {
+                              const differents = moisFactures.filter(m => mensualiteDuMois(cfg, m.key) !== cfg.monthlyFee);
+                              return differents.length > 0 ? (
+                                <span className="text-xs text-primary" title={differents.map(m => `${m.label} : ${fmt(mensualiteDuMois(cfg, m.key))}`).join('\n')}>
+                                  {differents.length} mois personnalisé{differents.length > 1 ? 's' : ''}
+                                </span>
+                              ) : null;
+                            })()}
                           </div>
                         ) : (
                           <Badge variant="outline" className="text-xs mt-1 font-normal text-muted-foreground">

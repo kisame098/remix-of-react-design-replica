@@ -15,6 +15,7 @@
 
 import { AcademicMonth, AnnexService, MonthKey, PaymentType, isMonthOverdue } from '@/types/payment';
 import { resteAPayer } from '@/lib/paiementPartiel';
+import { mensualiteDuMois, type MontantsParMois } from '@/lib/mensualites';
 
 // ─── Vue caisse ─────────────────────────────────────────────────────────────
 
@@ -39,7 +40,8 @@ export interface PayableItemsInput {
   academicMonths: AcademicMonth[];
   /** Clés des mois réellement dus par CET élève (getBillableMonthsFor). */
   billableKeys: Set<string>;
-  tuitionConfig?: { inscriptionFee: number; monthlyFee: number };
+  /** `montantsParMois` : mois au montant personnalisé (src/lib/mensualites.ts). */
+  tuitionConfig?: { inscriptionFee: number; monthlyFee: number; montantsParMois?: MontantsParMois };
   className?: string;
   /** Services auxquels l'élève est rattaché (obligatoires + optionnels souscrits). */
   services: AnnexService[];
@@ -88,10 +90,14 @@ export const buildPayableItems = (input: PayableItemsInput): PayableItem[] => {
       const { key, label } = month;
       const paid = hasPaidTuitionMonth(key);
       if (!billableKeys.has(key) && !paid) continue;
+      // Montant propre à ce mois pour cette classe ; un mois à 0 F n'est rien
+      // à payer : il n'apparaît pas et ne bloque pas le mois suivant.
+      const du = mensualiteDuMois(tuitionConfig, key);
+      if (du <= 0 && !paid) continue;
       items.push({
         id: `tuition_${key}`,
         label: `Scolarité — ${label}`,
-        ...montants(tuitionConfig.monthlyFee, paid, { type: 'tuition', monthKey: key }),
+        ...montants(du, paid, { type: 'tuition', monthKey: key }),
         paid,
         overdue: isMonthOverdue(month, paid),
         blocked: !prevPaid && !paid,
@@ -176,6 +182,8 @@ export interface DueTuitionConfig {
   classId: string;
   inscriptionFee: number;
   monthlyFee: number;
+  /** Mois au montant personnalisé (src/lib/mensualites.ts). */
+  montantsParMois?: MontantsParMois;
 }
 
 export interface DueServiceEnrollment {
@@ -245,14 +253,17 @@ export const computeDueItems = (
   // échus. Une famille qui en a les moyens doit pouvoir régler l'année
   // d'avance — dans l'ordre : payer septembre ouvre octobre, qui ouvre
   // novembre. C'est la même règle qu'à la caisse (buildPayableItems).
-  if (tuition.monthlyFee > 0) {
+  {
     let precedentPaye = true;
     for (const month of billableMonths) {
+      // Montant propre à ce mois ; un mois à 0 F n'est rien à payer ni ne bloque.
+      const du = mensualiteDuMois(tuition, month.key);
+      if (du <= 0) continue;
       const paye = isPaid(p => p.type === 'tuition' && p.monthKey === month.key);
       if (!paye) {
         items.push({
           key: `tuition-${month.key}`, label: `Scolarité ${month.label}`,
-          ...reste(tuition.monthlyFee, p => p.type === 'tuition' && p.monthKey === month.key),
+          ...reste(du, p => p.type === 'tuition' && p.monthKey === month.key),
           type: 'tuition', monthKey: month.key,
           echeance: month.index <= currentIdx ? 'du' : 'avance',
           verrouille: !precedentPaye,
