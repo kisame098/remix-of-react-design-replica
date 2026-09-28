@@ -32,7 +32,7 @@ interface TeacherAttendanceFormProps {
 }
 
 export const TeacherAttendanceForm = ({ session, isMonthLocked }: TeacherAttendanceFormProps) => {
-  const { teachers } = useSchool();
+  const { tousLesProfs: teachers } = useSchool();
   const { getOrInitTeacherAttendance, getTeacherAttendance, updateTeacherAttendance } = useAttendance();
 
   const teacher = session.teacherId

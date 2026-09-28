@@ -10,6 +10,7 @@ import { z } from "zod";
 import { supabase } from "@/integrations/supabase/client";
 import { adresseRetourConfirmation } from "@/lib/confirmationEmail";
 import { EcranConfirmationEmail } from "@/components/auth/EcranConfirmationEmail";
+import { CLE_COMPTE_DESACTIVE } from "@/contexts/AuthContext";
 
 // Validation schemas
 const loginSchema = z.object({
@@ -51,6 +52,16 @@ const Auth = () => {
   const { toast } = useToast();
   const navigate = useNavigate();
   const { user, loading, accountRole, staffPermissions, isPlatformAdmin, signIn, signUpSchool } = useAuth();
+
+  // Compte d'un élève ou d'un professeur retiré par l'école : on le dit.
+  useEffect(() => {
+    if (user) return;
+    let desactive = false;
+    try { desactive = sessionStorage.getItem(CLE_COMPTE_DESACTIVE) === '1'; sessionStorage.removeItem(CLE_COMPTE_DESACTIVE); } catch { /* stockage indisponible */ }
+    if (desactive) {
+      toast({ title: 'Compte désactivé', description: "Ce compte a été désactivé par l'école. Contactez l'administration.", variant: 'destructive' });
+    }
+  }, [user, toast]);
 
   // Rediriger vers la bonne page selon le rôle, une fois le rôle connu.
   // Le chef du système n'a pas de accountRole (n'appartient à aucune école) —

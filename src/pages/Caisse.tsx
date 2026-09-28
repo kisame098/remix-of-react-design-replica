@@ -48,7 +48,7 @@ type Tab = 'scan' | 'history' | 'cancel';
 // ─── Page ─────────────────────────────────────────────────────────────────────
 const Caisse = () => {
   const { school, profile, accountRole, staffPermissions, signOut } = useAuth();
-  const { students, studentsLoading } = useSchool();
+  const { students, tousLesEleves, studentsLoading } = useSchool();
   const {
     payments, annexServices, getTuitionConfig,
     hasPaidInscription, hasPaidTuitionMonth, hasPaidService,
@@ -160,8 +160,8 @@ const Caisse = () => {
   const getPaymentLabel = (p: Payment) => libellePaiement(p, annexServices, monthLabel);
 
   const recent = useMemo(
-    () => filtrerHistorique(payments, students, receipts, { recherche: search, statut: 'tous' }).slice(0, 60),
-    [payments, receipts, search, students],
+    () => filtrerHistorique(payments, tousLesEleves, receipts, { recherche: search, statut: 'tous' }).slice(0, 60),
+    [payments, receipts, search, tousLesEleves],
   );
 
   const { annuler, enCours: cancelingId } = useAnnulerPaiement(montrerRecu);
@@ -291,7 +291,7 @@ const Caisse = () => {
             {recent.length === 0 ? (
               <p className="text-sm text-slate-400 text-center py-10">Aucun paiement trouvé</p>
             ) : recent.map(p => {
-              const s = students.find(st => st.id === p.studentId);
+              const s = tousLesEleves.find(st => st.id === p.studentId);
               const cancelled = p.status === 'cancelled';
               return (
                 <div key={p.id} className={`bg-white rounded-2xl border shadow-sm p-3.5 ${cancelled ? 'border-red-100 bg-red-50/40' : 'border-slate-100'}`}>

@@ -25,7 +25,7 @@ const ClassSubjects = () => {
   const navigate = useNavigate();
   const { currentYear } = useSchoolYear();
   const {
-    gradePeriods, classes, subjects, grades, students, teachers,
+    gradePeriods, classes, subjects, grades, students, teachers, tousLesProfs,
     addSubject, updateSubject, deleteSubject,
     filieres, filiereMandatorySubjects, filiereChoiceGroups, getClassFiliereAssignment, assignClassFiliere,
     resyncPeriodSubjects,
@@ -456,7 +456,7 @@ const ClassSubjects = () => {
                   const isComplete = comp && comp.pct === 100;
                   const hasStarted = comp && comp.count > 0;
                   const isDeleting = deletingId === subject.id;
-                  const assignedTeacher = teachers.find(t => t.id === subject.teacherId);
+                  const assignedTeacher = tousLesProfs.find(t => t.id === subject.teacherId);
                   return (
                     <TableRow key={subject.id} className="group">
                       <TableCell className="font-medium">

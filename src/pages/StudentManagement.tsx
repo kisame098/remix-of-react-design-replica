@@ -5,6 +5,7 @@ import {
   Phone, Mail, MapPin, Calendar, User, X, Save, GraduationCap, Home, Download
 } from 'lucide-react';
 import StudentExportDialog from '@/components/student/StudentExportDialog';
+import { BoutonRetirer, ListeRetires } from '@/components/retrait/Retraits';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -73,7 +74,7 @@ type ViewMode = 'grid' | 'table';
 
 const StudentManagement = () => {
   const {
-    students, classes, updateStudent,
+    students, classes, updateStudent, studentsRetires, retirerEleve, reintegrerEleve,
     subjects, gradePeriods, getSubjectSettings, updateStudentSubjectOverride,
     resolveFiliereChoice, setFacultativeActive, getStudentFiliereChoice,
     getClassFiliereAssignment, getUnresolvedChoiceGroups,
@@ -394,10 +395,20 @@ const StudentManagement = () => {
               </p>
             </div>
           </div>
-          <Button variant="outline" className="gap-2" onClick={() => setIsExportOpen(true)}>
-            <Download className="w-4 h-4" />
-            Exporter
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <ListeRetires
+              genre="eleve"
+              personnes={studentsRetires.map(s => ({
+                id: s.id, nom: `${s.firstName} ${s.lastName}`, identifiant: s.studentId,
+                detail: classes.find(c => c.id === s.classId)?.name,
+              }))}
+              onReintegrer={reintegrerEleve}
+            />
+            <Button variant="outline" className="gap-2" onClick={() => setIsExportOpen(true)}>
+              <Download className="w-4 h-4" />
+              Exporter
+            </Button>
+          </div>
         </div>
 
         {/* Filters & Search Bar */}
@@ -1165,6 +1176,14 @@ const StudentManagement = () => {
             </ScrollArea>
 
             <DialogFooter className="pt-4">
+              {selectedStudent && (
+                <BoutonRetirer
+                  genre="eleve"
+                  nom={`${selectedStudent.firstName} ${selectedStudent.lastName}`}
+                  onRetirer={() => retirerEleve(selectedStudent.id)}
+                  onFait={() => { setIsEditOpen(false); setIsProfileOpen(false); }}
+                />
+              )}
               <Button variant="outline" onClick={() => setIsEditOpen(false)}>
                 Annuler
               </Button>

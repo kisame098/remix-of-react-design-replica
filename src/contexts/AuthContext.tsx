@@ -9,6 +9,9 @@ import { enregistrer, lire, effacerUtilisateur } from '@/lib/cacheHorsLigne';
 import { retirerAbonnementDuCompte } from '@/lib/notificationsPush';
 import { actionPourEvenement } from '@/lib/evenementsAuth';
 
+/** Posé quand un compte désactivé (élève ou professeur retiré) se connecte ; lu par la page de connexion. */
+export const CLE_COMPTE_DESACTIVE = 'senclass:compte-desactive';
+
 // platform_admins n'est pas encore dans les types générés (table ajoutée
 // après la dernière génération) — cast localisé, comme ailleurs dans l'app
 // pour les tables toutes neuves (voir sbElementary dans SchoolContext.tsx).
@@ -214,6 +217,17 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           .eq('auth_user_id', userId)
           .maybeSingle();
 
+        if (acct && !acct.is_active) {
+          // Élève ou professeur RETIRÉ par l'école (voir src/lib/retrait.ts) :
+          // la base ne lui montre plus rien ; on le déconnecte avec un message clair.
+          try { sessionStorage.setItem(CLE_COMPTE_DESACTIVE, '1'); } catch { /* stockage indisponible */ }
+          setAccountRole(null);
+          setSchoolAccount(null);
+          setStaffPermissions([]);
+          await retirerAbonnementDuCompte();
+          await supabase.auth.signOut();
+          return;
+        }
         if (acct) {
           // Récupérer la photo depuis student_profiles via student_enrollments
           let photoUrl: string | undefined = undefined;

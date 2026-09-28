@@ -30,7 +30,7 @@ const emptyForm = { domaine: 'LC' as ElementaryDomaine, registre: 'COMPETENCE' a
 const ElementaryClassLines = ({ classId, periodId, schoolClass, period, onBack }: ElementaryClassLinesProps) => {
   const navigate = useNavigate();
   const {
-    elementaryClassLines, elementaryGrades, elementaryLineSettings, students, teachers,
+    elementaryClassLines, elementaryGrades, elementaryLineSettings, students, teachers, tousLesProfs,
     addElementaryClassLine, updateElementaryClassLine, deleteElementaryClassLine,
     resyncPeriodSubjects,
   } = useSchool();
@@ -62,7 +62,7 @@ const ElementaryClassLines = ({ classId, periodId, schoolClass, period, onBack }
 
   const teacherName = (id?: string) => {
     if (!id) return null;
-    const t = teachers.find(t => t.id === id);
+    const t = tousLesProfs.find(t => t.id === id);
     return t ? `${t.firstName} ${t.lastName}` : null;
   };
 
