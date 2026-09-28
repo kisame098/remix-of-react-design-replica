@@ -1,6 +1,11 @@
 import { useCallback, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { generatePassword } from '@/lib/accountUtils';
+import { MIN_MOT_DE_PASSE } from '@/lib/comptePersonnel';
+import { Input } from '@/components/ui/input';
+import {
+  Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
+} from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Copy, RefreshCw, Eye, EyeOff, Loader2 } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
@@ -20,9 +25,13 @@ export const copyToClipboard = async (text: string, label: string) => {
 // chargé en masse avec la liste des comptes : il est chiffré en base et n'est
 // déchiffré qu'à la demande, via la fonction RPC `reveal_school_account_password`
 // (vérifie que l'appelant est admin de l'école propriétaire du compte).
-export const PasswordCell = ({ accountId }: {
+export const PasswordCell = ({ accountId, saisieLibre = false }: {
   accountId: string;
+  /** Personnel : le directeur SAISIT le mot de passe choisi par l'employé, au lieu d'en générer un. */
+  saisieLibre?: boolean;
 }) => {
+  const [saisieOuverte, setSaisieOuverte] = useState(false);
+  const [nouveau, setNouveau] = useState('');
   const [password,  setPassword]  = useState<string | null>(null);
   const [visible,   setVisible]   = useState(false);
   const [revealing, setRevealing] = useState(false);
@@ -56,22 +65,41 @@ export const PasswordCell = ({ accountId }: {
     if (pwd) copyToClipboard(pwd, 'Mot de passe');
   };
 
-  const handleReset = async () => {
+  const changer = async (newPwd: string): Promise<boolean> => {
     setResetting(true);
     try {
-      const newPwd = generatePassword();
       const { error } = await supabase.functions.invoke('reset-school-account', {
         body: { accountId, newPassword: newPwd },
       });
-      if (error) throw new Error(String(error));
+      if (error) {
+        const message = 'context' in error
+          ? await (error as { context: Response }).context.json().then(j => j?.error).catch(() => undefined)
+          : undefined;
+        throw new Error(message ?? 'Impossible de changer le mot de passe');
+      }
       setPassword(newPwd);
       setVisible(true);
-      toast({ title: 'Mot de passe réinitialisé', description: 'Nouveau mot de passe généré' });
-    } catch {
-      toast({ title: 'Erreur', description: 'Impossible de réinitialiser', variant: 'destructive' });
+      toast({ title: 'Mot de passe changé', description: saisieLibre ? 'Le nouveau mot de passe est enregistré.' : 'Nouveau mot de passe généré' });
+      return true;
+    } catch (e) {
+      toast({ title: 'Erreur', description: e instanceof Error ? e.message : 'Impossible de réinitialiser', variant: 'destructive' });
+      return false;
     } finally {
       setResetting(false);
     }
+  };
+
+  const handleReset = () => {
+    if (saisieLibre) { setNouveau(''); setSaisieOuverte(true); return; }
+    changer(generatePassword());
+  };
+
+  const enregistrerSaisie = async () => {
+    if (nouveau.length < MIN_MOT_DE_PASSE) {
+      toast({ title: 'À corriger', description: `Au moins ${MIN_MOT_DE_PASSE} caractères.`, variant: 'destructive' });
+      return;
+    }
+    if (await changer(nouveau)) setSaisieOuverte(false);
   };
 
   return (
@@ -105,12 +133,35 @@ export const PasswordCell = ({ accountId }: {
         className="h-7 w-7 flex-shrink-0 text-amber-600 hover:text-amber-700"
         onClick={handleReset}
         disabled={resetting}
-        title="Réinitialiser"
+        title={saisieLibre ? 'Changer le mot de passe' : 'Réinitialiser'}
       >
         {resetting
           ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
           : <RefreshCw className="h-3.5 w-3.5" />}
       </Button>
+      {saisieLibre && (
+        <Dialog open={saisieOuverte} onOpenChange={o => !resetting && setSaisieOuverte(o)}>
+          <DialogContent className="max-w-sm">
+            <DialogHeader>
+              <DialogTitle>Changer le mot de passe</DialogTitle>
+              <DialogDescription>Saisissez le nouveau mot de passe choisi par le membre du personnel.</DialogDescription>
+            </DialogHeader>
+            <Input
+              type="text" autoComplete="new-password" autoFocus
+              value={nouveau} onChange={e => setNouveau(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') enregistrerSaisie(); }}
+              placeholder={`Au moins ${MIN_MOT_DE_PASSE} caractères`} disabled={resetting}
+            />
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setSaisieOuverte(false)} disabled={resetting}>Annuler</Button>
+              <Button onClick={enregistrerSaisie} disabled={resetting} className="gap-2">
+                {resetting && <Loader2 className="h-4 w-4 animate-spin" />}
+                Enregistrer
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
     </div>
   );
 };

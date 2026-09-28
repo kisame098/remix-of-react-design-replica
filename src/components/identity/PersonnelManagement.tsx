@@ -1,9 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
-import {
-  generatePassword, generateLoginEmail, generateStaffDisplayId,
-} from '@/lib/accountUtils';
+import { generateStaffDisplayId } from '@/lib/accountUtils';
+import { MIN_MOT_DE_PASSE, normaliserEmail, verifierComptePersonnel } from '@/lib/comptePersonnel';
 import { ALL_PERMISSION_KEYS, PERMISSION_LABELS, PermissionKey } from '@/lib/permissions';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -113,6 +112,10 @@ const PersonnelManagement = () => {
   const [submitting, setSubmitting] = useState(false);
 
   const [fullName,    setFullName]    = useState('');
+  // Vraie adresse e-mail (identifiant de connexion) et mot de passe choisi par
+  // l'employé, que le directeur saisit. Pas de « mot de passe oublié ».
+  const [email,       setEmail]       = useState('');
+  const [motDePasse,  setMotDePasse]  = useState('');
   const [permissions, setPermissions] = useState<Set<PermissionKey>>(new Set());
 
   const load = useCallback(async () => {
@@ -157,6 +160,8 @@ const PersonnelManagement = () => {
 
   const resetForm = () => {
     setFullName('');
+    setEmail('');
+    setMotDePasse('');
     setPermissions(new Set());
   };
 
@@ -169,16 +174,20 @@ const PersonnelManagement = () => {
   };
 
   const handleCreate = async () => {
-    if (!school || !fullName.trim()) {
-      toast({ title: 'Erreur', description: 'Le nom complet est obligatoire', variant: 'destructive' });
+    if (!school) return;
+    const erreurs = verifierComptePersonnel({ nom: fullName, email, motDePasse });
+    if (erreurs.length) {
+      toast({ title: 'À corriger', description: erreurs.join(' · '), variant: 'destructive' });
+      return;
+    }
+    if (staff.some(s => s.email.toLowerCase() === normaliserEmail(email))) {
+      toast({ title: 'À corriger', description: 'Un membre du personnel utilise déjà cette adresse.', variant: 'destructive' });
       return;
     }
     setSubmitting(true);
     try {
-      const [firstName, ...rest] = fullName.trim().split(' ');
-      const lastName = rest.join(' ') || firstName;
-      const email    = generateLoginEmail(firstName, lastName);
-      const password = generatePassword();
+      const adresse  = normaliserEmail(email);
+      const password = motDePasse;
       const displayId = generateStaffDisplayId();
 
       const { data: acct, error: insertError } = await supabase
@@ -186,7 +195,7 @@ const PersonnelManagement = () => {
         .insert({
           school_id:      school.id,
           role:           'staff',
-          email,
+          email:          adresse,
           password_plain: password,
           display_name:   fullName.trim(),
           display_id:     displayId,
@@ -198,19 +207,24 @@ const PersonnelManagement = () => {
 
       const { data, error } = await supabase.functions.invoke('create-staff-account', {
         body: {
-          email, password, accountId: acct.id,
+          email: adresse, password, accountId: acct.id,
           fullName: fullName.trim(),
           permissions: Array.from(permissions),
         },
       });
       if (error || (data && (data as { error?: string }).error)) {
-        throw new Error((data as { error?: string })?.error ?? String(error));
+        // Le message de la fonction (adresse déjà utilisée…) est dans le corps de la réponse.
+        let message = (data as { error?: string })?.error;
+        if (!message && error && 'context' in error) {
+          message = await (error as { context: Response }).context.json().then(j => j?.error).catch(() => undefined);
+        }
+        throw new Error(message ?? 'Impossible de créer ce compte');
       }
 
       await load();
       setDialogOpen(false);
       resetForm();
-      toast({ title: 'Compte créé', description: `${fullName} peut maintenant se connecter (${email}).` });
+      toast({ title: 'Compte créé', description: `${fullName} peut maintenant se connecter avec ${adresse} et son mot de passe.` });
     } catch (err) {
       toast({
         title: 'Erreur',
@@ -302,7 +316,7 @@ const PersonnelManagement = () => {
                         </div>
                       </td>
                       <td className="p-3">
-                        <PasswordCell accountId={row.accountId} />
+                        <PasswordCell accountId={row.accountId} saisieLibre={isAdmin} />
                       </td>
                       <td className="p-3">
                         <div className="flex flex-wrap gap-1 mb-2 max-w-56">
@@ -353,8 +367,8 @@ const PersonnelManagement = () => {
               Ajouter un membre du personnel
             </DialogTitle>
             <DialogDescription>
-              L'email et le mot de passe sont générés automatiquement, comme pour les élèves et professeurs.
-              Cochez les sections auxquelles ce membre aura accès.
+              Saisissez la vraie adresse e-mail du membre du personnel et le mot de passe qu'il a choisi.
+              Il se connectera avec les deux. Cochez les sections auxquelles il aura accès.
             </DialogDescription>
           </DialogHeader>
 
@@ -362,6 +376,27 @@ const PersonnelManagement = () => {
             <div className="space-y-1.5">
               <Label>Nom complet</Label>
               <Input value={fullName} onChange={e => setFullName(e.target.value)} placeholder="Ex: Awa Ndiaye" disabled={submitting} />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="email-personnel">Adresse e-mail (pour se connecter)</Label>
+              <Input
+                id="email-personnel" type="email" inputMode="email" autoComplete="off"
+                value={email} onChange={e => setEmail(e.target.value)}
+                placeholder="Ex: awa.ndiaye@gmail.com" disabled={submitting}
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="mdp-personnel">Mot de passe choisi par le membre</Label>
+              <Input
+                id="mdp-personnel" type="text" autoComplete="new-password"
+                value={motDePasse} onChange={e => setMotDePasse(e.target.value)}
+                placeholder={`Au moins ${MIN_MOT_DE_PASSE} caractères`} disabled={submitting}
+              />
+              <p className="text-xs text-muted-foreground">
+                Pas de « mot de passe oublié » : en cas d'oubli, vous le changez ici, dans la liste du personnel.
+              </p>
             </div>
 
             <div className="space-y-1.5">
