@@ -133,7 +133,7 @@ const PaymentTracking = () => {
         // Paiement précis correspondant à cet item (pour la date/méthode/référence à l'export) —
         // même logique de correspondance que hasPaid*, mais on garde la ligne entière.
         const payment = paid ? getStudentPayments(student.id).find(p => {
-          if (p.status === 'cancelled') return false;
+          if (p.status === 'cancelled' || p.partiel) return false; // l'acompte ne solde pas
           if (viewMode === 'inscription') return p.type === 'inscription';
           if (viewMode === 'tuition') return p.type === 'tuition' && p.monthKey === selectedMonth;
           if (viewMode === 'service' && selectedServiceId) {

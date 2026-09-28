@@ -26,6 +26,7 @@ import {
 } from '@/types/payment';
 import { QrScanner } from '@/components/payment/QrScanner';
 import { buildPayableItems, type PayableItem } from '@/lib/dueItems';
+import { deciderVersement } from '@/lib/paiementPartiel';
 import { cn } from '@/lib/utils';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -90,6 +91,9 @@ const PaymentRow = ({ item, selected, onToggle }: { item: PayableItem; selected:
       <div className="flex-1 min-w-0">
         <p className="text-sm font-medium">{item.label}</p>
         {item.sublabel && <p className="text-xs text-muted-foreground">{item.sublabel}</p>}
+        {item.dejaVerse > 0 && (
+          <p className="text-xs font-medium text-amber-600">Déjà versé {fmt(item.dejaVerse)} · reste à payer</p>
+        )}
       </div>
       {item.overdue && (
         <Badge variant="destructive" className="text-xs gap-1">
@@ -108,7 +112,7 @@ const PaymentEntry = ({ initialMode = 'search' }: { initialMode?: 'search' | 'sc
   const {
     getTuitionConfig,
     getStudentActiveServices,
-    hasPaidInscription, hasPaidTuitionMonth, hasPaidService,
+    hasPaidInscription, hasPaidTuitionMonth, hasPaidService, getAcomptes,
     isEnrolledInService,
     addPayment,
   } = usePayment();
@@ -131,6 +135,9 @@ const PaymentEntry = ({ initialMode = 'search' }: { initialMode?: 'search' | 'sc
   const [reference, setReference]             = useState('');
   const [note, setNote]                       = useState('');
   const [processing, setProcessing]           = useState(false);
+  // Montant réellement versé par élément sélectionné (par défaut : le reste).
+  // Moins que le reste = ACOMPTE (src/lib/paiementPartiel.ts).
+  const [montantsSaisis, setMontantsSaisis]   = useState<Record<string, string>>({});
 
   const METHODS: PaymentMethod[] = ['especes', 'wave', 'orange_money', 'virement', 'cheque'];
 
@@ -173,27 +180,41 @@ const PaymentEntry = ({ initialMode = 'search' }: { initialMode?: 'search' | 'sc
       hasPaidService: (serviceId, monthKey) => hasPaidService(selectedStudent.id, serviceId, monthKey),
       isEnrolledInService: (serviceId, monthIndex) =>
         isEnrolledInService(selectedStudent.id, selectedStudent.classId, serviceId, monthIndex),
+      acomptes: (e) => getAcomptes(selectedStudent.id, e),
     });
-  }, [selectedStudent, tuitionConfig, studentServices, hasPaidInscription, hasPaidTuitionMonth, hasPaidService, isEnrolledInService, selectedClass, academicMonths, billingRules]);
+  }, [selectedStudent, tuitionConfig, studentServices, hasPaidInscription, hasPaidTuitionMonth, hasPaidService, getAcomptes, isEnrolledInService, selectedClass, academicMonths, billingRules]);
 
-  const selectedTotal = useMemo(() =>
-    payableItems.filter(i => selectedItems.has(i.id) && !i.paid && !i.blocked).reduce((s, i) => s + i.amount, 0),
-  [payableItems, selectedItems]);
+  const itemsSelectionnes = useMemo(
+    () => payableItems.filter(i => selectedItems.has(i.id) && !i.paid && !i.blocked),
+    [payableItems, selectedItems],
+  );
+  // Ce que la caisse va encaisser pour chaque élément : le montant saisi, sinon le reste.
+  const versements = useMemo(
+    () => itemsSelectionnes.map(item => ({ item, decision: deciderVersement(montantsSaisis[item.id] ?? item.amount, item.amount) })),
+    [itemsSelectionnes, montantsSaisis],
+  );
+  const selectedTotal = useMemo(
+    () => versements.reduce((s, v) => s + (v.decision.ok ? v.decision.montant : 0), 0),
+    [versements],
+  );
 
   const unpaidCount = payableItems.filter(i => !i.paid && !i.blocked).length;
 
-  const toggleItem = (id: string) =>
+  const toggleItem = (id: string) => {
+    setMontantsSaisis(prev => { const n = { ...prev }; delete n[id]; return n; });
     setSelectedItems(prev => {
       const n = new Set(prev);
       if (n.has(id)) n.delete(id); else n.add(id);
       return n;
     });
+  };
 
   const [pendingItemId, setPendingItemId] = useState<string | null>(null);
 
   const selectStudent = (id: string) => {
     setSelectedStudentId(id);
     setSelectedItems(new Set());
+    setMontantsSaisis({});
     setSearch('');
     setReference('');
     setNote('');
@@ -250,21 +271,29 @@ const PaymentEntry = ({ initialMode = 'search' }: { initialMode?: 'search' | 'sc
       toast({ title: 'Référence requise', description: 'Saisissez une référence pour ce mode de paiement', variant: 'destructive' });
       return;
     }
+    // Tous les montants sont vérifiés AVANT d'encaisser quoi que ce soit.
+    const invalide = versements.find(v => !v.decision.ok);
+    if (invalide) {
+      toast({ title: 'Montant à corriger', description: `${invalide.item.label} : ${invalide.decision.erreur}`, variant: 'destructive' });
+      return;
+    }
     setProcessing(true);
     // Paiements réellement enregistrés : le reçu ne couvre que ceux-là, même si
     // un élément échoue en cours de route.
     const enregistres: Payment[] = [];
     try {
-      const itemsToPay = payableItems.filter(i => selectedItems.has(i.id) && !i.paid && !i.blocked);
+      const itemsToPay = versements;
       // Process payments sequentially to avoid race conditions on unique constraints
-      for (const item of itemsToPay) {
+      for (const { item, decision } of itemsToPay) {
+        if (!decision.ok) continue; // déjà écarté plus haut
         enregistres.push(await addPayment({
           studentId:      selectedStudent.id,
           studentUniqueId: selectedStudent.studentId,
           type:           item.type,
           serviceId:      item.serviceId,
           monthKey:       item.monthKey,
-          amount:         item.amount,
+          amount:         decision.montant,
+          partiel:        decision.partiel,
           method,
           reference:      reference.trim() || undefined,
           note:           note.trim() || undefined,
@@ -272,11 +301,14 @@ const PaymentEntry = ({ initialMode = 'search' }: { initialMode?: 'search' | 'sc
         }));
       }
       const total = new Intl.NumberFormat('fr-FR').format(selectedTotal);
+      const nbAcomptes = enregistres.filter(p => p.partiel).length;
       toast({
         title: 'Paiement enregistré ✓',
-        description: `${itemsToPay.length} élément(s) — ${total} FCFA via ${PAYMENT_METHOD_LABELS[method]}`,
+        description: `${itemsToPay.length} élément(s) — ${total} FCFA via ${PAYMENT_METHOD_LABELS[method]}`
+          + (nbAcomptes ? ` · ${nbAcomptes} acompte(s), le reste reste dû` : ''),
       });
       setSelectedItems(new Set());
+      setMontantsSaisis({});
       setReference('');
       setNote('');
       // Après l'encaissement, jamais avant : un souci de reçu ne peut pas
@@ -474,8 +506,32 @@ const PaymentEntry = ({ initialMode = 'search' }: { initialMode?: 'search' | 'sc
             </div>
 
             {/* Payment panel */}
-            {selectedItems.size > 0 && selectedTotal > 0 && (
+            {versements.length > 0 && (
               <div className="flex-shrink-0 border-t p-5 space-y-4 bg-muted/20">
+                {/* Montant versé par élément : moins que le reste = acompte */}
+                <div className="space-y-2">
+                  <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Montant versé</Label>
+                  {versements.map(({ item, decision }) => (
+                    <div key={item.id} className="flex items-center gap-2">
+                      <span className="flex-1 min-w-0 text-sm truncate" title={item.label}>{item.label}</span>
+                      {decision.ok && decision.partiel && (
+                        <Badge variant="outline" className="text-xs text-amber-700 border-amber-300 bg-amber-50">Acompte</Badge>
+                      )}
+                      <Input
+                        inputMode="numeric"
+                        className={cn('w-32 text-right', !decision.ok && 'border-destructive')}
+                        value={montantsSaisis[item.id] ?? String(item.amount)}
+                        onChange={e => setMontantsSaisis(prev => ({ ...prev, [item.id]: e.target.value.replace(/[^\d\s]/g, '') }))}
+                        aria-label={`Montant versé pour ${item.label}`}
+                        title={decision.ok ? `Reste à payer : ${fmt(item.amount)}` : decision.erreur}
+                      />
+                    </div>
+                  ))}
+                  <p className="text-xs text-muted-foreground">
+                    Pour un paiement en plusieurs fois, saisissez le montant versé : le reste restera dû.
+                  </p>
+                </div>
+
                 <div className="flex items-center justify-between">
                   <span className="font-semibold">Total à encaisser</span>
                   <span className="text-xl font-bold text-primary">{fmt(selectedTotal)}</span>

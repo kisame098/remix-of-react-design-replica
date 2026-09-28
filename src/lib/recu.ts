@@ -83,7 +83,8 @@ export const construireRecu = ({
     ordre[a.type] - ordre[b.type] || (a.monthKey ?? '').localeCompare(b.monthKey ?? ''));
 
   const lignes: LigneRecu[] = tries.map(p => ({
-    designation: libelleDuPaiement(p, services, libelleMois),
+    // Un acompte (paiement partiel) est écrit tel quel sur le reçu.
+    designation: libelleDuPaiement(p, services, libelleMois) + (p.partiel ? ' (acompte)' : ''),
     montant: p.amount,
     annulee: p.status === 'cancelled',
   }));

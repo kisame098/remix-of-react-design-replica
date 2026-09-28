@@ -6,6 +6,8 @@
 //   1. Un paiement ANNULÉ ne compte pas comme payé (l'élément redevient dû).
 //   2. Tout est borné à l'ANNÉE SCOLAIRE courante : la scolarité de l'an
 //      dernier ne solde pas celle de cette année.
+//   3. Un ACOMPTE (paiement partiel) ne solde pas l'élément : seul un paiement
+//      non partiel le solde. Les acomptes se cumulent (voir acomptesVerses).
 //
 // Fonctions pures extraites de PaymentContext pour être testables
 // (paymentQueries.test.ts).
@@ -16,20 +18,39 @@ import { AnnexService, MonthKey, Payment, ServiceEnrollment } from '@/types/paym
 const isLive = (p: Payment, studentId: string, yearLabel: string): boolean =>
   p.studentId === studentId && p.academicYearLabel === yearLabel && p.status !== 'cancelled';
 
+/** Paiement vivant qui SOLDE l'élément (un acompte ne solde rien). */
+const soldeVivant = (p: Payment, studentId: string, yearLabel: string): boolean =>
+  isLive(p, studentId, yearLabel) && !p.partiel;
+
+/** L'élément payé : inscription, un mois de scolarité, un service (mois ou année). */
+export interface ElementPaye { type: Payment['type']; monthKey?: MonthKey; serviceId?: string }
+
+const concerne = (p: Payment, e: ElementPaye): boolean =>
+  p.type === e.type
+  && (e.type === 'inscription' || (p.monthKey ?? undefined) === (e.monthKey ?? undefined))
+  && (e.type !== 'service' || p.serviceId === e.serviceId);
+
+/** Somme des ACOMPTES vivants déjà versés sur un élément non soldé. */
+export const acomptesVerses = (
+  payments: Payment[], yearLabel: string, studentId: string, element: ElementPaye,
+): number => payments
+  .filter(p => isLive(p, studentId, yearLabel) && p.partiel && concerne(p, element))
+  .reduce((s, p) => s + p.amount, 0);
+
 export const hasPaidInscription = (
   payments: Payment[], yearLabel: string, studentId: string,
-): boolean => payments.some(p => isLive(p, studentId, yearLabel) && p.type === 'inscription');
+): boolean => payments.some(p => soldeVivant(p, studentId, yearLabel) && p.type === 'inscription');
 
 export const hasPaidTuitionMonth = (
   payments: Payment[], yearLabel: string, studentId: string, monthKey: MonthKey,
 ): boolean => payments.some(p =>
-  isLive(p, studentId, yearLabel) && p.type === 'tuition' && p.monthKey === monthKey);
+  soldeVivant(p, studentId, yearLabel) && p.type === 'tuition' && p.monthKey === monthKey);
 
 /** `monthKey` omis : n'importe quel paiement de ce service compte (annuel/ponctuel). */
 export const hasPaidService = (
   payments: Payment[], yearLabel: string, studentId: string, serviceId: string, monthKey?: MonthKey,
 ): boolean => payments.some(p =>
-  isLive(p, studentId, yearLabel) && p.type === 'service' && p.serviceId === serviceId &&
+  soldeVivant(p, studentId, yearLabel) && p.type === 'service' && p.serviceId === serviceId &&
   (monthKey === undefined || p.monthKey === monthKey));
 
 export const getTotalCollectedForYear = (payments: Payment[], yearLabel: string): number =>

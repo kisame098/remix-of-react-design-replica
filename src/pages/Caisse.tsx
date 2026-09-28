@@ -21,6 +21,7 @@ import {
 import { Student } from '@/contexts/SchoolContext';
 import { useRecus } from '@/hooks/useRecus';
 import { useAnnulerPaiement } from '@/hooks/useAnnulerPaiement';
+import { resteAPayer } from '@/lib/paiementPartiel';
 import { filtrerHistorique, libellePaiement, numeroRecuDuPaiement } from '@/lib/historiquePaiements';
 import {
   ScanLine, History, XCircle, CheckCircle2, LogOut, AlertCircle, Loader2, Search, Trash2, Receipt as ReceiptIcon,
@@ -51,7 +52,7 @@ const Caisse = () => {
   const { students, tousLesEleves, studentsLoading } = useSchool();
   const {
     payments, annexServices, getTuitionConfig,
-    hasPaidInscription, hasPaidTuitionMonth, hasPaidService,
+    hasPaidInscription, hasPaidTuitionMonth, hasPaidService, getAcomptes,
     addPayment, receipts, paymentLoading,
   } = usePayment();
   const { currentYear } = useSchoolYear();
@@ -78,7 +79,14 @@ const Caisse = () => {
   const METHODS: PaymentMethod[] = ['especes', 'wave', 'orange_money', 'virement', 'cheque'];
 
   // ── Résoudre le montant exact pour l'intention scannée (jamais depuis le QR) ─
+  // Après un acompte, on encaisse le RESTE (qui solde l'élément), pas le tarif.
   const resolveItem = (studentId: string, classId: string | null, intent: PaymentIntent): ResolvedItem | null => {
+    const item = resolveTarif(studentId, classId, intent);
+    if (!item || item.alreadyPaid) return item;
+    const dejaVerse = getAcomptes(studentId, { type: item.type, monthKey: item.monthKey, serviceId: item.serviceId });
+    return { ...item, amount: resteAPayer(item.amount, dejaVerse) };
+  };
+  const resolveTarif = (studentId: string, classId: string | null, intent: PaymentIntent): ResolvedItem | null => {
     const cfg = classId ? getTuitionConfig(classId) : undefined;
     if (intent.type === 'inscription') {
       if (!cfg) return null;
