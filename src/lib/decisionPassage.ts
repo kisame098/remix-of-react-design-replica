@@ -34,6 +34,8 @@ export interface ContexteDecision {
   estDernierePeriode: boolean;
   /** Moyenne ANNUELLE (cumulée sur l'année), pas celle du trimestre. */
   moyenneAnnuelle: number | undefined;
+  /** Moyenne de passage réglée par l'école (Paramètres → Scolarité). Absente : 5/10 ou 10/20. */
+  seuil?: number;
 }
 
 const estElementaire = (niveau: string): boolean =>
@@ -63,6 +65,6 @@ export const decisionDePassage = (c: ContexteDecision): string | undefined => {
   if (!c.estDernierePeriode || !c.niveau) return undefined;
   if (c.moyenneAnnuelle === undefined || Number.isNaN(c.moyenneAnnuelle)) return undefined;
 
-  const seuil = seuilDePassage(c.niveau)!;
+  const seuil = c.seuil ?? seuilDePassage(c.niveau)!;
   return c.moyenneAnnuelle >= seuil ? ADMIS : REDOUBLE;
 };

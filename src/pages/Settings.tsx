@@ -17,7 +17,7 @@ import {
 } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import {
-  School, User, Calendar, Clock,
+  School, User, Calendar, Clock, GraduationCap,
   Camera, Loader2, Save, ShieldAlert, AlertCircle, CheckCircle2,
 } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
@@ -29,6 +29,11 @@ import {
   ARRIVAL_MONTH_WAIVE_DAY_KEY, readBillingRules,
 } from '@/types/payment';
 import { Checkbox } from '@/components/ui/checkbox';
+import {
+  CLE_CONFIG_SCOLARITE, CONFIG_PAR_DEFAUT, CYCLES, lireConfigScolarite,
+  type ConfigScolarite, type Cycle, type NombrePeriodes,
+} from '@/lib/configScolarite';
+import { estFormationPro } from '@/lib/modeGestion';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -321,6 +326,43 @@ const SettingsPage = () => {
     }
   };
 
+  // ── Scolarité : découpage de l'année et moyenne de passage, par cycle ─────────
+  type BrouillonScolarite = Record<Cycle, { periodes: NombrePeriodes; seuil: string }>;
+  const brouillonDe = (config: ConfigScolarite): BrouillonScolarite =>
+    Object.fromEntries(Object.entries(config).map(([cycle, r]) => [cycle, { periodes: r.periodes, seuil: String(r.seuil).replace('.', ',') }])) as BrouillonScolarite;
+  const configEnregistree = JSON.stringify(school?.settings?.[CLE_CONFIG_SCOLARITE] ?? null);
+  const [scolarite, setScolarite] = useState<BrouillonScolarite>(() => brouillonDe(lireConfigScolarite(school?.settings)));
+  const [savingScolarite, setSavingScolarite] = useState(false);
+  // Resynchronise seulement si la configuration enregistrée change (pas à chaque retour d'onglet).
+  useEffect(() => {
+    setScolarite(brouillonDe(lireConfigScolarite(school?.settings)));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [configEnregistree]);
+  const changerCycle = (cycle: Cycle, champ: Partial<{ periodes: NombrePeriodes; seuil: string }>) =>
+    setScolarite(f => ({ ...f, [cycle]: { ...f[cycle], ...champ } }));
+
+  const saveScolarite = async () => {
+    const config = {} as ConfigScolarite;
+    for (const { cycle, libelle, bareme } of CYCLES) {
+      const seuil = Number(scolarite[cycle].seuil.replace(',', '.'));
+      if (!Number.isFinite(seuil) || seuil <= 0 || seuil > bareme) {
+        toast({ title: 'Moyenne de passage invalide', description: `${libelle} : entre 0 et ${bareme}.`, variant: 'destructive' });
+        return;
+      }
+      config[cycle] = { periodes: scolarite[cycle].periodes, seuil };
+    }
+    setSavingScolarite(true);
+    try {
+      await updateSchoolSettings({ [CLE_CONFIG_SCOLARITE]: config });
+      toast({ title: 'Scolarité mise à jour', description: 'Les bulletins de fin d\'année rendront la décision finale selon ces réglages.' });
+    } catch {
+      toast({ title: 'Erreur', description: 'Impossible de sauvegarder', variant: 'destructive' });
+    } finally {
+      setSavingScolarite(false);
+    }
+  };
+  const avecScolarite = !estFormationPro(school);
+
   const initials = (profile?.full_name || profile?.email || 'AD').slice(0, 2).toUpperCase();
 
   if (!isAdmin) {
@@ -341,11 +383,12 @@ const SettingsPage = () => {
       </div>
 
       <Tabs defaultValue="ecole" className="space-y-6">
-        <TabsList className="grid w-full grid-cols-4">
-          <TabsTrigger value="ecole" className="gap-2"><School className="h-4 w-4" /> École</TabsTrigger>
-          <TabsTrigger value="compte" className="gap-2"><User className="h-4 w-4" /> Mon compte</TabsTrigger>
-          <TabsTrigger value="annee" className="gap-2"><Calendar className="h-4 w-4" /> Année scolaire</TabsTrigger>
-          <TabsTrigger value="horaires" className="gap-2"><Clock className="h-4 w-4" /> Emploi du temps</TabsTrigger>
+        <TabsList className={`grid w-full ${avecScolarite ? 'grid-cols-5' : 'grid-cols-4'}`}>
+          <TabsTrigger value="ecole" className="gap-2" title="École" aria-label="École"><School className="h-4 w-4" /> <span className="hidden md:inline">École</span></TabsTrigger>
+          <TabsTrigger value="compte" className="gap-2" title="Mon compte" aria-label="Mon compte"><User className="h-4 w-4" /> <span className="hidden md:inline">Mon compte</span></TabsTrigger>
+          <TabsTrigger value="annee" className="gap-2" title="Année scolaire" aria-label="Année scolaire"><Calendar className="h-4 w-4" /> <span className="hidden md:inline">Année scolaire</span></TabsTrigger>
+          <TabsTrigger value="horaires" className="gap-2" title="Emploi du temps" aria-label="Emploi du temps"><Clock className="h-4 w-4" /> <span className="hidden md:inline">Emploi du temps</span></TabsTrigger>
+          {avecScolarite && <TabsTrigger value="scolarite" className="gap-2" title="Scolarité" aria-label="Scolarité"><GraduationCap className="h-4 w-4" /> <span className="hidden md:inline">Scolarité</span></TabsTrigger>}
         </TabsList>
 
         {/* École */}
@@ -669,6 +712,61 @@ const SettingsPage = () => {
             </CardFooter>
           </Card>
         </TabsContent>
+
+        {avecScolarite && (
+          <TabsContent value="scolarite">
+            <Card>
+              <CardHeader>
+                <CardTitle>Découpage de l'année et passage en classe supérieure</CardTitle>
+                <CardDescription>
+                  Pour chaque cycle : trimestres ou semestres, et la moyenne annuelle à atteindre pour passer.
+                  SenClass rend la décision finale (Admis / Redouble) sur le bulletin du dernier trimestre ou semestre.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {CYCLES.map(({ cycle, libelle, bareme }) => (
+                  <div key={cycle} className="grid gap-3 sm:grid-cols-[140px_1fr_1fr] items-end rounded-lg border p-3">
+                    <p className="font-medium sm:pb-2">{libelle}</p>
+                    <div className="space-y-1.5">
+                      <Label>Découpage de l'année</Label>
+                      <Select
+                        value={String(scolarite[cycle].periodes)}
+                        onValueChange={v => changerCycle(cycle, { periodes: Number(v) as NombrePeriodes })}
+                      >
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="3">3 trimestres</SelectItem>
+                          <SelectItem value="2">2 semestres</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label>Moyenne de passage (sur {bareme})</Label>
+                      <div className="flex items-center gap-2">
+                        <Input
+                          inputMode="decimal"
+                          value={scolarite[cycle].seuil}
+                          onChange={e => changerCycle(cycle, { seuil: e.target.value.replace(/[^\d.,]/g, '') })}
+                        />
+                        <span className="text-sm text-muted-foreground shrink-0">/ {bareme}</span>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+                <p className="text-xs text-muted-foreground">
+                  Par défaut : élémentaire en {CONFIG_PAR_DEFAUT.elementaire.periodes} trimestres avec {CONFIG_PAR_DEFAUT.elementaire.seuil}/10,
+                  collège et lycée en {CONFIG_PAR_DEFAUT.college.periodes} semestres avec {CONFIG_PAR_DEFAUT.college.seuil}/20.
+                </p>
+              </CardContent>
+              <CardFooter className="justify-end border-t bg-muted/30 py-4">
+                <Button className="gap-2" onClick={saveScolarite} disabled={savingScolarite}>
+                  {savingScolarite ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                  Enregistrer
+                </Button>
+              </CardFooter>
+            </Card>
+          </TabsContent>
+        )}
       </Tabs>
     </div>
   );

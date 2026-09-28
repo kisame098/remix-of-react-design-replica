@@ -5,6 +5,8 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useAttendance } from '@/contexts/AttendanceContext';
 import { useClassRanking, useCumulativeAverage, RankingCalculationMode } from '@/hooks/useClassRanking';
 import { decisionDePassage } from '@/lib/decisionPassage';
+import { useConfigScolarite } from '@/hooks/useConfigScolarite';
+import { cycleDuNiveau } from '@/lib/configScolarite';
 import { BulletinPdfData } from '@/lib/bulletinPdf';
 
 /**
@@ -21,15 +23,16 @@ export function useBulletinDataList(
   enabled = true,
   studentId?: string,
   observations?: string,
-  /** Coché à la main dans BulletinModal — jamais déduit. Sans lui, aucune
-   *  décision de passage n'est imprimée : le bulletin du 1er semestre ne doit
-   *  pas annoncer un passage définitif. */
+  /** Case de BulletinModal, cochée d'office sur la dernière période d'après
+   *  Paramètres → Scolarité (voir useFinDAnnee). Sans elle, aucune décision
+   *  de passage n'est imprimée. */
   isLastPeriodOfYear = false,
 ): BulletinPdfData[] {
   const { classes, gradePeriods, students, filieres, getClassFiliereAssignment } = useSchool();
   const { currentYear } = useSchoolYear();
   const { school } = useAuth();
   const { studentAttendances, sessions } = useAttendance();
+  const configScolarite = useConfigScolarite();
   const rankings = useClassRanking(periodId, classId, mode, enabled);
   const cumulativeAverage = useCumulativeAverage(periodId, classId, mode);
 
@@ -54,6 +57,8 @@ export function useBulletinDataList(
 
   return useMemo((): BulletinPdfData[] => {
     if (!enabled || !schoolClass || !period || !currentYear) return [];
+    const cycle = cycleDuNiveau(schoolClass.niveau);
+    const seuilEcole = cycle ? configScolarite[cycle].seuil : undefined;
     return targetRankings.flatMap((ranking): BulletinPdfData[] => {
       const student = students.find(s => s.id === ranking.studentId);
       if (!student) return [];
@@ -98,10 +103,11 @@ export function useBulletinDataList(
           niveau: schoolClass.niveau,
           estDernierePeriode: isLastPeriodOfYear && period.type === 'semester',
           moyenneAnnuelle: annualAverage?.average,
+          seuil: seuilEcole,
         }),
         observations: isBulk ? undefined : observations || undefined,
       }];
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [enabled, targetRankings, students, schoolClass, period, currentYear, filiereName, rankings.length, classAverage, isBulk, observations, school, yearLabel, studentAttendances, sessionDateById, cumulativeAverage, isLastPeriodOfYear]);
+  }, [enabled, targetRankings, students, schoolClass, period, currentYear, filiereName, rankings.length, classAverage, isBulk, observations, school, yearLabel, studentAttendances, sessionDateById, cumulativeAverage, isLastPeriodOfYear, configScolarite]);
 }

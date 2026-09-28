@@ -137,3 +137,14 @@ describe('barèmes et seuils', () => {
     expect(seuilDePassage('Petite Section')).toBe(SEUIL_SECONDAIRE);
   });
 });
+
+describe('moyenne de passage réglée par l’école (Paramètres → Scolarité)', () => {
+  it('le seuil de l’école remplace 5/10 ou 10/20', () => {
+    const base = { niveau: '4ème', estDernierePeriode: true };
+    expect(decisionDePassage({ ...base, moyenneAnnuelle: 11, seuil: 12 })).toBe(REDOUBLE);
+    expect(decisionDePassage({ ...base, moyenneAnnuelle: 12, seuil: 12 })).toBe(ADMIS);
+    expect(decisionDePassage({ niveau: 'CE1', estDernierePeriode: true, moyenneAnnuelle: 5.5, seuil: 6 })).toBe(REDOUBLE);
+    // Sans réglage : les valeurs par défaut.
+    expect(decisionDePassage({ ...base, moyenneAnnuelle: 10 })).toBe(ADMIS);
+  });
+});

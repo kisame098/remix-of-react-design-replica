@@ -6,31 +6,27 @@ import { useAttendance } from '@/contexts/AttendanceContext';
 import { useElementaryClassRanking, useElementaryCumulativeAverage } from '@/hooks/useElementaryClassRanking';
 import { ElementaryBulletinPdfData, ElementaryBulletinLine } from '@/lib/elementaryBulletinPdf';
 import { decisionDePassage } from '@/lib/decisionPassage';
+import { useConfigScolarite } from '@/hooks/useConfigScolarite';
+import { cycleDuNiveau } from '@/lib/configScolarite';
 
 // La règle vit dans src/lib/decisionPassage.ts, partagée avec le collège et
 // couverte par decisionPassage.test.ts : admis à partir de 5/10, redouble en
 // dessous. Elle a remplacé un « Passage de droit » qui s'affichait aux niveaux
 // intermédiaires SANS REGARDER LES NOTES.
 export const computeDecisionPassage = (
-  niveau: string | undefined, isFinalPeriod: boolean, annualAverage: number | undefined,
+  niveau: string | undefined, isFinalPeriod: boolean, annualAverage: number | undefined, seuil?: number,
 ): string | undefined =>
-  decisionDePassage({ niveau, estDernierePeriode: isFinalPeriod, moyenneAnnuelle: annualAverage });
+  decisionDePassage({ niveau, estDernierePeriode: isFinalPeriod, moyenneAnnuelle: annualAverage, seuil });
 
 /**
  * Assemble les données de bulletin élémentaire — miroir de useBulletinDataList
  * mais pour le système à barème de points (pas de coefficients/matières).
  *
- * `isLastPeriodOfYear` est un choix EXPLICITE de la personne qui génère le
- * bulletin (case à cocher dans ElementaryBulletinModal) — jamais déduit
- * automatiquement de "c'est la dernière période qui existe aujourd'hui dans
- * la base". Déduire automatiquement rendrait une décision de passage
- * définitive ("Admis en classe supérieure" / "Redouble") sur le bulletin du 1er semestre
- * tant que le 2e n'a pas encore été créé, ce qui est faux : la période
- * courante N'EST PAS forcément la dernière de l'année, juste la dernière
- * créée jusqu'ici. La détection "cette classe a-t-elle déjà fait une période
- * précédente" (pour la moyenne cumulée) reste, elle, automatique — voir
- * useElementaryCumulativeAverage — puisqu'elle porte sur des périodes qui
- * existent réellement, pas sur une hypothèse de fin d'année.
+ * `isLastPeriodOfYear` : case d'ElementaryBulletinModal, cochée d'office
+ * quand la période est la dernière de l'année d'après Paramètres → Scolarité
+ * (3 trimestres par défaut → le 3e ; voir useFinDAnnee). On ne déduit JAMAIS
+ * « dernière » de « dernière créée dans la base » : le 1er trimestre serait
+ * alors le dernier tant que le 2e n'existe pas encore.
  */
 export function useElementaryBulletinDataList(
   periodId: string | undefined,
@@ -44,6 +40,7 @@ export function useElementaryBulletinDataList(
   const { currentYear } = useSchoolYear();
   const { school } = useAuth();
   const { studentAttendances, sessions } = useAttendance();
+  const configScolarite = useConfigScolarite();
   const rankings = useElementaryClassRanking(classId, periodId, enabled);
   const cumulativeAverage = useElementaryCumulativeAverage(periodId, classId);
 
@@ -122,7 +119,10 @@ export function useElementaryBulletinDataList(
         };
       };
 
-      const decisionPassage = computeDecisionPassage(schoolClass.niveau, isLastPeriodOfYear, annualAverage?.average);
+      const decisionPassage = computeDecisionPassage(
+        schoolClass.niveau, isLastPeriodOfYear, annualAverage?.average,
+        cycleDuNiveau(schoolClass.niveau) ? configScolarite[cycleDuNiveau(schoolClass.niveau)!].seuil : undefined,
+      );
 
       return [{
         school: { name: school?.name ?? 'École', phone: school?.phone, email: school?.email, logoUrl: school?.logo_url },
@@ -147,5 +147,5 @@ export function useElementaryBulletinDataList(
         observations: isBulk ? undefined : observations || undefined,
       }];
     });
-  }, [enabled, targetRankings, students, schoolClass, period, currentYear, rankings.length, isBulk, observations, school, yearLabel, studentAttendances, sessionDateById, cumulativeAverage, lines, elementaryGrades, elementaryLineSettings, isLastPeriodOfYear]);
+  }, [enabled, targetRankings, students, schoolClass, period, currentYear, rankings.length, isBulk, observations, school, yearLabel, studentAttendances, sessionDateById, cumulativeAverage, lines, elementaryGrades, elementaryLineSettings, isLastPeriodOfYear, configScolarite]);
 }

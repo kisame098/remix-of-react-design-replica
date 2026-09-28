@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useFinDAnnee } from '@/hooks/useConfigScolarite';
 import jsPDF from 'jspdf';
 import { useSchool } from '@/contexts/SchoolContext';
 import { useElementaryBulletinDataList } from '@/hooks/useElementaryBulletinData';
@@ -31,6 +32,12 @@ const ElementaryBulletinModal = ({ open, onOpenChange, periodId, classId, studen
   // n'est PAS en fin d'année). Décoché par défaut : on ne rend une décision de
   // passage définitive que si on l'affirme volontairement.
   const [isLastPeriodOfYear, setIsLastPeriodOfYear] = useState(false);
+  // Cochée d'office sur le dernier trimestre/semestre de l'année, d'après
+  // Paramètres → Scolarité ; la personne peut toujours la décocher.
+  const finDAnnee = useFinDAnnee(periodId, classId);
+  useEffect(() => {
+    if (open) setIsLastPeriodOfYear(finDAnnee?.estDerniere ?? false);
+  }, [open, finDAnnee?.estDerniere]);
   const [pdfDoc, setPdfDoc] = useState<jsPDF | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
@@ -90,11 +97,17 @@ const ElementaryBulletinModal = ({ open, onOpenChange, periodId, classId, studen
                 className="mt-0.5"
               />
               <span className="text-sm">
-                <span className="font-medium">C'est le dernier semestre/trimestre de l'année scolaire</span>
+                <span className="font-medium">C'est le dernier {finDAnnee?.nom ?? 'semestre/trimestre'} de l'année scolaire</span>
+                {finDAnnee?.rang ? (
+                  <span className="block text-xs mt-0.5 font-medium text-primary">
+                    {finDAnnee.nom.charAt(0).toUpperCase() + finDAnnee.nom.slice(1)} {finDAnnee.rang} sur {finDAnnee.total}
+                    {finDAnnee.estDerniere ? ' : bulletin de fin d\'année, la décision finale est rendue.' : ' : pas encore de décision finale.'}
+                  </span>
+                ) : null}
                 <span className="block text-xs text-muted-foreground mt-0.5">
-                  Coché : la décision de passage et la "Moyenne Annuelle" apparaissent sur le bulletin —
-                  « Admis en classe supérieure » à partir de 5/10, « Redouble » en dessous.
-                  Décoché : seule une moyenne cumulée apparaît, sans décision.
+                  Coché : la décision de passage apparaît sur le bulletin — « Admis en classe supérieure »
+                  à partir de {finDAnnee ? `${String(finDAnnee.seuil).replace('.', ',')}/${finDAnnee.bareme}` : 'la moyenne de passage'} de moyenne annuelle, « Redouble » en dessous.
+                  Réglable dans Paramètres → Scolarité.
                 </span>
               </span>
             </label>
