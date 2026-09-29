@@ -1,4 +1,5 @@
 import { useRef, useState } from 'react';
+import { CLE_GUIDE, guideProgrammeJson } from '@/lib/guideProgrammeJson';
 import {
   useSchool, NIVEAUX, NIVEAU_BASE,
   mergeFiliereMandatorySubjects, mergeFiliereFacultativeSubjects, mergeFiliereChoiceGroups,
@@ -94,6 +95,8 @@ const Filieres = () => {
   // être réimporté tel quel dans une autre école SenClass.
   const handleExportProgramme = () => {
     const data = {
+      // Mode d'emploi pour une personne ou une IA ; ignoré à l'import.
+      [CLE_GUIDE]: guideProgrammeJson(),
       type: 'teranga_school_programme_export',
       version: 1,
       exportedAt: new Date().toISOString(),
