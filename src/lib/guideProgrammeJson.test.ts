@@ -24,15 +24,21 @@ describe("mode d'emploi du fichier de programme", () => {
   });
 
   it('décrit chaque champ que l’import utilise', () => {
-    for (const champ of ['niveauDefaults', 'filieres', 'niveaux', 'mandatorySubjects', 'facultativeSubjects', 'choiceGroups', 'options', 'coefficient', 'isFacultative']) {
+    for (const champ of ['niveauDefaults', 'elementaireDefaults', 'filieres', 'niveaux', 'mandatorySubjects', 'facultativeSubjects', 'choiceGroups', 'options', 'coefficient', 'isFacultative']) {
       expect(guide, champ).toContain(`"${champ}"`);
       expect(page, champ).toContain(champ);
     }
   });
 
-  it('prévient du doublon de cursus : l’import crée toujours un nouveau cursus', () => {
-    expect(page).toMatch(/const created = await addFiliere\(/);
-    expect(guide).toMatch(/CRÉÉ comme nouveau cursus/);
+  it('dit la vérité sur l’import : un cursus existant est complété, rien n’est écrasé', () => {
+    expect(page).toMatch(/planifierImport\(/);
+    expect(guide).toMatch(/cursus qui existe déjà \(même nom\) est COMPLÉTÉ/);
+    expect(guide).toMatch(/rien n'est supprimé/);
+  });
+
+  it('explique l’élémentaire avec ses domaines et registres exacts', () => {
+    for (const code of ['LC', 'MATH', 'ESVS', 'EPSA', 'RESSOURCES', 'COMPETENCE', '"elementaireDefaults"', '"pointMax"']) expect(guide).toContain(code);
+    expect(page).toMatch(/elementaireDefaults: elementaryDefaultLines\.map/);
   });
 
   it('reste un JSON valide une fois exporté (lignes de texte simples)', () => {

@@ -1,0 +1,725 @@
+{
+  "_LISEZ_MOI": [
+    "FICHIER DE PROGRAMME SENCLASS — mode d'emploi (ce champ est ignoré à l'import).",
+    "",
+    "À QUOI SERT CE FICHIER",
+    "Il contient le programme de l'école : les matières de chaque niveau (avec coefficient) et les cursus/séries (S1, S2, L…) avec leurs matières. On peut le modifier (à la main ou avec une IA) puis le réimporter dans SenClass : Cursus → Importer.",
+    "Il ne contient pas les classes, les élèves, les notes ni les paiements. Les matières de l'élémentaire (CI à CM2) utilisent un barème de points géré à part et ne sont pas dans ce fichier.",
+    "",
+    "CONSIGNES POUR UNE IA QUI MODIFIE CE FICHIER",
+    "1. Rendre un JSON strictement valide : pas de commentaires, pas de virgule finale, guillemets droits \".",
+    "2. Garder \"type\": \"teranga_school_programme_export\" et \"version\": 1 tels quels.",
+    "3. Ne jamais ajouter d'identifiants (id) : SenClass les crée lui-même.",
+    "4. Écrire les niveaux EXACTEMENT comme dans la liste ci-dessous (accents compris).",
+    "5. \"coefficient\" est un nombre (1, 2, 3, 0.5…). \"isFacultative\" est true ou false.",
+    "6. Le champ \"_LISEZ_MOI\" peut être gardé ou supprimé : il est ignoré.",
+    "",
+    "NIVEAUX RECONNUS",
+    "Élémentaire : CI, CP, CE1, CE2, CM1, CM2 (hors de ce fichier, voir plus haut).",
+    "Collège : 6ème, 5ème, 4ème, 3ème.",
+    "Lycée : 2nde, 1ère, Tle.",
+    "",
+    "LES DEUX PARTIES DU FICHIER",
+    "\"niveauDefaults\" : les matières communes à tous les élèves d'un niveau.",
+    "  Une ligne = { \"niveau\": \"4ème\", \"name\": \"Mathématiques\", \"coefficient\": 3, \"isFacultative\": false }.",
+    "  isFacultative = true pour une matière optionnelle.",
+    "\"filieres\" : les cursus/séries (surtout au lycée).",
+    "  \"name\" : le nom du cursus (ex. \"S2\"). \"description\" : texte libre ou null.",
+    "  \"niveaux\" : les niveaux où ce cursus existe (ex. [\"1ère\", \"Tle\"]).",
+    "  \"mandatorySubjects\" : matières obligatoires du cursus { \"niveau\", \"name\", \"coefficient\" }.",
+    "     \"niveau\": \"\" = la matière vaut pour TOUS les niveaux du cursus ; un niveau précis = seulement ce niveau.",
+    "  \"facultativeSubjects\" : matières facultatives du cursus, même forme.",
+    "  \"choiceGroups\" : un créneau où l'élève choisit UNE matière parmi plusieurs (ex. LV2).",
+    "     { \"niveau\": \"\", \"label\": \"LV2\", \"coefficient\": 2, \"options\": [\"Espagnol\", \"Arabe\", \"Allemand\"] }.",
+    "  Un cursus qui porte le nom d'un niveau et ne couvre que ce niveau (ex. name \"3ème\", niveaux [\"3ème\"]) sert aux matières propres à ce niveau : le garder tel quel.",
+    "",
+    "CE QUE FAIT L'IMPORT",
+    "- Matières de niveau : ajoutées ; une matière déjà présente (même niveau + même nom) est laissée telle quelle, jamais écrasée.",
+    "- Cursus : chaque cursus du fichier est CRÉÉ comme nouveau cursus. Si l'école a déjà un cursus du même nom, il y aura un doublon : ne mettre dans le fichier que les cursus à créer, ou supprimer l'ancien cursus avant l'import.",
+    "- Rien n'est supprimé par un import."
+  ],
+  "type": "teranga_school_programme_export",
+  "version": 1,
+  "exportedAt": "2026-09-29T22:02:59.322Z",
+  "niveauDefaults": [
+    {
+      "niveau": "CP",
+      "name": "Anglais",
+      "coefficient": 1,
+      "isFacultative": false
+    },
+    {
+      "niveau": "CM1",
+      "name": "Anglais",
+      "coefficient": 1,
+      "isFacultative": false
+    },
+    {
+      "niveau": "CE2",
+      "name": "Anglais",
+      "coefficient": 1,
+      "isFacultative": false
+    },
+    {
+      "niveau": "CE1",
+      "name": "Anglais",
+      "coefficient": 1,
+      "isFacultative": false
+    },
+    {
+      "niveau": "CI",
+      "name": "Anglais",
+      "coefficient": 1,
+      "isFacultative": false
+    },
+    {
+      "niveau": "6ème",
+      "name": "Français",
+      "coefficient": 4,
+      "isFacultative": false
+    },
+    {
+      "niveau": "CM2",
+      "name": "Anglais",
+      "coefficient": 1,
+      "isFacultative": false
+    },
+    {
+      "niveau": "6ème",
+      "name": "Mathématiques",
+      "coefficient": 3,
+      "isFacultative": false
+    },
+    {
+      "niveau": "6ème",
+      "name": "Anglais",
+      "coefficient": 2,
+      "isFacultative": false
+    },
+    {
+      "niveau": "6ème",
+      "name": "Histoire-Géographie",
+      "coefficient": 2,
+      "isFacultative": false
+    },
+    {
+      "niveau": "6ème",
+      "name": "Éducation civique",
+      "coefficient": 1,
+      "isFacultative": false
+    },
+    {
+      "niveau": "6ème",
+      "name": "SVT",
+      "coefficient": 2,
+      "isFacultative": false
+    },
+    {
+      "niveau": "6ème",
+      "name": "EPS",
+      "coefficient": 2,
+      "isFacultative": false
+    },
+    {
+      "niveau": "5ème",
+      "name": "Français",
+      "coefficient": 4,
+      "isFacultative": false
+    },
+    {
+      "niveau": "5ème",
+      "name": "Mathématiques",
+      "coefficient": 3,
+      "isFacultative": false
+    },
+    {
+      "niveau": "5ème",
+      "name": "Anglais",
+      "coefficient": 2,
+      "isFacultative": false
+    },
+    {
+      "niveau": "5ème",
+      "name": "Histoire-Géographie",
+      "coefficient": 2,
+      "isFacultative": false
+    },
+    {
+      "niveau": "5ème",
+      "name": "Éducation civique",
+      "coefficient": 1,
+      "isFacultative": false
+    },
+    {
+      "niveau": "5ème",
+      "name": "SVT",
+      "coefficient": 2,
+      "isFacultative": false
+    },
+    {
+      "niveau": "5ème",
+      "name": "EPS",
+      "coefficient": 2,
+      "isFacultative": false
+    },
+    {
+      "niveau": "4ème",
+      "name": "Français",
+      "coefficient": 4,
+      "isFacultative": false
+    },
+    {
+      "niveau": "4ème",
+      "name": "Mathématiques",
+      "coefficient": 3,
+      "isFacultative": false
+    },
+    {
+      "niveau": "4ème",
+      "name": "Anglais",
+      "coefficient": 2,
+      "isFacultative": false
+    },
+    {
+      "niveau": "4ème",
+      "name": "Histoire-Géographie",
+      "coefficient": 2,
+      "isFacultative": false
+    },
+    {
+      "niveau": "4ème",
+      "name": "Éducation civique",
+      "coefficient": 1,
+      "isFacultative": false
+    },
+    {
+      "niveau": "4ème",
+      "name": "SVT",
+      "coefficient": 2,
+      "isFacultative": false
+    },
+    {
+      "niveau": "4ème",
+      "name": "Sciences Physiques",
+      "coefficient": 2,
+      "isFacultative": false
+    },
+    {
+      "niveau": "4ème",
+      "name": "EPS",
+      "coefficient": 2,
+      "isFacultative": false
+    },
+    {
+      "niveau": "3ème",
+      "name": "Français",
+      "coefficient": 4,
+      "isFacultative": false
+    },
+    {
+      "niveau": "3ème",
+      "name": "Mathématiques",
+      "coefficient": 3,
+      "isFacultative": false
+    },
+    {
+      "niveau": "3ème",
+      "name": "Anglais",
+      "coefficient": 2,
+      "isFacultative": false
+    },
+    {
+      "niveau": "3ème",
+      "name": "Histoire-Géographie",
+      "coefficient": 2,
+      "isFacultative": false
+    },
+    {
+      "niveau": "3ème",
+      "name": "Éducation civique",
+      "coefficient": 1,
+      "isFacultative": false
+    },
+    {
+      "niveau": "3ème",
+      "name": "SVT",
+      "coefficient": 2,
+      "isFacultative": false
+    },
+    {
+      "niveau": "3ème",
+      "name": "Sciences Physiques",
+      "coefficient": 2,
+      "isFacultative": false
+    },
+    {
+      "niveau": "3ème",
+      "name": "EPS",
+      "coefficient": 2,
+      "isFacultative": false
+    }
+  ],
+  "filieres": [
+    {
+      "name": "L",
+      "description": "Série littéraire — configurée pour : 2nde. Ajoutez 1ère/Tle si votre école ne sépare pas L2/L'1.",
+      "niveaux": [
+        "2nde"
+      ],
+      "mandatorySubjects": [
+        {
+          "niveau": "2nde",
+          "name": "Français",
+          "coefficient": 4
+        },
+        {
+          "niveau": "2nde",
+          "name": "Anglais",
+          "coefficient": 3
+        },
+        {
+          "niveau": "2nde",
+          "name": "Mathématiques",
+          "coefficient": 3
+        },
+        {
+          "niveau": "2nde",
+          "name": "Histoire-Géographie",
+          "coefficient": 4
+        },
+        {
+          "niveau": "2nde",
+          "name": "SVT",
+          "coefficient": 2
+        },
+        {
+          "niveau": "2nde",
+          "name": "Sciences Physiques",
+          "coefficient": 2
+        },
+        {
+          "niveau": "2nde",
+          "name": "EPS",
+          "coefficient": 1
+        }
+      ],
+      "facultativeSubjects": [],
+      "choiceGroups": [
+        {
+          "niveau": "2nde",
+          "label": "Langue 2",
+          "coefficient": 3,
+          "options": [
+            "Arabe",
+            "Espagnol"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "L'1",
+      "description": "Série littéraire (langues) — configurée pour : 1ère, Tle. En 1ère, deux langues au choix parmi Anglais/Arabe/Espagnol (coef 4 chacune) ; en Tle, Anglais devient fixe et un seul choix reste entre Arabe/Espagnol.",
+      "niveaux": [
+        "1ère",
+        "Tle"
+      ],
+      "mandatorySubjects": [
+        {
+          "niveau": "",
+          "name": "Français",
+          "coefficient": 6
+        },
+        {
+          "niveau": "",
+          "name": "Mathématiques",
+          "coefficient": 2
+        },
+        {
+          "niveau": "",
+          "name": "Histoire-Géographie",
+          "coefficient": 2
+        },
+        {
+          "niveau": "",
+          "name": "EPS",
+          "coefficient": 1
+        },
+        {
+          "niveau": "Tle",
+          "name": "Anglais",
+          "coefficient": 4
+        },
+        {
+          "niveau": "Tle",
+          "name": "Philosophie",
+          "coefficient": 4
+        }
+      ],
+      "facultativeSubjects": [],
+      "choiceGroups": [
+        {
+          "niveau": "1ère",
+          "label": "Langue 1",
+          "coefficient": 4,
+          "options": [
+            "Anglais",
+            "Arabe",
+            "Espagnol"
+          ]
+        },
+        {
+          "niveau": "1ère",
+          "label": "Langue 2",
+          "coefficient": 4,
+          "options": [
+            "Anglais",
+            "Arabe",
+            "Espagnol"
+          ]
+        },
+        {
+          "niveau": "Tle",
+          "label": "Langue 2",
+          "coefficient": 4,
+          "options": [
+            "Arabe",
+            "Espagnol"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "L2",
+      "description": "Série littéraire (dominante Langues, choix LV1/LV2 + Sciences) — configurée pour : 1ère, Tle",
+      "niveaux": [
+        "1ère",
+        "Tle"
+      ],
+      "mandatorySubjects": [
+        {
+          "niveau": "",
+          "name": "Français",
+          "coefficient": 5
+        },
+        {
+          "niveau": "",
+          "name": "Histoire-Géographie",
+          "coefficient": 6
+        },
+        {
+          "niveau": "",
+          "name": "EPS",
+          "coefficient": 1
+        },
+        {
+          "niveau": "1ère",
+          "name": "Mathématiques",
+          "coefficient": 3
+        },
+        {
+          "niveau": "Tle",
+          "name": "Mathématiques",
+          "coefficient": 2
+        },
+        {
+          "niveau": "Tle",
+          "name": "Philosophie",
+          "coefficient": 6
+        }
+      ],
+      "facultativeSubjects": [],
+      "choiceGroups": [
+        {
+          "niveau": "",
+          "label": "LV1",
+          "coefficient": 4,
+          "options": [
+            "Anglais",
+            "Arabe",
+            "Espagnol"
+          ]
+        },
+        {
+          "niveau": "",
+          "label": "LV2",
+          "coefficient": 2,
+          "options": [
+            "Anglais",
+            "Arabe",
+            "Espagnol"
+          ]
+        },
+        {
+          "niveau": "1ère",
+          "label": "LV2",
+          "coefficient": 2,
+          "options": [
+            "Anglais",
+            "Arabe",
+            "Espagnol",
+            "Économie"
+          ]
+        },
+        {
+          "niveau": "",
+          "label": "Sciences",
+          "coefficient": 2,
+          "options": [
+            "SVT",
+            "Sciences Physiques"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "S",
+      "description": "Série scientifique — configurée pour : 2nde. Ajoutez 1ère/Tle si votre école ne sépare pas S1/S2.",
+      "niveaux": [
+        "2nde"
+      ],
+      "mandatorySubjects": [
+        {
+          "niveau": "2nde",
+          "name": "Français",
+          "coefficient": 3
+        },
+        {
+          "niveau": "2nde",
+          "name": "Anglais",
+          "coefficient": 3
+        },
+        {
+          "niveau": "2nde",
+          "name": "Mathématiques",
+          "coefficient": 5
+        },
+        {
+          "niveau": "2nde",
+          "name": "Histoire-Géographie",
+          "coefficient": 2
+        },
+        {
+          "niveau": "2nde",
+          "name": "SVT",
+          "coefficient": 5
+        },
+        {
+          "niveau": "2nde",
+          "name": "Sciences Physiques",
+          "coefficient": 5
+        },
+        {
+          "niveau": "2nde",
+          "name": "EPS",
+          "coefficient": 1
+        },
+        {
+          "niveau": "2nde",
+          "name": "Informatique",
+          "coefficient": 2
+        }
+      ],
+      "facultativeSubjects": [
+        {
+          "niveau": "2nde",
+          "name": "Arabe",
+          "coefficient": 2
+        },
+        {
+          "niveau": "2nde",
+          "name": "Espagnol",
+          "coefficient": 2
+        },
+        {
+          "niveau": "2nde",
+          "name": "Économie",
+          "coefficient": 2
+        }
+      ],
+      "choiceGroups": []
+    },
+    {
+      "name": "S1",
+      "description": "Série scientifique (dominante Maths-Physique) — configurée pour : 1ère, Tle",
+      "niveaux": [
+        "1ère",
+        "Tle"
+      ],
+      "mandatorySubjects": [
+        {
+          "niveau": "",
+          "name": "Français",
+          "coefficient": 3
+        },
+        {
+          "niveau": "",
+          "name": "Anglais",
+          "coefficient": 2
+        },
+        {
+          "niveau": "",
+          "name": "Mathématiques",
+          "coefficient": 8
+        },
+        {
+          "niveau": "",
+          "name": "Histoire-Géographie",
+          "coefficient": 2
+        },
+        {
+          "niveau": "",
+          "name": "SVT",
+          "coefficient": 2
+        },
+        {
+          "niveau": "",
+          "name": "Sciences Physiques",
+          "coefficient": 8
+        },
+        {
+          "niveau": "",
+          "name": "EPS",
+          "coefficient": 1
+        },
+        {
+          "niveau": "Tle",
+          "name": "Philosophie",
+          "coefficient": 2
+        },
+        {
+          "niveau": "",
+          "name": "Informatique",
+          "coefficient": 2
+        }
+      ],
+      "facultativeSubjects": [
+        {
+          "niveau": "1ère",
+          "name": "Arabe",
+          "coefficient": 2
+        },
+        {
+          "niveau": "1ère",
+          "name": "Espagnol",
+          "coefficient": 2
+        }
+      ],
+      "choiceGroups": []
+    },
+    {
+      "name": "S2",
+      "description": "Série scientifique (dominante SVT) — configurée pour : 1ère, Tle",
+      "niveaux": [
+        "1ère",
+        "Tle"
+      ],
+      "mandatorySubjects": [
+        {
+          "niveau": "",
+          "name": "Français",
+          "coefficient": 3
+        },
+        {
+          "niveau": "",
+          "name": "Anglais",
+          "coefficient": 2
+        },
+        {
+          "niveau": "",
+          "name": "Mathématiques",
+          "coefficient": 5
+        },
+        {
+          "niveau": "",
+          "name": "Histoire-Géographie",
+          "coefficient": 2
+        },
+        {
+          "niveau": "",
+          "name": "SVT",
+          "coefficient": 6
+        },
+        {
+          "niveau": "",
+          "name": "Sciences Physiques",
+          "coefficient": 6
+        },
+        {
+          "niveau": "",
+          "name": "EPS",
+          "coefficient": 1
+        },
+        {
+          "niveau": "Tle",
+          "name": "Philosophie",
+          "coefficient": 2
+        },
+        {
+          "niveau": "",
+          "name": "Informatique",
+          "coefficient": 2
+        }
+      ],
+      "facultativeSubjects": [
+        {
+          "niveau": "1ère",
+          "name": "Arabe",
+          "coefficient": 2
+        },
+        {
+          "niveau": "1ère",
+          "name": "Espagnol",
+          "coefficient": 2
+        },
+        {
+          "niveau": "1ère",
+          "name": "Économie",
+          "coefficient": 2
+        }
+      ],
+      "choiceGroups": []
+    },
+    {
+      "name": "4ème",
+      "description": "Matières propres à la 4ème : option au choix (Espagnol, Arabe ou Musique).",
+      "niveaux": [
+        "4ème"
+      ],
+      "mandatorySubjects": [],
+      "facultativeSubjects": [],
+      "choiceGroups": [
+        {
+          "niveau": "",
+          "label": "Option au choix",
+          "coefficient": 2,
+          "options": [
+            "Espagnol",
+            "Arabe",
+            "Musique"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "3ème",
+      "description": "Matières propres à la 3ème : option au choix (Espagnol, Arabe ou Musique).",
+      "niveaux": [
+        "3ème"
+      ],
+      "mandatorySubjects": [],
+      "facultativeSubjects": [],
+      "choiceGroups": [
+        {
+          "niveau": "",
+          "label": "Option au choix",
+          "coefficient": 2,
+          "options": [
+            "Espagnol",
+            "Arabe",
+            "Musique"
+          ]
+        }
+      ]
+    }
+  ]
+}
