@@ -22,6 +22,7 @@ import { Student } from '@/contexts/SchoolContext';
 import { useRecus } from '@/hooks/useRecus';
 import { useAnnulerPaiement } from '@/hooks/useAnnulerPaiement';
 import { resteAPayer } from '@/lib/paiementPartiel';
+import { montantEleve } from '@/lib/tarifsEleve';
 import { mensualiteDuMois } from '@/lib/mensualites';
 import { filtrerHistorique, libellePaiement, numeroRecuDuPaiement } from '@/lib/historiquePaiements';
 import {
@@ -53,7 +54,7 @@ const Caisse = () => {
   const { students, tousLesEleves, studentsLoading } = useSchool();
   const {
     payments, annexServices, getTuitionConfig,
-    hasPaidInscription, hasPaidTuitionMonth, hasPaidService, getAcomptes,
+    hasPaidInscription, hasPaidTuitionMonth, hasPaidService, getAcomptes, getAjustementsEleve,
     addPayment, receipts, paymentLoading,
   } = usePayment();
   const { currentYear } = useSchoolYear();
@@ -84,8 +85,10 @@ const Caisse = () => {
   const resolveItem = (studentId: string, classId: string | null, intent: PaymentIntent): ResolvedItem | null => {
     const item = resolveTarif(studentId, classId, intent);
     if (!item || item.alreadyPaid) return item;
-    const dejaVerse = getAcomptes(studentId, { type: item.type, monthKey: item.monthKey, serviceId: item.serviceId });
-    return { ...item, amount: resteAPayer(item.amount, dejaVerse) };
+    const element = { type: item.type, monthKey: item.monthKey, serviceId: item.serviceId };
+    // Tarif personnalisé de l'élève (réduction, bourse), puis acomptes déjà versés.
+    const { du } = montantEleve(item.amount, element, getAjustementsEleve(studentId));
+    return { ...item, amount: resteAPayer(du, getAcomptes(studentId, element)) };
   };
   const resolveTarif = (studentId: string, classId: string | null, intent: PaymentIntent): ResolvedItem | null => {
     const cfg = classId ? getTuitionConfig(classId) : undefined;
@@ -129,6 +132,7 @@ const Caisse = () => {
     if (!student) { flashError('Élève introuvable pour ce code.'); return; }
     const item = resolveItem(student.id, student.classId, intent);
     if (!item) { flashError('Impossible de déterminer le montant pour ce paiement.'); return; }
+    if (!item.alreadyPaid && item.amount <= 0) { flashError('Rien à payer : tarif personnalisé à 0 F pour cet élève.'); return; }
     setMatched({ student, item });
   };
 

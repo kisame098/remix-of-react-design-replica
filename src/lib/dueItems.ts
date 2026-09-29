@@ -16,6 +16,7 @@
 import { AcademicMonth, AnnexService, MonthKey, PaymentType, isMonthOverdue } from '@/types/payment';
 import { resteAPayer } from '@/lib/paiementPartiel';
 import { mensualiteDuMois, type MontantsParMois } from '@/lib/mensualites';
+import { montantEleve, type AjustementTarif } from '@/lib/tarifsEleve';
 
 // ─── Vue caisse ─────────────────────────────────────────────────────────────
 
@@ -27,6 +28,10 @@ export interface PayableItem {
   amount: number;
   /** Acomptes déjà versés sur cet élément (0 s'il n'y en a pas). */
   dejaVerse: number;
+  /** Tarif normal (classe / mois) avant le tarif personnalisé de l'élève. */
+  tarifNormal: number;
+  /** L'élève a un tarif personnalisé sur ce frais (src/lib/tarifsEleve.ts). */
+  personnalise: boolean;
   paid: boolean;
   blocked: boolean;
   overdue?: boolean;
@@ -51,6 +56,8 @@ export interface PayableItemsInput {
   isEnrolledInService: (serviceId: string, monthIndex: number) => boolean;
   /** Acomptes déjà versés sur un élément non soldé (absent = aucun). */
   acomptes?: (e: { type: PaymentType; monthKey?: MonthKey; serviceId?: string }) => number;
+  /** Tarif personnalisé de CET élève, indexé par frais (indexerAjustements). */
+  ajustements?: Map<string, AjustementTarif>;
 }
 
 export const buildPayableItems = (input: PayableItemsInput): PayableItem[] => {
@@ -59,22 +66,32 @@ export const buildPayableItems = (input: PayableItemsInput): PayableItem[] => {
     hasPaidInscription, hasPaidTuitionMonth, hasPaidService, isEnrolledInService,
   } = input;
   const acomptes = input.acomptes ?? (() => 0);
+  const ajustements = input.ajustements ?? new Map<string, AjustementTarif>();
 
   const items: PayableItem[] = [];
-  // Tarif et acomptes d'un élément NON soldé ; un élément soldé garde son tarif, sans acompte.
-  const montants = (du: number, paid: boolean, e: { type: PaymentType; monthKey?: MonthKey; serviceId?: string }) => {
+  // Ce que CET élève doit (tarif personnalisé éventuel), moins ses acomptes.
+  // Un élément soldé garde son montant, sans acompte ; `rien` = 0 F à payer :
+  // l'élément n'apparaît pas et ne bloque pas le suivant.
+  const montants = (base: number, paid: boolean, e: { type: PaymentType; monthKey?: MonthKey; serviceId?: string }) => {
+    const m = montantEleve(base, e, ajustements);
     const dejaVerse = paid ? 0 : acomptes(e);
-    return { amount: resteAPayer(du, dejaVerse), dejaVerse };
+    return {
+      amount: resteAPayer(m.du, dejaVerse), dejaVerse,
+      tarifNormal: m.tarifNormal, personnalise: !!m.ajustement,
+      rien: m.du <= 0 && !paid,
+    };
   };
+  const sansDrapeau = <T extends { rien: boolean }>({ rien: _rien, ...reste }: T) => reste;
 
   // 1. Frais d'inscription
-  if (tuitionConfig) {
+  const inscription = tuitionConfig ? montants(tuitionConfig.inscriptionFee, hasPaidInscription(), { type: 'inscription' }) : null;
+  if (tuitionConfig && inscription && !inscription.rien) {
     const paid = hasPaidInscription();
     items.push({
       id: 'inscription',
       label: 'Frais d\'inscription',
       sublabel: className,
-      ...montants(tuitionConfig.inscriptionFee, paid, { type: 'inscription' }),
+      ...sansDrapeau(inscription),
       paid,
       blocked: false,
       type: 'inscription',
@@ -90,14 +107,14 @@ export const buildPayableItems = (input: PayableItemsInput): PayableItem[] => {
       const { key, label } = month;
       const paid = hasPaidTuitionMonth(key);
       if (!billableKeys.has(key) && !paid) continue;
-      // Montant propre à ce mois pour cette classe ; un mois à 0 F n'est rien
-      // à payer : il n'apparaît pas et ne bloque pas le mois suivant.
-      const du = mensualiteDuMois(tuitionConfig, key);
-      if (du <= 0 && !paid) continue;
+      // Montant propre à ce mois pour cette classe, puis tarif de l'élève ; un
+      // mois à 0 F n'est rien à payer : il n'apparaît pas et ne bloque rien.
+      const m = montants(mensualiteDuMois(tuitionConfig, key), paid, { type: 'tuition', monthKey: key });
+      if (m.rien) continue;
       items.push({
         id: `tuition_${key}`,
         label: `Scolarité — ${label}`,
-        ...montants(du, paid, { type: 'tuition', monthKey: key }),
+        ...sansDrapeau(m),
         paid,
         overdue: isMonthOverdue(month, paid),
         blocked: !prevPaid && !paid,
@@ -116,11 +133,13 @@ export const buildPayableItems = (input: PayableItemsInput): PayableItem[] => {
         if (!isEnrolledInService(svc.id, index)) { prevPaid = true; continue; }
         const paid = hasPaidService(svc.id, key);
         if (!billableKeys.has(key) && !paid) { prevPaid = true; continue; }
+        const m = montants(svc.amount, paid, { type: 'service', serviceId: svc.id, monthKey: key });
+        if (m.rien) { prevPaid = true; continue; }
         items.push({
           id: `service_${svc.id}_${key}`,
           label: `${svc.name} — ${label}`,
           sublabel: svc.isObligatory ? 'Service obligatoire' : 'Service optionnel',
-          ...montants(svc.amount, paid, { type: 'service', serviceId: svc.id, monthKey: key }),
+          ...sansDrapeau(m),
           paid,
           // Seul un service obligatoire bloque la suite : on ne verrouille pas
           // la cantine de mars parce que celle de février n'est pas réglée.
@@ -133,11 +152,13 @@ export const buildPayableItems = (input: PayableItemsInput): PayableItem[] => {
       }
     } else {
       const paid = hasPaidService(svc.id);
+      const m = montants(svc.amount, paid, { type: 'service', serviceId: svc.id });
+      if (m.rien) continue;
       items.push({
         id: `service_${svc.id}`,
         label: svc.name,
         sublabel: svc.isObligatory ? 'Service obligatoire' : 'Service optionnel',
-        ...montants(svc.amount, paid, { type: 'service', serviceId: svc.id }),
+        ...sansDrapeau(m),
         paid,
         blocked: false,
         type: 'service',
@@ -158,6 +179,10 @@ export interface DueItem {
   amount: number;
   /** Acomptes déjà versés (0 s'il n'y en a pas). */
   dejaVerse: number;
+  /** Tarif normal avant le tarif personnalisé de l'élève. */
+  tarifNormal: number;
+  /** L'élève a un tarif personnalisé sur ce frais. */
+  personnalise: boolean;
   type: 'inscription' | 'tuition' | 'service';
   monthKey?: string;
   serviceId?: string;
@@ -221,6 +246,8 @@ export const computeDueItems = (
   /** Mois DÉJÀ filtrés par getBillableMonthsFor — mois décochés et pré-inscription exclus. */
   billableMonths: AcademicMonth[],
   currentIdx: number,
+  /** Tarif personnalisé de l'élève, indexé par frais (indexerAjustements). */
+  ajustements: Map<string, AjustementTarif> = new Map(),
 ): DueItem[] => {
   const items: DueItem[] = [];
 
@@ -234,17 +261,20 @@ export const computeDueItems = (
   const verse = (pred: (p: DuePayment) => boolean) => payments
     .filter(p => p.status !== 'cancelled' && p.partiel && pred(p))
     .reduce((s, p) => s + (p.amount ?? 0), 0);
-  const reste = (du: number, pred: (p: DuePayment) => boolean) => {
+  // Ce que CET élève doit (tarif personnalisé éventuel), moins ses acomptes.
+  const du = (base: number, e: { type: PaymentType; monthKey?: string; serviceId?: string }) => montantEleve(base, e, ajustements);
+  const reste = (m: ReturnType<typeof du>, pred: (p: DuePayment) => boolean) => {
     const dejaVerse = verse(pred);
-    return { amount: resteAPayer(du, dejaVerse), dejaVerse };
+    return { amount: resteAPayer(m.du, dejaVerse), dejaVerse, tarifNormal: m.tarifNormal, personnalise: !!m.ajustement };
   };
 
-  if (tuition.inscriptionFee > 0 && !isPaid(p => p.type === 'inscription')) {
+  const insc = du(tuition.inscriptionFee, { type: 'inscription' });
+  if (insc.du > 0 && !isPaid(p => p.type === 'inscription')) {
     // L'inscription ne fait pas partie de la chaîne mensuelle : elle se règle
     // quand la famille veut, sans bloquer la scolarité.
     items.push({
       key: 'inscription', label: "Frais d'inscription",
-      ...reste(tuition.inscriptionFee, p => p.type === 'inscription'),
+      ...reste(insc, p => p.type === 'inscription'),
       type: 'inscription', echeance: 'du', verrouille: false,
     });
   }
@@ -256,14 +286,14 @@ export const computeDueItems = (
   {
     let precedentPaye = true;
     for (const month of billableMonths) {
-      // Montant propre à ce mois ; un mois à 0 F n'est rien à payer ni ne bloque.
-      const du = mensualiteDuMois(tuition, month.key);
-      if (du <= 0) continue;
+      // Montant propre à ce mois, puis tarif de l'élève ; 0 F = rien à payer ni ne bloque.
+      const m = du(mensualiteDuMois(tuition, month.key), { type: 'tuition', monthKey: month.key });
+      if (m.du <= 0) continue;
       const paye = isPaid(p => p.type === 'tuition' && p.monthKey === month.key);
       if (!paye) {
         items.push({
           key: `tuition-${month.key}`, label: `Scolarité ${month.label}`,
-          ...reste(du, p => p.type === 'tuition' && p.monthKey === month.key),
+          ...reste(m, p => p.type === 'tuition' && p.monthKey === month.key),
           type: 'tuition', monthKey: month.key,
           echeance: month.index <= currentIdx ? 'du' : 'avance',
           verrouille: !precedentPaye,
@@ -285,11 +315,13 @@ export const computeDueItems = (
       let precedentPaye = true;
       for (const month of billableMonths) {
         if (month.index < enr.startMonthIndex || month.index > fin) continue;
+        const m = du(svc.amount, { type: 'service', serviceId: svc.id, monthKey: month.key });
+        if (m.du <= 0) continue;
         const paye = isPaid(p => p.type === 'service' && p.serviceId === svc.id && p.monthKey === month.key);
         if (!paye) {
           items.push({
             key: `svc-${svc.id}-${month.key}`, label: `${svc.name} — ${month.label}`,
-            ...reste(svc.amount, p => p.type === 'service' && p.serviceId === svc.id && p.monthKey === month.key),
+            ...reste(m, p => p.type === 'service' && p.serviceId === svc.id && p.monthKey === month.key),
             type: 'service', serviceId: svc.id, monthKey: month.key,
             echeance: month.index <= currentIdx ? 'du' : 'avance',
             verrouille: !precedentPaye,
@@ -299,9 +331,11 @@ export const computeDueItems = (
       }
     } else {
       if (isPaid(p => p.type === 'service' && p.serviceId === svc.id)) continue;
+      const m = du(svc.amount, { type: 'service', serviceId: svc.id });
+      if (m.du <= 0) continue;
       items.push({
         key: `svc-${svc.id}`, label: svc.name,
-        ...reste(svc.amount, p => p.type === 'service' && p.serviceId === svc.id),
+        ...reste(m, p => p.type === 'service' && p.serviceId === svc.id),
         type: 'service', serviceId: svc.id, echeance: 'du', verrouille: false,
       });
     }

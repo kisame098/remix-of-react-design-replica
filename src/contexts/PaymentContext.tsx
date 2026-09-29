@@ -12,6 +12,7 @@ import {
 } from '@/types/payment';
 import * as queries from '@/lib/paymentQueries';
 import { lireMontantsParMois, type MontantsParMois } from '@/lib/mensualites';
+import { indexerAjustements, type AjustementTarif, type ModeAjustement } from '@/lib/tarifsEleve';
 import { findPreviousSchoolYear } from '@/lib/schoolYears';
 import { useEnLigne } from '@/hooks/useEnLigne';
 import { useInstantaneHorsLigne } from '@/hooks/useInstantaneHorsLigne';
@@ -27,6 +28,25 @@ const mapTuition = (r: any): TuitionConfig => ({
   monthlyFee:       Number(r.monthly_fee),
   montantsParMois:  lireMontantsParMois(r.monthly_fees),
 });
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const mapAjustement = (r: any): AjustementTarif => ({
+  id:         r.id,
+  studentId:  r.student_enrollment_id,
+  type:       r.element_type,
+  ...(r.month_key  ? { monthKey: r.month_key } : {}),
+  ...(r.service_id ? { serviceId: r.service_id } : {}),
+  mode:       r.mode as ModeAjustement,
+  valeur:     Number(r.valeur),
+  motif:      r.motif ?? '',
+  accordePar: r.granted_by_name ?? undefined,
+  accordeLe:  r.updated_at ?? r.created_at ?? undefined,
+});
+
+// Tables et fonctions des tarifs personnalisés (docs/sql/tarifs_eleve.sql),
+// absentes des types générés.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const sbTarifs = () => supabase as any;
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const mapService = (r: any): AnnexService => ({
@@ -130,6 +150,14 @@ interface PaymentContextType {
   hasPaidService:      (studentId: string, serviceId: string, monthKey?: MonthKey) => boolean;
   /** Acomptes déjà versés sur un élément non soldé (src/lib/paiementPartiel.ts). */
   getAcomptes:         (studentId: string, element: queries.ElementPaye) => number;
+  /** Tarifs personnalisés de l'année (réductions, bourses — src/lib/tarifsEleve.ts). */
+  ajustements:         AjustementTarif[];
+  /** Tarifs personnalisés d'UN élève, indexés par frais. */
+  getAjustementsEleve: (studentId: string) => Map<string, AjustementTarif>;
+  /** Accorde ou modifie (directeur / permission « reductions » ; vérifié par la base). */
+  appliquerTarifsEleve: (studentId: string, lignes: AjustementTarif[]) => Promise<void>;
+  /** Retire : l'élève repaie le tarif normal sur ces frais. */
+  retirerTarifsEleve:  (ids: string[]) => Promise<void>;
 
   // Stats
   getTotalCollectedForYear: () => number;
@@ -159,6 +187,7 @@ export const PaymentProvider = ({ children }: { children: ReactNode }) => {
   const [payments,           setPayments]            = useState<Payment[]>([]);
   const [receipts,           setReceipts]            = useState<Receipt[]>([]);
   const [serviceEnrollments, setServiceEnrollments]  = useState<ServiceEnrollment[]>([]);
+  const [ajustements,        setAjustements]         = useState<AjustementTarif[]>([]);
   const [paymentLoading,     setPaymentLoading]      = useState(false);
 
   // Prevent duplicate concurrent loads
@@ -172,6 +201,7 @@ export const PaymentProvider = ({ children }: { children: ReactNode }) => {
       setPayments([]);
       setReceipts([]);
       setServiceEnrollments([]);
+      setAjustements([]);
       return;
     }
 
@@ -213,12 +243,18 @@ export const PaymentProvider = ({ children }: { children: ReactNode }) => {
         .eq('school_id', schoolId)
         .eq('academic_year_label', yearLabel))
         .catch(() => ({ data: null })),
-    ]).then(([tRes, sRes, pRes, eRes, rRes]) => {
+
+      // Tarifs personnalisés : même règle, leur absence ne bloque rien (tarif normal).
+      Promise.resolve(sbTarifs().from('student_fee_adjustments').select('*')
+        .eq('school_id', schoolId).eq('academic_year_label', yearLabel))
+        .catch(() => ({ data: null })),
+    ]).then(([tRes, sRes, pRes, eRes, rRes, aRes]) => {
       if (tRes.data) setTuitionConfigs(tRes.data.map(mapTuition));
       if (sRes.data) setAnnexServices(sRes.data.map(mapService));
       if (pRes.data) setPayments(pRes.data.map(mapPayment));
       if (eRes.data) setServiceEnrollments(eRes.data.map(mapEnrollment));
       if (rRes?.data) setReceipts(rRes.data.map(mapReceipt));
+      if (aRes?.data) setAjustements(aRes.data.map(mapAjustement));
     }).finally(() => {
       setPaymentLoading(false);
       loadingRef.current = false;
@@ -591,6 +627,31 @@ export const PaymentProvider = ({ children }: { children: ReactNode }) => {
     queries.acomptesVerses(payments, yearLabel, studentId, element),
   [payments, yearLabel]);
 
+  // ── Tarifs personnalisés ────────────────────────────────────────────────────
+  const getAjustementsEleve = useCallback((studentId: string) =>
+    indexerAjustements(ajustements.filter(a => a.studentId === studentId)),
+  [ajustements]);
+
+  const appliquerTarifsEleve = useCallback(async (studentId: string, lignes: AjustementTarif[]) => {
+    const { data, error } = await sbTarifs().rpc('appliquer_tarifs_eleve', {
+      p_eleve: studentId,
+      p_lignes: lignes.map(l => ({
+        type: l.type, month_key: l.monthKey ?? null, service_id: l.serviceId ?? null,
+        mode: l.mode, valeur: l.valeur, motif: l.motif,
+      })),
+    });
+    if (error) throw error;
+    const nouveaux = ((data ?? []) as unknown[]).map(mapAjustement);
+    setAjustements(prev => [...prev.filter(a => !nouveaux.some(n => n.id === a.id)), ...nouveaux]);
+  }, []);
+
+  const retirerTarifsEleve = useCallback(async (ids: string[]) => {
+    if (ids.length === 0) return;
+    const { error } = await sbTarifs().rpc('retirer_tarifs_eleve', { p_ids: ids });
+    if (error) throw error;
+    setAjustements(prev => prev.filter(a => !a.id || !ids.includes(a.id)));
+  }, []);
+
   // ── Stats ── un paiement annulé n'est plus de l'argent réellement encaissé ───
   const getTotalCollectedForYear = useCallback((): number =>
     queries.getTotalCollectedForYear(payments, yearLabel),
@@ -600,7 +661,7 @@ export const PaymentProvider = ({ children }: { children: ReactNode }) => {
   // Les écrans lisent ce contexte, jamais Supabase : garder ces tranches rend
   // l'écran consultable sans réseau. On n'enregistre qu'une fois le chargement
   // terminé, sinon l'état vide du démarrage effacerait l'instantané.
-  const tranchesHorsLigne = useMemo(() => ({ tuitionConfigs, annexServices, payments, receipts, serviceEnrollments }), [tuitionConfigs, annexServices, payments, receipts, serviceEnrollments]);
+  const tranchesHorsLigne = useMemo(() => ({ tuitionConfigs, annexServices, payments, receipts, serviceEnrollments, ajustements }), [tuitionConfigs, annexServices, payments, receipts, serviceEnrollments, ajustements]);
 
   const appliquerInstantane = useCallback((t: typeof tranchesHorsLigne) => {
     setTuitionConfigs(t.tuitionConfigs);
@@ -609,6 +670,8 @@ export const PaymentProvider = ({ children }: { children: ReactNode }) => {
     setServiceEnrollments(t.serviceEnrollments);
     // Un instantané enregistré avant l'arrivée des reçus n'en contient pas.
     setReceipts(t.receipts ?? []);
+    // Idem pour les tarifs personnalisés.
+    setAjustements(t.ajustements ?? []);
   }, []);
 
   const instantaneLe = useInstantaneHorsLigne(
@@ -624,6 +687,7 @@ export const PaymentProvider = ({ children }: { children: ReactNode }) => {
     isEnrolledInService, getStudentActiveServices, getAvailableServicesForStudent,
     addPayment, cancelPayment, getStudentPayments,
     hasPaidInscription, hasPaidTuitionMonth, hasPaidService, getAcomptes,
+    ajustements, getAjustementsEleve, appliquerTarifsEleve, retirerTarifsEleve,
     getTotalCollectedForYear,
     emettreRecu, getReceiptOf,
   };

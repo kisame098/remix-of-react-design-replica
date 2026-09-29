@@ -24,6 +24,7 @@ import {
 } from '@/types/payment';
 import { computeDueItems, totalExigible, type DueItem } from '@/lib/dueItems';
 import { lireMontantsParMois, type MontantsParMois } from '@/lib/mensualites';
+import { indexerAjustements, type AjustementTarif, type ModeAjustement } from '@/lib/tarifsEleve';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { chargerRecusEleve, type RecusEleve } from '@/lib/recusFamille';
 import { numeroDeRecu } from '@/lib/recu';
@@ -88,6 +89,8 @@ export default function PortalPaiements() {
     tuition: TuitionCfg | null;
     classId: string | null;
     enrolledAt: string | null;
+    /** Tarif personnalisé de l'élève (réduction, bourse). Absent d'un ancien instantané. */
+    ajustements?: AjustementTarif[];
     recus: RecusEleve;
   }>(
     'portail-paiements',
@@ -119,6 +122,11 @@ export default function PortalPaiements() {
         // lecture ne lève pas (voir recusFamille.ts).
         chargerRecusEleve(eleveId),
       ]);
+      // Tarif personnalisé : son absence (table pas encore créée, réseau) ne
+      // bloque rien, l'élève voit alors le tarif normal.
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const ajR = await Promise.resolve((supabase as any).from('student_fee_adjustments').select('*')
+        .eq('student_enrollment_id', eleveId)).catch(() => ({ data: null }));
 
       const classeId = seR.data?.class_id ?? null;
       // Le tarif qui correspond à la classe de l'élève.
@@ -164,6 +172,14 @@ export default function PortalPaiements() {
 
         classId: classeId,
         enrolledAt: seR.data?.enrolled_at ?? null,
+        ajustements: ((ajR?.data ?? []) as Record<string, unknown>[]).map(r => ({
+          id: String(r.id), studentId: String(r.student_enrollment_id),
+          type: r.element_type as AjustementTarif['type'],
+          ...(r.month_key ? { monthKey: String(r.month_key) } : {}),
+          ...(r.service_id ? { serviceId: String(r.service_id) } : {}),
+          mode: r.mode as ModeAjustement, valeur: Number(r.valeur), motif: String(r.motif ?? ''),
+          accordeLe: String(r.updated_at ?? ''),
+        })),
         recus,
       };
     },
@@ -204,9 +220,10 @@ export default function PortalPaiements() {
     [academicMonths, school, enrolledAt],
   );
 
+  const ajustements = useMemo(() => indexerAjustements(donnees?.ajustements ?? []), [donnees]);
   const dueItems = useMemo(() =>
-    computeDueItems(payments, tuition, services, enrs, classId ?? '', billableMonths, currentIdx),
-    [payments, tuition, services, enrs, classId, billableMonths, currentIdx],
+    computeDueItems(payments, tuition, services, enrs, classId ?? '', billableMonths, currentIdx, ajustements),
+    [payments, tuition, services, enrs, classId, billableMonths, currentIdx, ajustements],
   );
 
   // Ce qui est exigible aujourd'hui vs ce que la famille peut régler à
@@ -367,6 +384,9 @@ export default function PortalPaiements() {
                   {/* Label */}
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-semibold text-slate-800 truncate">{item.label}</p>
+                    {item.personnalise && (
+                      <p className="text-[11px] font-medium text-violet-600">Tarif accordé par l'école (normal {fmtAmount(item.tarifNormal)})</p>
+                    )}
                     {item.dejaVerse > 0 && (
                       <p className="text-[11px] font-medium text-amber-600">Déjà versé : {fmtAmount(item.dejaVerse)} · reste à payer</p>
                     )}
