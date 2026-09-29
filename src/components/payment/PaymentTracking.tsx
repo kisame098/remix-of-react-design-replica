@@ -1,5 +1,6 @@
 import { useState, useMemo, useEffect, useCallback } from 'react';
 import { mensualiteDuMois } from '@/lib/mensualites';
+import { montantEleve } from '@/lib/tarifsEleve';
 import { useSchool } from '@/contexts/SchoolContext';
 import { usePayment } from '@/contexts/PaymentContext';
 import { useSchoolYear } from '@/contexts/SchoolYearContext';
@@ -34,7 +35,7 @@ const PaymentTracking = () => {
   const {
     annexServices, getTuitionConfig,
     hasPaidInscription, hasPaidTuitionMonth, hasPaidService,
-    isEnrolledInService, getStudentPayments,
+    isEnrolledInService, getStudentPayments, getAjustementsEleve,
   } = usePayment();
   const { currentYear } = useSchoolYear();
   const { school } = useAuth();
@@ -127,6 +128,16 @@ const PaymentTracking = () => {
           }
         }
 
+        // Tarif personnalisé de l'élève (réduction, bourse) sur ce frais.
+        if (!paid && amount > 0) {
+          const svcMensuel = annexServices.find(s => s.id === selectedServiceId)?.frequency === 'monthly';
+          amount = montantEleve(amount, {
+            type: viewMode,
+            ...(viewMode === 'tuition' || (viewMode === 'service' && svcMensuel) ? { monthKey: selectedMonth } : {}),
+            ...(viewMode === 'service' ? { serviceId: selectedServiceId } : {}),
+          }, getAjustementsEleve(student.id)).du;
+        }
+
         const overdue = (viewMode === 'tuition' || (viewMode === 'service' && showMonthFilter))
           ? isMonthOverdue(academicMonths[selectedMonthIndex] ?? { key: '', label: '', index: 0, dueDate: '9999-12-31' }, paid)
           : false;
@@ -148,7 +159,7 @@ const PaymentTracking = () => {
       });
   }, [
     classStudents, viewMode, selectedMonth, selectedMonthIndex, academicMonths,
-    selectedServiceId, showMonthFilter, isMonthDueBy,
+    selectedServiceId, showMonthFilter, isMonthDueBy, getAjustementsEleve,
     hasPaidInscription, hasPaidTuitionMonth, hasPaidService,
     isEnrolledInService, getTuitionConfig, annexServices,
   ]);

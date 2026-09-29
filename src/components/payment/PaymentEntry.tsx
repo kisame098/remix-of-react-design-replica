@@ -91,6 +91,11 @@ const PaymentRow = ({ item, selected, onToggle }: { item: PayableItem; selected:
       <div className="flex-1 min-w-0">
         <p className="text-sm font-medium">{item.label}</p>
         {item.sublabel && <p className="text-xs text-muted-foreground">{item.sublabel}</p>}
+        {item.personnalise && (
+          <p className="text-xs font-medium text-violet-600">
+            Tarif personnalisé · normal <span className="line-through">{fmt(item.tarifNormal)}</span>
+          </p>
+        )}
         {item.dejaVerse > 0 && (
           <p className="text-xs font-medium text-amber-600">Déjà versé {fmt(item.dejaVerse)} · reste à payer</p>
         )}
@@ -112,7 +117,7 @@ const PaymentEntry = ({ initialMode = 'search' }: { initialMode?: 'search' | 'sc
   const {
     getTuitionConfig,
     getStudentActiveServices,
-    hasPaidInscription, hasPaidTuitionMonth, hasPaidService, getAcomptes,
+    hasPaidInscription, hasPaidTuitionMonth, hasPaidService, getAcomptes, getAjustementsEleve,
     isEnrolledInService,
     addPayment,
   } = usePayment();
@@ -181,8 +186,9 @@ const PaymentEntry = ({ initialMode = 'search' }: { initialMode?: 'search' | 'sc
       isEnrolledInService: (serviceId, monthIndex) =>
         isEnrolledInService(selectedStudent.id, selectedStudent.classId, serviceId, monthIndex),
       acomptes: (e) => getAcomptes(selectedStudent.id, e),
+      ajustements: getAjustementsEleve(selectedStudent.id),
     });
-  }, [selectedStudent, tuitionConfig, studentServices, hasPaidInscription, hasPaidTuitionMonth, hasPaidService, getAcomptes, isEnrolledInService, selectedClass, academicMonths, billingRules]);
+  }, [selectedStudent, tuitionConfig, studentServices, hasPaidInscription, hasPaidTuitionMonth, hasPaidService, getAcomptes, getAjustementsEleve, isEnrolledInService, selectedClass, academicMonths, billingRules]);
 
   const itemsSelectionnes = useMemo(
     () => payableItems.filter(i => selectedItems.has(i.id) && !i.paid && !i.blocked),
