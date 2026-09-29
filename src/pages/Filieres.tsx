@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react';
 import { CLE_GUIDE, guideProgrammeJson } from '@/lib/guideProgrammeJson';
+import { compterAjouts, messageErreur, planifierImport } from '@/lib/importProgramme';
 import {
   useSchool, NIVEAUX, NIVEAU_BASE,
   mergeFiliereMandatorySubjects, mergeFiliereFacultativeSubjects, mergeFiliereChoiceGroups,
@@ -67,7 +68,7 @@ const Filieres = () => {
     addFiliereChoiceGroup, updateFiliereChoiceGroup, deleteFiliereChoiceGroup,
     addFiliereChoiceOption, deleteFiliereChoiceOption,
     niveauDefaultSubjects, addNiveauDefaultSubject, updateNiveauDefaultSubject, deleteNiveauDefaultSubject,
-    elementaryDefaultLines, deleteElementaryDefaultLine,
+    elementaryDefaultLines, deleteElementaryDefaultLine, addElementaryDefaultLine,
     classes, applyNiveauDefaultsToClass,
   } = useSchool();
   const { currentYear } = useSchoolYear();
@@ -103,6 +104,10 @@ const Filieres = () => {
       niveauDefaults: niveauDefaultSubjects.map(s => ({
         niveau: s.niveau, name: s.name, coefficient: s.coefficient, isFacultative: s.isFacultative,
       })),
+      // Élémentaire (CI à CM2) : barème de points, domaine et registre.
+      elementaireDefaults: elementaryDefaultLines.map(l => ({
+        niveau: l.niveau, domaine: l.domaine, registre: l.registre, name: l.name, pointMax: l.pointMax,
+      })),
       filieres: filieres.map(f => ({
         name: f.name,
         description: f.description ?? null,
@@ -134,59 +139,45 @@ const Filieres = () => {
     setImporting(true);
     try {
       const text = await file.text();
-      const data = JSON.parse(text);
-      if (!data || (!Array.isArray(data.niveauDefaults) && !Array.isArray(data.filieres))) {
-        throw new Error("Fichier invalide — ce n'est pas un export de programme SenClass.");
+      let data: unknown;
+      try { data = JSON.parse(text); } catch { throw new Error("Le fichier n'est pas un JSON valide (virgule en trop, guillemet manquant…)."); }
+
+      // Ce qu'il faut ajouter (src/lib/importProgramme.ts) : rien n'est
+      // supprimé ni écrasé, un cursus du même nom est complété, pas recréé.
+      const plan = planifierImport(data, {
+        niveauDefaults: niveauDefaultSubjects,
+        elementaire: elementaryDefaultLines,
+        filieres: filieres.map(f => ({
+          id: f.id, name: f.name, niveaux: f.niveaux,
+          obligatoires: filiereMandatorySubjects.filter(m => m.filiereId === f.id),
+          facultatives: filiereFacultativeSubjects.filter(m => m.filiereId === f.id),
+          groupes: filiereChoiceGroups.filter(g => g.filiereId === f.id)
+            .map(g => ({ id: g.id, niveau: g.niveau, label: g.label, options: g.options.map(o => o.subjectName) })),
+        })),
+      });
+
+      for (const s of plan.niveauAjouts) await addNiveauDefaultSubject(s);
+      for (const l of plan.elementaireAjouts) await addElementaryDefaultLine(l);
+      for (const c of plan.cursus) {
+        const id = c.filiereId ?? (await addFiliere({ name: c.name, description: c.description })).id;
+        if (c.niveaux) await updateFiliereNiveaux(id, c.niveaux);
+        for (const m of c.obligatoires) await addFiliereMandatorySubject(id, m);
+        for (const m of c.facultatives) await addFiliereFacultativeSubject(id, m);
+        for (const g of c.groupes) {
+          const groupId = g.groupId ?? (await addFiliereChoiceGroup(id, { niveau: g.niveau, label: g.label, coefficient: g.coefficient })).id;
+          for (const o of g.options) await addFiliereChoiceOption(groupId, o);
+        }
       }
 
-      let importedSubjects = 0;
-      let importedFilieres = 0;
-
-      // Matières de niveau : on n'écrase jamais, on saute les doublons (même
-      // niveau + même nom déjà présents).
-      const existingNiveauKeys = new Set(niveauDefaultSubjects.map(s => `${s.niveau}::${s.name}`));
-      for (const s of data.niveauDefaults ?? []) {
-        if (!s?.niveau || !s?.name) continue;
-        const key = `${s.niveau}::${s.name}`;
-        if (existingNiveauKeys.has(key)) continue;
-        await addNiveauDefaultSubject({
-          niveau: s.niveau, name: s.name, coefficient: Number(s.coefficient) || 1, isFacultative: !!s.isFacultative,
-        });
-        existingNiveauKeys.add(key);
-        importedSubjects++;
-      }
-
-      // Cursus : toujours créés en tant que nouveaux cursus (jamais fusionnés
-      // avec un cursus existant du même nom) — à supprimer manuellement ensuite
-      // en cas de doublon volontaire.
-      for (const f of data.filieres ?? []) {
-        if (!f?.name || !Array.isArray(f.niveaux)) continue;
-        const created = await addFiliere({ name: f.name, description: f.description || undefined });
-        if (f.niveaux.length > 0) await updateFiliereNiveaux(created.id, f.niveaux);
-        for (const m of f.mandatorySubjects ?? []) {
-          if (!m?.name) continue;
-          await addFiliereMandatorySubject(created.id, { niveau: m.niveau ?? '', name: m.name, coefficient: Number(m.coefficient) || 1 });
-        }
-        for (const m of f.facultativeSubjects ?? []) {
-          if (!m?.name) continue;
-          await addFiliereFacultativeSubject(created.id, { niveau: m.niveau ?? '', name: m.name, coefficient: Number(m.coefficient) || 1 });
-        }
-        for (const g of f.choiceGroups ?? []) {
-          if (!g?.label) continue;
-          const group = await addFiliereChoiceGroup(created.id, { niveau: g.niveau ?? '', label: g.label, coefficient: Number(g.coefficient) || 1 });
-          for (const optName of g.options ?? []) {
-            if (optName) await addFiliereChoiceOption(group.id, optName);
-          }
-        }
-        importedFilieres++;
-      }
-
+      const ajouts = compterAjouts(plan);
       toast({
-        title: 'Import terminé',
-        description: `${importedSubjects} matière(s) de niveau et ${importedFilieres} cursus importés.`,
+        title: ajouts > 0 ? 'Import terminé' : 'Rien de nouveau à importer',
+        description: `${ajouts} élément(s) ajouté(s), ${plan.dejaPresents} déjà présent(s).`
+          + (plan.ignores.length ? ` ${plan.ignores.length} ligne(s) ignorée(s) : ${plan.ignores.slice(0, 3).join(' ; ')}${plan.ignores.length > 3 ? '…' : ''}` : '')
+          + (ajouts > 0 ? ' Pensez à « Appliquer aux classes existantes » dans chaque niveau.' : ''),
       });
     } catch (err) {
-      toast({ title: "Erreur d'import", description: err instanceof Error ? err.message : String(err), variant: 'destructive' });
+      toast({ title: "Erreur d'import", description: messageErreur(err), variant: 'destructive' });
     } finally {
       setImporting(false);
     }
