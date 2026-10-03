@@ -19,7 +19,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Badge } from '@/components/ui/badge';
 import { useSchoolYear } from '@/contexts/SchoolYearContext';
 import { toast } from '@/hooks/use-toast';
 
@@ -173,27 +172,26 @@ export const SchoolYearSelector = ({ collapsed = false }: SchoolYearSelectorProp
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="outline" className="w-full justify-between gap-2 h-auto py-2">
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 min-w-0">
                 {yearsLoading
-                  ? <Loader2 className="w-4 h-4 animate-spin text-primary" />
-                  : <CalendarDays className="w-4 h-4 text-primary" />
+                  ? <Loader2 className="w-4 h-4 shrink-0 animate-spin text-primary" />
+                  : <CalendarDays className="w-4 h-4 shrink-0 text-primary" />
                 }
-                <div className="text-left">
+                <div className="text-left min-w-0">
                   <div className="text-xs text-muted-foreground">Année scolaire</div>
-                  <div className="font-semibold">
+                  <div className="font-semibold truncate">
                     {yearsLoading ? 'Chargement…' : (currentYear?.name || 'Non définie')}
                   </div>
+                  {/* Sous le nom : un badge à côté débordait du cadre quand le nom est long. */}
+                  {currentYear?.isClosed && (
+                    <div className="mt-0.5 inline-flex items-center gap-1 rounded-full bg-secondary px-2 py-0.5 text-[11px] font-medium text-secondary-foreground">
+                      <Lock className="w-3 h-3" />
+                      Clôturée
+                    </div>
+                  )}
                 </div>
               </div>
-              <div className="flex items-center gap-1">
-                {currentYear?.isClosed && (
-                  <Badge variant="secondary" className="text-xs">
-                    <Lock className="w-3 h-3 mr-1" />
-                    Clôturée
-                  </Badge>
-                )}
-                <ChevronDown className="w-4 h-4" />
-              </div>
+              <ChevronDown className="w-4 h-4 shrink-0" />
             </Button>
           </DropdownMenuTrigger>
 
