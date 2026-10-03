@@ -571,7 +571,7 @@ const TeacherManagement = () => {
                           <User className="w-4 h-4 text-muted-foreground mt-0.5" />
                           <div>
                             <p className="text-muted-foreground">Sexe</p>
-                            <p className="font-medium">{selectedTeacher.sex === 'homme' ? 'Masculin' : 'Féminin'}</p>
+                            <p className="font-medium">{selectedTeacher.sex === 'homme' ? 'Masculin' : selectedTeacher.sex === 'femme' ? 'Féminin' : '—'}</p>
                           </div>
                         </div>
                         <div className="flex items-start gap-3">

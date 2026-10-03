@@ -39,7 +39,7 @@ const BUILTIN_COLUMNS: BuiltinColumnDef[] = [
   { key: 'studentId',    label: 'Code élève',           defaultOn: true,  width: 1.3, getValue: s => s.studentId },
   { key: 'lastName',     label: 'Nom',                  defaultOn: true,  width: 1.4, getValue: s => s.lastName },
   { key: 'firstName',    label: 'Prénom',               defaultOn: true,  width: 1.4, getValue: s => s.firstName },
-  { key: 'sex',          label: 'Sexe',                 defaultOn: false, width: 0.8, getValue: s => s.sex === 'homme' ? 'Masculin' : 'Féminin' },
+  { key: 'sex',          label: 'Sexe',                 defaultOn: false, width: 0.8, getValue: s => s.sex === 'homme' ? 'Masculin' : s.sex === 'femme' ? 'Féminin' : '' },
   { key: 'dateOfBirth',  label: 'Date de naissance',    defaultOn: false, width: 1.2, getValue: s => s.dateOfBirth ? new Date(s.dateOfBirth).toLocaleDateString('fr-FR') : '' },
   { key: 'placeOfBirth', label: 'Lieu de naissance',    defaultOn: false, width: 1.3, getValue: s => s.placeOfBirth ?? '' },
   { key: 'className',    label: 'Classe',               defaultOn: false, width: 1.0, getValue: (s, classes) => classes.find(c => c.id === s.classId)?.name ?? '' },

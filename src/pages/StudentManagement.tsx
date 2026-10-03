@@ -54,6 +54,7 @@ import AcademicChoicesFields, { useAcademicChoicesRequirement } from '@/componen
 import { mergeFiliereChoiceGroups, mergeFiliereFacultativeSubjects } from '@/contexts/SchoolContext';
 import { ListChecks, FileText } from 'lucide-react';
 import { useFicheInscription } from '@/hooks/useFicheInscription';
+import { libelleSexe } from '@/lib/ficheInscription';
 import { ProfilMatieres } from '@/components/student/ProfilMatieres';
 
 interface EditFormData {
@@ -552,7 +553,7 @@ const StudentManagement = () => {
                         </div>
                         <div className="flex items-center justify-center gap-1 text-sm text-muted-foreground">
                           <User className="w-3 h-3" />
-                          {student.sex === 'homme' ? 'Masculin' : 'Féminin'}
+                          {libelleSexe(student.sex)}
                         </div>
                       </div>
 
@@ -639,7 +640,7 @@ const StudentManagement = () => {
                           </Badge>
                         </TableCell>
                         <TableCell>
-                          {student.sex === 'homme' ? 'M' : 'F'}
+                          {student.sex === 'homme' ? 'M' : student.sex === 'femme' ? 'F' : '—'}
                         </TableCell>
                         <TableCell>
                           <div className="flex flex-col gap-1 text-sm text-muted-foreground">
@@ -748,7 +749,7 @@ const StudentManagement = () => {
                         <User className="w-4 h-4 text-muted-foreground" />
                         <span className="text-muted-foreground">Sexe:</span>
                         <span className="text-foreground">
-                          {selectedStudent.sex === 'homme' ? 'Masculin' : 'Féminin'}
+                          {libelleSexe(selectedStudent.sex)}
                         </span>
                       </div>
                       <div className="flex items-center gap-3 text-sm">
