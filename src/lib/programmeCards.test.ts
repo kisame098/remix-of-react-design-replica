@@ -53,10 +53,10 @@ describe('buildProgrammeCards', () => {
     expect(niveaux).toEqual(['PS', 'MS', 'GS', 'CI', 'CP', 'CE1', 'CE2', 'CM1', 'CM2', '6ème', '5ème', '4ème', '3ème']);
   });
 
-  it('une école sans maternelle peut supprimer PS, MS et GS', () => {
+  it('la maternelle reste toujours proposée à la création d\'une classe', () => {
     const niveaux = buildProgrammeCards([], [], [], ['PS', 'MS', 'GS'])
       .filter(c => c.type === 'niveau').map(c => c.niveau);
-    expect(niveaux[0]).toBe('CI');
+    expect(niveaux.slice(0, 3)).toEqual(['PS', 'MS', 'GS']);
   });
 
   it('crée une carte par couple (filière, niveau) — S1 en 1ère ET en Tle', () => {

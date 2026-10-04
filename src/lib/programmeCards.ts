@@ -44,9 +44,9 @@ export const buildProgrammeCards = (
     })));
 
   return [
-    // Maternelle : un bloc sans contenu (ni matières ni barème), qui existe
-    // pour qu'on puisse y créer des classes — et le supprimer si l'école n'en a pas.
-    ...visibles(NIVEAUX_PRESCOLAIRE).map(niveau => ({ type: 'niveau' as const, niveau })),
+    // Maternelle : un bloc sans contenu (ni matières ni barème), toujours
+    // proposé à la création d'une classe. Il n'apparaît pas dans Cursus.
+    ...NIVEAUX_PRESCOLAIRE.map(niveau => ({ type: 'niveau' as const, niveau })),
     ...elementaireNiveaux.map(niveau => ({ type: 'niveau' as const, niveau })),
     ...collegeNiveaux.map(niveau => ({ type: 'niveau' as const, niveau })),
     ...filiereCards,
