@@ -29,6 +29,7 @@ import { toast } from '@/hooks/use-toast';
 import { buildProgrammeCards, isCompanionFiliere, getNiveauLabels, getNiveauxSupprimes, resolveNiveauLabel, type ProgrammeCard } from '@/lib/programmeCards';
 import { CLE_AMORCE, type TypeProgramme } from '@/lib/amorcageProgramme';
 import { NIVEAUX_ELEMENTAIRE } from '@/lib/elementaryDefaults';
+import { estPrescolaire } from '@/lib/prescolaire';
 import ElementaryBaremeEditor from '@/components/ElementaryBaremeEditor';
 
 // ─── Programme par niveau ───────────────────────────────────────────────────
@@ -481,6 +482,19 @@ const Filieres = () => {
       return;
     }
     setClearingNiveau(niveau);
+    // Maternelle : aucun contenu à effacer, on retire seulement le bloc.
+    if (estPrescolaire(niveau)) {
+      try {
+        await updateSchoolSettings({ niveauxSupprimes: Array.from(new Set([...niveauxSupprimes, niveau])) });
+        toast({ title: 'Bloc supprimé', description: `${resolveNiveauLabel(niveauLabels, niveau)} a été supprimé. Vous pouvez le restaurer en bas de page.` });
+      } catch (err) {
+        toast({ title: 'Erreur', description: String(err), variant: 'destructive' });
+      } finally {
+        setClearingNiveau(null);
+        setConfirmClearNiveau(null);
+      }
+      return;
+    }
     try {
       const type: TypeProgramme = (NIVEAUX_ELEMENTAIRE as readonly string[]).includes(niveau) ? 'elementaire' : 'college';
       await assurerAmorce(type);
@@ -512,7 +526,12 @@ const Filieres = () => {
   const handleRestaurerNiveau = async (niveau: string) => {
     try {
       await updateSchoolSettings({ niveauxSupprimes: niveauxSupprimes.filter(n => n !== niveau) });
-      toast({ title: 'Bloc restauré', description: `${resolveNiveauLabel(niveauLabels, niveau)} est de retour, vide : ajoutez ses matières.` });
+      toast({
+        title: 'Bloc restauré',
+        description: estPrescolaire(niveau)
+          ? `${resolveNiveauLabel(niveauLabels, niveau)} est de retour : vous pouvez y créer des classes.`
+          : `${resolveNiveauLabel(niveauLabels, niveau)} est de retour, vide : ajoutez ses matières.`,
+      });
     } catch (err) {
       toast({ title: 'Erreur', description: String(err), variant: 'destructive' });
     }
@@ -657,7 +676,7 @@ const Filieres = () => {
               <Select value={selectedNiveau} onValueChange={setSelectedNiveau}>
                 <SelectTrigger><SelectValue placeholder="Choisir un niveau" /></SelectTrigger>
                 <SelectContent>
-                  {NIVEAUX.map(n => (
+                  {NIVEAUX.filter(n => !estPrescolaire(n)).map(n => (
                     <SelectItem key={n} value={n}>{n}</SelectItem>
                   ))}
                 </SelectContent>
@@ -713,6 +732,45 @@ const Filieres = () => {
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {allCards.map(card => {
+          if (card.type === 'niveau' && estPrescolaire(card.niveau)) {
+            const { niveau } = card;
+            const classCount = classes.filter(c => c.niveau === niveau).length;
+            return (
+              <Card key={`niveau-${niveau}`} className="group h-full flex flex-col">
+                <CardHeader className="pb-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <CardTitle className="text-base">{resolveNiveauLabel(niveauLabels, niveau)}</CardTitle>
+                      <p className="text-xs text-muted-foreground mt-0.5">{classCount} classe{classCount !== 1 ? 's' : ''} · maternelle</p>
+                    </div>
+                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 flex-shrink-0">
+                      <Button
+                        variant="ghost" size="icon" className="h-6 w-6"
+                        title="Modifier le nom affiché"
+                        onClick={() => openRenameNiveau(niveau)}
+                      >
+                        <Pencil className="h-3 w-3" />
+                      </Button>
+                      <Button
+                        variant="ghost" size="icon" className="h-6 w-6 text-destructive hover:text-destructive"
+                        title={`Supprimer le bloc ${resolveNiveauLabel(niveauLabels, niveau)}`}
+                        disabled={clearingNiveau === niveau}
+                        onClick={() => setConfirmClearNiveau(niveau)}
+                      >
+                        {clearingNiveau === niveau ? <Loader2 className="h-3 w-3 animate-spin" /> : <Trash2 className="h-3 w-3" />}
+                      </Button>
+                    </div>
+                  </div>
+                </CardHeader>
+                <CardContent className="flex-1">
+                  <p className="text-sm text-muted-foreground">
+                    Ni matières ni notes. Les classes de ce niveau se gèrent normalement pour les élèves, les paiements,
+                    l'emploi du temps et les présences.
+                  </p>
+                </CardContent>
+              </Card>
+            );
+          }
           if (card.type === 'niveau' && (NIVEAUX_ELEMENTAIRE as readonly string[]).includes(card.niveau)) {
             const { niveau } = card;
             const lines = elementaryDefaultLines.filter(l => l.niveau === niveau && l.isActiveByDefault).sort((a, b) => a.ordering - b.ordering);
@@ -1233,7 +1291,7 @@ const Filieres = () => {
                 <SelectTrigger><SelectValue placeholder="Choisir un niveau" /></SelectTrigger>
                 <SelectContent>
                   {allCards
-                    .filter((c): c is Extract<ProgrammeCard, { type: 'niveau' }> => c.type === 'niveau' && c.niveau !== duplicateNiveauSource)
+                    .filter((c): c is Extract<ProgrammeCard, { type: 'niveau' }> => c.type === 'niveau' && c.niveau !== duplicateNiveauSource && !estPrescolaire(c.niveau))
                     .map(c => (
                       <SelectItem key={c.niveau} value={c.niveau}>{resolveNiveauLabel(niveauLabels, c.niveau)}</SelectItem>
                     ))}

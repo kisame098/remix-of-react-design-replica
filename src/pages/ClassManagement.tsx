@@ -18,10 +18,11 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
 import { useSchool, NIVEAUX, NIVEAUX_ELEMENTAIRE, SchoolClass } from '@/contexts/SchoolContext';
+import { estPrescolaire } from '@/lib/prescolaire';
 import { useSchoolYear } from '@/contexts/SchoolYearContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
-import { buildProgrammeCards, programmeCardLabel, programmeCardKey, getNiveauLabels, getNiveauxSupprimes, type ProgrammeCard } from '@/lib/programmeCards';
+import { buildProgrammeCards, programmeCardLabel, programmeCardKey, getNiveauLabels, getNiveauxSupprimes, resolveNiveauLabel, type ProgrammeCard } from '@/lib/programmeCards';
 
 const NO_BLOC = '__none__';
 
@@ -83,7 +84,8 @@ const ClassManagement = () => {
       const niveau = selectedCard?.niveau;
       const newClass = await addClass({ name: newClassName.trim(), studentLimit: limit, niveau });
       try {
-        if (selectedCard?.type === 'niveau') {
+        // Maternelle : rien à activer, ni matières ni barème.
+        if (selectedCard?.type === 'niveau' && !estPrescolaire(selectedCard.niveau)) {
           if ((NIVEAUX_ELEMENTAIRE as readonly string[]).includes(selectedCard.niveau)) {
             await applyElementaryDefaultsToClass(newClass.id, currentYear.id);
           } else {
@@ -255,7 +257,9 @@ const ClassManagement = () => {
                     </SelectContent>
                   </Select>
                   <p className="text-xs text-muted-foreground">
-                    {selectedCard
+                    {selectedCard && estPrescolaire(selectedCard.niveau)
+                      ? 'Maternelle : pas de matières ni de notes. La classe se gère comme les autres pour les élèves, les paiements, l\'emploi du temps et les présences.'
+                      : selectedCard
                       ? `Active automatiquement les matières et coefficients de ce bloc. Modifiable ensuite depuis Gestion Notes.`
                       : 'Choisissez parmi les blocs déjà définis dans Cursus — vous ne trouvez pas le vôtre ? Créez-le d\'abord dans Cursus, ou laissez "Aucun" et assignez-le plus tard depuis Gestion Notes.'}
                   </p>
@@ -312,7 +316,7 @@ const ClassManagement = () => {
                     <SelectContent>
                       <SelectItem value={NO_BLOC}>Aucun</SelectItem>
                       {NIVEAUX.map(n => (
-                        <SelectItem key={n} value={n}>{n}</SelectItem>
+                        <SelectItem key={n} value={n}>{resolveNiveauLabel(niveauLabels, n)}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>

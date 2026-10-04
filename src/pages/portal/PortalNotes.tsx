@@ -13,6 +13,7 @@ import { generateBulletinsPdf, BulletinPdfData } from '@/lib/bulletinPdf';
 import TeacherNotes from './teacher/TeacherNotes';
 import PortalNotesElementary from './PortalNotesElementary';
 import { NIVEAUX_ELEMENTAIRE } from '@/lib/elementaryDefaults';
+import { estPrescolaire } from '@/lib/prescolaire';
 import { periodesDeLEleve, periodeParDefaut } from '@/lib/studentPeriods';
 
 interface PublishedBulletin {
@@ -142,6 +143,8 @@ export default function PortalNotes() {
 
   const { donnees, chargement: loading, enregistreLe } = useDonneesHorsLigne<{
     isElementary: boolean;
+    /** Maternelle : pas de notes (absent des données gardées hors connexion avant cette version). */
+    isPrescolaire?: boolean;
     periods: GradePeriod[];
     grades: SubjectGrade[];
     publishedBulletins: PublishedBulletin[];
@@ -183,6 +186,7 @@ export default function PortalNotes() {
 
       return {
         isElementary: !!cls?.niveau && (NIVEAUX_ELEMENTAIRE as readonly string[]).includes(cls.niveau),
+        isPrescolaire: estPrescolaire(cls?.niveau),
         periods,
         grades: (gR.data ?? []).filter(g => g.subjects).map(g => {
           const s = g.subjects as { id: string; name: string; coefficient: number; period_id: string };
@@ -310,6 +314,15 @@ export default function PortalNotes() {
     </div>
   );
   if (isElementary) return <PortalNotesElementary />;
+  if (donnees?.isPrescolaire) return (
+    <div className="flex h-[60vh] flex-col items-center justify-center gap-2 px-6 text-center">
+      <p className="text-base font-semibold text-slate-800">Pas de notes en maternelle</p>
+      <p className="text-sm text-slate-500">
+        La Petite, la Moyenne et la Grande Section ne sont pas notées. Les autres rubriques (paiements,
+        emploi du temps, présences) restent disponibles.
+      </p>
+    </div>
+  );
 
   if (loading) return (
     <div className="flex h-[60vh] items-center justify-center">

@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useSchool, NIVEAUX_COLLEGE, NIVEAUX_ELEMENTAIRE, mergeFiliereMandatorySubjects, mergeFiliereChoiceGroups } from '@/contexts/SchoolContext';
+import { estPrescolaire } from '@/lib/prescolaire';
 import ElementaryClassLines from '@/components/ElementaryClassLines';
 import { useSchoolYear } from '@/contexts/SchoolYearContext';
 import { Button } from '@/components/ui/button';
@@ -154,6 +155,21 @@ const ClassSubjects = () => {
     return (
       <div className="flex flex-col items-center justify-center py-20">
         <p className="text-muted-foreground">Période ou classe non trouvée</p>
+        <Button variant="link" onClick={() => navigate('/notes')}>Retour à la gestion des notes</Button>
+      </div>
+    );
+  }
+
+  // Maternelle : ni matières ni notes. Une adresse ouverte à la main (ou une
+  // ancienne classe passée en maternelle) ne doit pas proposer d'en créer.
+  if (estPrescolaire(schoolClass.niveau)) {
+    return (
+      <div className="flex flex-col items-center justify-center py-20 text-center gap-2">
+        <p className="font-medium text-foreground">{schoolClass.name} est une classe de maternelle</p>
+        <p className="text-sm text-muted-foreground max-w-md">
+          La Petite, la Moyenne et la Grande Section n'ont ni matières ni notes. La classe se gère normalement
+          pour les élèves, les paiements, l'emploi du temps et les présences.
+        </p>
         <Button variant="link" onClick={() => navigate('/notes')}>Retour à la gestion des notes</Button>
       </div>
     );

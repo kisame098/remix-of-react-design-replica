@@ -15,6 +15,7 @@
 // Fonction pure, testée dans importProgramme.test.ts.
 // ═══════════════════════════════════════════════════════════════════════════
 import { NIVEAUX_ELEMENTAIRE, type ElementaryDomaine, type ElementaryRegistre } from '@/lib/elementaryDefaults';
+import { estPrescolaire } from '@/lib/prescolaire';
 
 export const NIVEAUX_SECONDAIRE = ['6ème', '5ème', '4ème', '3ème', '2nde', '1ère', 'Tle'];
 const ELEMENTAIRE = NIVEAUX_ELEMENTAIRE as readonly string[];
@@ -79,6 +80,10 @@ export const planifierImport = (data: unknown, etat: EtatProgramme): PlanImport 
     const niveau = texte(s.niveau);
     const name = texte(s.name);
     if (!niveau || !name) { plan.ignores.push('Matière de niveau incomplète (niveau ou nom manquant)'); continue; }
+    if (estPrescolaire(niveau)) {
+      plan.ignores.push(`${name} (${niveau}) : la maternelle n'a pas de matières`);
+      continue;
+    }
     if (ELEMENTAIRE.includes(niveau)) {
       plan.ignores.push(`${name} (${niveau}) : l'élémentaire se décrit dans « elementaireDefaults », avec un barème de points`);
       continue;

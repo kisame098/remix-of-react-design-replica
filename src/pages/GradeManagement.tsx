@@ -16,6 +16,7 @@ import {
 import { toast } from '@/hooks/use-toast';
 import { GradePeriod } from '@/contexts/SchoolContext';
 import { NIVEAUX_ELEMENTAIRE } from '@/lib/elementaryDefaults';
+import { classesAvecNotes } from '@/lib/prescolaire';
 
 const formatShortDate = (iso?: string) => {
   if (!iso) return '—';
@@ -55,8 +56,12 @@ const GradeManagement = () => {
   const semesters = gradePeriods.filter(p => p.type === 'semester');
   const exams = gradePeriods.filter(p => p.type === 'exam');
   const selectedPeriod = gradePeriods.find(p => p.id === selectedPeriodId);
+  // La maternelle (PS, MS, GS) n'a pas de notes : absente de toute cette page,
+  // même si une ancienne classe passée en maternelle figure encore dans une période.
+  const classesNotees = classesAvecNotes(classes);
+  const nbClassesMaternelle = classes.length - classesNotees.length;
   const includedClasses = selectedPeriodId
-    ? classes.filter(c => isClassInPeriod(selectedPeriodId, c.id))
+    ? classesNotees.filter(c => isClassInPeriod(selectedPeriodId, c.id))
     : [];
 
   // Stats par classe pour la période sélectionnée — l'élémentaire (CI-CM2) a
@@ -363,7 +368,7 @@ const GradeManagement = () => {
                 <div className="flex gap-2">
                   <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setIsManageClassesOpen(true)}>
                     <Settings2 className="h-3.5 w-3.5" />
-                    Classes ({includedClasses.length}/{classes.length})
+                    Classes ({includedClasses.length}/{classesNotees.length})
                   </Button>
                   <Button variant="outline" size="sm" className="gap-1.5" onClick={() => openEditPeriod(selectedPeriod)}>
                     <Pencil className="h-3.5 w-3.5" />
@@ -379,12 +384,13 @@ const GradeManagement = () => {
                   </DialogHeader>
                   <p className="text-xs text-muted-foreground -mt-2">
                     Par défaut, toutes les classes sont incluses. Utile par exemple pour un examen interne réservé à certaines classes.
+                    {nbClassesMaternelle > 0 && ' Les classes de maternelle (PS, MS, GS) n\'ont pas de notes et n\'apparaissent pas ici.'}
                   </p>
                   <div className="space-y-1 max-h-[50vh] overflow-y-auto">
-                    {classes.length === 0 ? (
+                    {classesNotees.length === 0 ? (
                       <p className="text-sm text-muted-foreground py-4 text-center">Aucune classe créée</p>
                     ) : (
-                      classes.map(cls => {
+                      classesNotees.map(cls => {
                         const included = isClassInPeriod(selectedPeriod.id, cls.id);
                         return (
                           <div key={cls.id} className="flex items-center justify-between px-2 py-2 rounded-lg hover:bg-muted/50">
