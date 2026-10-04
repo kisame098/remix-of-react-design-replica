@@ -23,7 +23,7 @@ const TABS: NavTab[] = [
   { id: 'entry',     label: 'Paiement',         icon: CreditCard,      description: 'Encaisser un paiement'      },
   { id: 'scan',      label: 'Scanner',          icon: ScanLine,        description: 'Scan QR direct à la caisse' },
   { id: 'tracking',  label: 'Suivi',             icon: BarChart3,       description: 'Qui a payé / pas payé'      },
-  { id: 'facturation', label: 'Facturation',     icon: FileText,        description: 'Factures et rappels'        },
+  { id: 'facturation', label: 'Facturation',     icon: FileText,        description: 'Factures, rappels, fiches'  },
   { id: 'history',   label: 'Historique',        icon: History,         description: 'Tous les paiements, annulation' },
   { id: 'roster',    label: 'Services',          icon: UsersRound,      description: 'Inscriptions aux services'  },
   { id: 'reductions', label: 'Réductions',       icon: BadgePercent,    description: 'Tarif personnalisé d\'un élève' },
