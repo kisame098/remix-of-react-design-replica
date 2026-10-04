@@ -10,8 +10,9 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
 import {
-  CheckCircle2, XCircle, Users, Filter, TrendingUp, AlertTriangle, ChevronDown, ChevronUp, Download,
+  CheckCircle2, XCircle, Users, Filter, TrendingUp, AlertTriangle, ChevronDown, ChevronUp, Download, ClipboardList,
 } from 'lucide-react';
+import { useFichesPaiement } from '@/hooks/useFichesPaiement';
 import {
   getAcademicMonths, isMonthOverdue, MonthKey, PAYMENT_METHOD_LABELS, AnnexService,
   TuitionBillingTiming, DEFAULT_TUITION_BILLING_TIMING,
@@ -39,6 +40,7 @@ const PaymentTracking = () => {
   } = usePayment();
   const { currentYear } = useSchoolYear();
   const { school } = useAuth();
+  const { ficheDe, montrerFiches, dialogueFiches } = useFichesPaiement();
   const billingTiming = (school?.settings?.tuitionBillingTiming as TuitionBillingTiming) ?? DEFAULT_TUITION_BILLING_TIMING;
   const academicMonths = useMemo(
     () => currentYear ? getAcademicMonths(currentYear.startDate, currentYear.endDate, billingTiming) : [],
@@ -347,6 +349,12 @@ const PaymentTracking = () => {
                   {/* Expanded: all payments for this student */}
                   {isExpanded && (
                     <div className="px-5 pb-3 bg-muted/10">
+                      <div className="pl-12 pt-1">
+                        <Button size="sm" variant="outline" className="gap-1.5 h-7 text-xs"
+                          onClick={() => { const f = ficheDe(student); montrerFiches([f], `Fiche de paiement — ${f.eleve.nom}`, `Fiche_paiement_${f.eleve.nom}`); }}>
+                          <ClipboardList className="h-3.5 w-3.5" /> Fiche de paiement de l'année
+                        </Button>
+                      </div>
                       {studentPayments.length === 0 ? (
                         <p className="text-xs text-muted-foreground py-2 pl-12">Aucun paiement enregistré</p>
                       ) : (
@@ -395,6 +403,8 @@ const PaymentTracking = () => {
           </div>
         )}
       </div>
+
+      {dialogueFiches}
 
       <PaymentExportDialog
         open={isExportOpen}

@@ -23,7 +23,8 @@ import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog';
 import { toast } from '@/hooks/use-toast';
-import { BellRing, FileText, Loader2, Printer, School, Search, User, Users } from 'lucide-react';
+import { BellRing, ClipboardList, FileText, Loader2, Printer, School, Search, User, Users } from 'lucide-react';
+import FichesPaiement from '@/components/payment/FichesPaiement';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // FACTURATION — factures et rappels remis aux familles.
@@ -70,6 +71,9 @@ const Facturation = () => {
   const [factures, setFactures] = useState<FactureEnregistree[]>([]);
   const [chargement, setChargement] = useState(true);
   const [impression, setImpression] = useState<Impression | null>(null);
+  // Deux documents remis aux familles : la facture (ce qu'il faut payer) et la
+  // fiche de paiement (le bilan de l'année).
+  const [vue, setVue] = useState<'factures' | 'fiches'>('factures');
 
   // ── Génération ──
   const [portee, setPortee] = useState<Portee>('classe');
@@ -207,6 +211,16 @@ const Facturation = () => {
   return (
     <div className="flex-1 overflow-y-auto">
       <div className="p-6 space-y-6 max-w-6xl">
+        <div className="flex rounded-lg border p-0.5 bg-muted/30 w-fit">
+          {([['factures', 'Factures et rappels', FileText], ['fiches', 'Fiches de paiement', ClipboardList]] as const).map(([id, label, Icone]) => (
+            <button key={id} type="button" onClick={() => setVue(id)}
+              className={`px-4 py-2 text-sm rounded-md flex items-center gap-2 transition-colors ${vue === id ? 'bg-background shadow-sm font-medium' : 'text-muted-foreground hover:text-foreground'}`}>
+              <Icone className="h-4 w-4" />{label}
+            </button>
+          ))}
+        </div>
+
+        {vue === 'fiches' ? <FichesPaiement /> : (<>
         {/* ── Générer ── */}
         <Card>
           <CardHeader className="pb-3">
@@ -383,6 +397,7 @@ const Facturation = () => {
             )}
           </CardContent>
         </Card>
+        </>)}
       </div>
 
       {/* ── Rappel : nouvelle date limite ── */}

@@ -13,12 +13,13 @@
 
 export type ModeImpression = 'couleur' | 'economique';
 
-export type TypeDocument = 'recu' | 'facture' | 'fiche' | 'formation';
+export type TypeDocument = 'recu' | 'facture' | 'fiche' | 'fiche_paiement' | 'formation';
 
 export const LIBELLES_TYPE_DOCUMENT: Record<TypeDocument, string> = {
   recu: 'les reçus',
   facture: 'les factures et rappels',
   fiche: 'les fiches d\'inscription',
+  fiche_paiement: 'les fiches de paiement',
   formation: 'les documents de formation',
 };
 
