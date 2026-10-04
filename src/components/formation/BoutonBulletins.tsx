@@ -113,16 +113,19 @@ export const BoutonBulletins = ({ promotionId, periodeId, periodeNom, eleveIds, 
         </DialogContent>
       </Dialog>
 
-      <DocumentDialog
-        ouvert={apercu} onFermer={() => setApercu(false)}
-        titre={`Bulletins — ${periodeNom}`} nomFichier={nomFichier}
-        generer={async () => {
-          const d = donnees.bulletins(promotionId, periodeId, eleveIds, ecartees, detail);
-          if (!d) throw new Error('Données introuvables');
-          const { genererBulletinsPdf } = await import('@/lib/documentsFormationProPdf');
-          return genererBulletinsPdf(d);
-        }}
-      />
+      {apercu && (
+        <DocumentDialog
+          ouvert onFermer={() => setApercu(false)}
+          titre={`Bulletins — ${periodeNom}`} nomFichier={nomFichier}
+          typeDocument="formation"
+          generer={async (o) => {
+            const d = donnees.bulletins(promotionId, periodeId, eleveIds, ecartees, detail);
+            if (!d) throw new Error('Données introuvables');
+            const { genererBulletinsPdf } = await import('@/lib/documentsFormationProPdf');
+            return genererBulletinsPdf(d, o);
+          }}
+        />
+      )}
     </>
   );
 };

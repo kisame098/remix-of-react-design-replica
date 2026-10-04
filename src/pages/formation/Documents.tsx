@@ -221,20 +221,20 @@ const DocumentsEleve = ({ eleveId, promotionId, estDirecteur, logo, donnees, onR
                 <div className="flex items-center gap-2">
                 <BoutonDocument
                   titre={`Relevé de notes — ${x.name}`} nomFichier={`Releve_${nom}`} className="gap-1.5"
-                  fabriquer={async () => {
+                  fabriquer={async (o) => {
                     const d = donnees.releves(x.id, [eleveId]);
                     if (!d) throw new Error('Examen introuvable');
-                    return (await pdf()).genererRelevesPdf(d);
+                    return (await pdf()).genererRelevesPdf(d, o);
                   }}
                 >
                   <Printer className="h-3.5 w-3.5" />Relevé de notes
                 </BoutonDocument>
                 <BoutonDocument
                   titre={`Convocation — ${x.name}`} nomFichier={`Convocation_${nom}`} className="gap-1.5"
-                  fabriquer={async () => {
+                  fabriquer={async (o) => {
                     const d = donnees.convocations(x.id, [eleveId]);
                     if (!d) throw new Error('Examen introuvable');
-                    return (await pdf()).genererConvocationsPdf(d);
+                    return (await pdf()).genererConvocationsPdf(d, o);
                   }}
                 >
                   <Printer className="h-3.5 w-3.5" />Convocation
@@ -250,10 +250,10 @@ const DocumentsEleve = ({ eleveId, promotionId, estDirecteur, logo, donnees, onR
                   <BoutonDocument
                     titre="Attestation de stage" nomFichier={`Attestation_stage_${nom}`} className="gap-1.5"
                     disabled={incomplet} title={incomplet ? 'Il faut l\'entreprise et les dates du stage.' : undefined}
-                    fabriquer={async () => {
+                    fabriquer={async (o) => {
                       const d = donnees.attestationStage(s.id);
                       if (!d) throw new Error('Stage introuvable');
-                      return (await pdf()).genererAttestationStagePdf(d);
+                      return (await pdf()).genererAttestationStagePdf(d, o);
                     }}
                   >
                     <Printer className="h-3.5 w-3.5" />Attestation
@@ -329,7 +329,7 @@ const DocumentsEleve = ({ eleveId, promotionId, estDirecteur, logo, donnees, onR
                         variant="ghost" titre={`${LIBELLES_DOCUMENT_OFFICIEL[d.type]} ${numeroDocument(d.type, d.annee, d.numero)}`}
                         description="Réimpression à l'identique du document émis." nomFichier={numeroDocument(d.type, d.annee, d.numero)}
                         className="gap-1.5 h-7"
-                        fabriquer={async () => (await pdf()).genererDocumentOfficielPdf(d, logo)}
+                        fabriquer={async (o) => (await pdf()).genererDocumentOfficielPdf(d, logo, o)}
                       >
                         <Printer className="h-3.5 w-3.5" />Réimprimer
                       </BoutonDocument>
@@ -363,7 +363,8 @@ const DocumentsEleve = ({ eleveId, promotionId, estDirecteur, logo, donnees, onR
           ouvert onFermer={() => setAOuvrir(null)}
           titre={`${LIBELLES_DOCUMENT_OFFICIEL[aOuvrir.type]} ${numeroDocument(aOuvrir.type, aOuvrir.annee, aOuvrir.numero)}`}
           nomFichier={numeroDocument(aOuvrir.type, aOuvrir.annee, aOuvrir.numero)}
-          generer={async () => (await pdf()).genererDocumentOfficielPdf(aOuvrir, logo)}
+          typeDocument="formation"
+          generer={async (o) => (await pdf()).genererDocumentOfficielPdf(aOuvrir, logo, o)}
         />
       )}
     </div>

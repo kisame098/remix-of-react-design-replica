@@ -20,6 +20,32 @@ export const FILET = '#E5E7EB';
 export const VERT_TAMPON = '#15803D';
 export const ROUGE = '#B91C1C';
 
+/** Couleur d'alerte (rappel, retard) : rouge, ou noir en impression économique. */
+export const alerte = (c: Palette): string => (c.economique ? ENCRE : ROUGE);
+
+/**
+ * Un bloc mis en avant (total, échéance) : rempli de la couleur foncée, ou —
+ * en impression économique — simplement encadré d'un trait épais, sans aplat.
+ * Renvoie la couleur du texte à écrire dedans.
+ */
+export const blocFort = (
+  doc: jsPDF, c: Palette, x: number, y: number, w: number, h: number, couleur = c.fonce, double = false,
+): string => {
+  if (!c.economique) {
+    doc.setFillColor(couleur);
+    doc.roundedRect(x, y, w, h, 2, 2, 'F');
+    return '#FFFFFF';
+  }
+  doc.setDrawColor(couleur);
+  doc.setLineWidth(0.8);
+  doc.roundedRect(x, y, w, h, 2, 2, 'S');
+  if (double) {
+    doc.setLineWidth(0.3);
+    doc.roundedRect(x + 1.2, y + 1.2, w - 2.4, h - 2.4, 1.4, 1.4, 'S');
+  }
+  return ENCRE;
+};
+
 export type Alignement = 'left' | 'right' | 'center';
 
 /**
@@ -182,10 +208,19 @@ export interface OptionsBandeau {
  */
 export const dessinerBandeau = (doc: jsPDF, ecole: InfosEcole, c: Palette, o: OptionsBandeau): void => {
   const k = o.k ?? 1;
-  doc.setFillColor(c.fonce);
-  doc.rect(0, 0, o.largeurPage, o.hauteur, 'F');
-  doc.setFillColor(c.accent);
-  doc.rect(0, o.hauteur, o.largeurPage, 1.6, 'F');
+  if (c.economique) {
+    // Pas d'aplat : un double filet sous l'en-tête suffit à le marquer.
+    doc.setDrawColor(c.fonce);
+    doc.setLineWidth(0.9);
+    doc.line(o.marge, o.hauteur, o.largeurPage - o.marge, o.hauteur);
+    doc.setLineWidth(0.25);
+    doc.line(o.marge, o.hauteur + 1.6, o.largeurPage - o.marge, o.hauteur + 1.6);
+  } else {
+    doc.setFillColor(c.fonce);
+    doc.rect(0, 0, o.largeurPage, o.hauteur, 'F');
+    doc.setFillColor(c.accent);
+    doc.rect(0, o.hauteur, o.largeurPage, 1.6, 'F');
+  }
 
   // Logo sur un disque blanc : lisible quelle que soit la couleur du logo.
   const r = 11.6 * k;
@@ -200,7 +235,7 @@ export const dessinerBandeau = (doc: jsPDF, ecole: InfosEcole, c: Palette, o: Op
 
   const x = o.marge + 2 * r + 4.3;
   const largeurTexte = o.largeurPage - o.marge - x;
-  doc.setTextColor('#FFFFFF');
+  doc.setTextColor(c.economique ? c.fonce : '#FFFFFF');
   doc.setFont('times', 'bold');
   // Le nom entier, sur deux lignes au plus : on réduit la police plutôt que d'en jeter.
   let tailleNom = ecole.nom.length > 34 ? 12.5 : 14.5;
@@ -217,7 +252,7 @@ export const dessinerBandeau = (doc: jsPDF, ecole: InfosEcole, c: Palette, o: Op
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(7.6);
   doc.saveGraphicsState();
-  opacite(doc, 0.86);
+  if (c.economique) doc.setTextColor(GRIS); else opacite(doc, 0.86);
   y += noms.length > 1 ? -0.4 : 0.6;
   for (const ligne of lignesCoordonnees(ecole).slice(0, 3)) {
     ecrireAjuste(doc, ligne, x, y, largeurTexte, { taille: 7.6, tailleMin: 6.2 });

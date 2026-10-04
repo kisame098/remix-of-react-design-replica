@@ -2,7 +2,7 @@ import jsPDF from 'jspdf';
 import QRCode from 'qrcode';
 import type { FicheInscriptionData } from '@/lib/ficheInscription';
 import { dateDakar } from '@/lib/documentsEcole';
-import { couleurDominanteDuLogo, paletteDepuis, type Palette } from '@/lib/couleurLogo';
+import { couleurDominanteDuLogo, paletteDepuis, PALETTE_ECONOMIQUE, type Palette } from '@/lib/couleurLogo';
 import {
   ENCRE, GRIS, ROUGE, dessinerBandeau, dessinerTitre, ecrireAjuste, espace, etiquette, filigrane,
   guilloche, signatureSenClass,
@@ -103,11 +103,17 @@ const piedDePage = ({ doc, c, data }: Etat, page: number, total: number) => {
 const suite = ({ doc, c, data }: Etat): number => {
   doc.addPage('a4', 'portrait');
   filigrane(doc, data.ecole, L, H, 110, c.fonce);
-  doc.setFillColor(c.fonce);
-  doc.rect(0, 0, L, 13, 'F');
+  if (c.economique) {
+    doc.setDrawColor(c.fonce);
+    doc.setLineWidth(0.6);
+    doc.line(M, 13, L - M, 13);
+  } else {
+    doc.setFillColor(c.fonce);
+    doc.rect(0, 0, L, 13, 'F');
+  }
   doc.setFont('times', 'bold');
   doc.setFontSize(10);
-  doc.setTextColor('#FFFFFF');
+  doc.setTextColor(c.economique ? c.fonce : '#FFFFFF');
   doc.text(data.ecole.nom.toUpperCase(), M, 8.2);
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(8);
@@ -363,7 +369,11 @@ const pageIdentifiants = async (e: Etat, compte: NonNullable<FicheInscriptionDat
 // ─── Assemblage ───────────────────────────────────────────────────────────────
 
 export async function genererFicheInscriptionPdf(
-  data: FicheInscriptionData & { couleur?: string | null },
+  data: FicheInscriptionData & {
+    couleur?: string | null;
+    /** Imprimante noir et blanc : aucun grand aplat. */
+    economique?: boolean;
+  },
 ): Promise<jsPDF> {
   const doc = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' });
   doc.setProperties({
@@ -374,8 +384,10 @@ export async function genererFicheInscriptionPdf(
   });
 
   // La teinte du document : celle du logo de l'école (ou la couleur passée).
-  const couleur = data.couleur !== undefined ? data.couleur : await couleurDominanteDuLogo(data.ecole.logo);
-  const e: Etat = { doc, c: paletteDepuis(couleur), data };
+  const c = data.economique
+    ? PALETTE_ECONOMIQUE
+    : paletteDepuis(data.couleur !== undefined ? data.couleur : await couleurDominanteDuLogo(data.ecole.logo));
+  const e: Etat = { doc, c, data };
 
   pageFiche(e);
   if (data.compte) await pageIdentifiants(e, data.compte);

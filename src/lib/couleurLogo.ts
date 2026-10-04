@@ -90,7 +90,21 @@ export interface Palette {
   pale: string;
   /** Traits fins et séparateurs, tirés de la teinte. */
   trait: string;
+  /**
+   * Impression économique (imprimante noir et blanc) : aucun grand aplat
+   * sombre. Bandeau blanc, total et échéance encadrés au lieu d'être remplis.
+   */
+  economique?: boolean;
 }
+
+/** Encre noire seulement, fonds quasi blancs : pour les imprimantes noir et blanc. */
+export const PALETTE_ECONOMIQUE: Palette = {
+  fonce: '#111827',
+  accent: '#374151',
+  pale: '#F6F6F6',
+  trait: '#BDBDBD',
+  economique: true,
+};
 
 /**
  * Toute la palette du document à partir d'UNE couleur. La luminosité est

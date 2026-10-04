@@ -66,9 +66,10 @@ export function useRecuFamille({ services, libelleMois }: Options): {
         titre={`Reçu ${numero}`}
         description="Copie de votre reçu de paiement."
         nomFichier={`Recu_${numero}_${nomDeFichier(schoolAccount?.displayName ?? 'eleve')}`}
-        generer={async () => {
+        typeDocument="recu"
+        generer={async ({ economique }) => {
           const { genererRecuPdf } = await import('@/lib/recuPdf');
-          return genererRecuPdf(construireRecu({
+          return genererRecuPdf({ economique, ...construireRecu({
             ecole: infosEcole(school),
             recu: { id: ouvert.recu.id, academicYearLabel: ouvert.recu.academicYearLabel, number: ouvert.recu.number,
                     studentId: schoolAccount?.studentEnrollmentId ?? '', createdAt: ouvert.recu.createdAt },
@@ -81,7 +82,7 @@ export function useRecuFamille({ services, libelleMois }: Options): {
             services,
             libelleMois,
             duplicata: true,
-          }));
+          }) });
         }}
       />
     );

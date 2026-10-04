@@ -67,7 +67,8 @@ export function useFicheInscription(): {
           ? `${eleve.lastName.toUpperCase()} ${eleve.firstName} — ${eleve.studentId}. ⚠ Les identifiants de connexion n'ont pas pu être lus : la page « Accès à l'espace élève » est absente. Fermez, puis rouvrez cette fiche depuis le profil de l'élève.`
           : `${eleve.lastName.toUpperCase()} ${eleve.firstName} — ${eleve.studentId}. La page 2, avec les identifiants de connexion, est à remettre à la famille.`}
         nomFichier={`Fiche_inscription_${nomDeFichier(`${eleve.lastName}_${eleve.firstName}`)}`}
-        generer={async () => {
+        typeDocument="fiche"
+        generer={async ({ economique }) => {
           // Le compte se crée en arrière-plan juste après l'inscription : on lui
           // laisse un court instant avant de conclure qu'il n'y a pas d'identifiants.
           const [compte, { genererFicheInscriptionPdf }] = await Promise.all([
@@ -75,7 +76,7 @@ export function useFicheInscription(): {
             import('@/lib/ficheInscriptionPdf'),
           ]);
           setSansIdentifiants(!compte);
-          return genererFicheInscriptionPdf(construireFiche({
+          return genererFicheInscriptionPdf({ economique, ...construireFiche({
             ecole: infosEcole(school),
             anneeScolaire: annee,
             dateInscription: eleve.enrolledAt,
@@ -87,7 +88,7 @@ export function useFicheInscription(): {
             inscriptionPayee: hasPaidInscription(eleve.id),
             compte,
             adresseSite: ADRESSE_SITE_PUBLIC,
-          }));
+          }) });
         }}
       />
     );

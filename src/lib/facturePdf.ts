@@ -2,10 +2,10 @@ import jsPDF from 'jspdf';
 import type { InfosEcole } from '@/lib/documentsEcole';
 import { dateLongueDakar } from '@/lib/documentsEcole';
 import {
-  ENCRE, FILET, GRIS, ROUGE, dessinerBandeau, dessinerTitre, ecrireAjuste, espace, etiquette,
+  ENCRE, FILET, GRIS, alerte, blocFort, dessinerBandeau, dessinerTitre, ecrireAjuste, espace, etiquette,
   filigrane, guilloche, opacite, signatureSenClass,
 } from '@/lib/documentsDesign';
-import { couleurDominanteDuLogo, paletteDepuis, type Palette } from '@/lib/couleurLogo';
+import { couleurDominanteDuLogo, paletteDepuis, PALETTE_ECONOMIQUE, type Palette } from '@/lib/couleurLogo';
 import { formaterMontant, montantEnLettres } from '@/lib/montantEnLettres';
 import { jourEnLettres, type LigneFacture, type TypeFacture } from '@/lib/facture';
 
@@ -69,10 +69,10 @@ const titre = ({ doc, c, f }: Etat, y: number): number => {
   const w = 54;
   const x = L - M - w;
   doc.setFillColor(c.pale);
-  doc.setDrawColor(rappel ? ROUGE : c.accent);
+  doc.setDrawColor(rappel ? alerte(c) : c.accent);
   doc.setLineWidth(0.45);
   doc.roundedRect(x, y - 1, w, 14, 2, 2, 'FD');
-  etiquette(doc, rappel ? 'Rappel n°' : 'Facture n°', x + w / 2, y + 3.4, rappel ? ROUGE : c.accent, 'center');
+  etiquette(doc, rappel ? 'Rappel n°' : 'Facture n°', x + w / 2, y + 3.4, rappel ? alerte(c) : c.accent, 'center');
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(12);
   doc.setTextColor(c.fonce);
@@ -138,13 +138,19 @@ const echeance = ({ doc, c, f }: Etat, y: number): number => {
   if (f.type === 'rappel' && f.origine) {
     const retard = Math.max(0, ecartJours(f.origine.dateLimite, f.emiseLe));
     const h = 21;
-    doc.setFillColor('#FEF2F2');
-    doc.setDrawColor(ROUGE);
-    doc.setLineWidth(0.5);
-    doc.roundedRect(M, y, U, h, 2, 2, 'FD');
-    doc.setFillColor(ROUGE);
-    doc.roundedRect(M, y, 2.2, h, 1, 1, 'F');
-    etiquette(doc, 'Échéance dépassée', M + 7, y + 6, ROUGE);
+    const rouge = alerte(c);
+    if (c.economique) {
+      // Sans couleur, le double cadre dit « attention ».
+      blocFort(doc, c, M, y, U, h, rouge, true);
+    } else {
+      doc.setFillColor('#FEF2F2');
+      doc.setDrawColor(rouge);
+      doc.setLineWidth(0.5);
+      doc.roundedRect(M, y, U, h, 2, 2, 'FD');
+      doc.setFillColor(rouge);
+      doc.roundedRect(M, y, 2.2, h, 1, 1, 'F');
+    }
+    etiquette(doc, 'Échéance dépassée', M + 7, y + 6, rouge);
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(9.4);
     doc.setTextColor(ENCRE);
@@ -152,24 +158,24 @@ const echeance = ({ doc, c, f }: Etat, y: number): number => {
       + `${jourEnLettres(f.origine.dateLimite)}${retard > 0 ? `, soit ${retard} jour${retard > 1 ? 's' : ''} de retard` : ''}.`;
     ecrireAjuste(doc, texte, M + 7, y + 11.6, U - 70, { taille: 9.4, tailleMin: 7.6, lignesMax: 2, interligne: 4 });
 
-    etiquette(doc, 'Nouvelle date limite', L - M - 5, y + 6, ROUGE, 'right');
+    etiquette(doc, 'Nouvelle date limite', L - M - 5, y + 6, rouge, 'right');
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(12.5);
-    doc.setTextColor(ROUGE);
+    doc.setTextColor(rouge);
     doc.text(jourEnLettres(f.dateLimite), L - M - 5, y + 14, { align: 'right' });
     return y + h + 7;
   }
 
   const h = 16;
-  doc.setFillColor(c.fonce);
-  doc.roundedRect(M, y, U, h, 2, 2, 'F');
-  doc.setTextColor('#FFFFFF');
+  const texte = blocFort(doc, c, M, y, U, h);
+  doc.setTextColor(texte);
   doc.saveGraphicsState();
   opacite(doc, 0.85);
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(7.2);
   espace(doc, 'À RÉGLER AU PLUS TARD LE', M + 7, y + 6.4, 0.22);
   doc.restoreGraphicsState();
+  doc.setTextColor(texte);
   doc.setFont('times', 'bold');
   doc.setFontSize(15);
   doc.text(jourEnLettres(f.dateLimite), M + 7, y + 12.8);
@@ -180,6 +186,7 @@ const echeance = ({ doc, c, f }: Etat, y: number): number => {
   doc.setFontSize(7.2);
   espace(doc, 'MONTANT À PAYER', L - M - 7, y + 6.4, 0.22, 'right');
   doc.restoreGraphicsState();
+  doc.setTextColor(texte);
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(14);
   doc.text(`${formaterMontant(f.total)} FCFA`, L - M - 7, y + 12.8, { align: 'right' });
@@ -215,12 +222,12 @@ const ligneTableau = ({ doc, c }: Etat, l: LigneFacture, y: number, rang: number
   if (l.en_retard) {
     // « En retard » : une pastille avec son texte — lisible en noir et blanc.
     const x = M + 2 + Math.min(doc.getTextWidth(l.designation), LARGEUR_DESIGNATION - largeurPastille) + 2.5;
-    doc.setDrawColor(ROUGE);
+    doc.setDrawColor(alerte(c));
     doc.setLineWidth(0.3);
     doc.roundedRect(x, y + 2.2, 15.5, 4, 1, 1, 'S');
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(6);
-    doc.setTextColor(ROUGE);
+    doc.setTextColor(alerte(c));
     espace(doc, 'EN RETARD', x + 7.75, y + 5, 0.15, 'center');
   }
   doc.setFont('helvetica', 'normal');
@@ -237,11 +244,17 @@ const ligneTableau = ({ doc, c }: Etat, l: LigneFacture, y: number, rang: number
 };
 
 const enTeteDeSuite = ({ doc, c, ecole, f }: Etat): number => {
-  doc.setFillColor(c.fonce);
-  doc.rect(0, 0, L, 15, 'F');
+  if (c.economique) {
+    doc.setDrawColor(c.fonce);
+    doc.setLineWidth(0.6);
+    doc.line(M, 15, L - M, 15);
+  } else {
+    doc.setFillColor(c.fonce);
+    doc.rect(0, 0, L, 15, 'F');
+  }
   doc.setFont('times', 'bold');
   doc.setFontSize(10.5);
-  doc.setTextColor('#FFFFFF');
+  doc.setTextColor(c.economique ? c.fonce : '#FFFFFF');
   doc.text(ecole.nom.toUpperCase(), M, 9.4);
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(8.4);
@@ -253,15 +266,16 @@ const blocTotal = ({ doc, c, f }: Etat, y: number): number => {
   const w = 96;
   const h = 17;
   const x = L - M - w;
-  doc.setFillColor(f.type === 'rappel' ? ROUGE : c.fonce);
-  doc.roundedRect(x, y, w, h, 2, 2, 'F');
-  doc.setTextColor('#FFFFFF');
+  const rappel = f.type === 'rappel';
+  const texte = blocFort(doc, c, x, y, w, h, rappel ? alerte(c) : c.fonce, rappel);
+  doc.setTextColor(texte);
   doc.saveGraphicsState();
   opacite(doc, 0.85);
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(7.6);
   espace(doc, 'TOTAL À PAYER', x + 6, y + 10.4, 0.22);
   doc.restoreGraphicsState();
+  doc.setTextColor(texte);
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(18);
   doc.text(formaterMontant(f.total), x + w - 17, y + 11.6, { align: 'right' });
@@ -394,6 +408,8 @@ const dessinerFacture = (e: Etat) => {
 /** Une ou plusieurs factures dans UN seul PDF, chacune commençant sur une nouvelle page. */
 export async function genererFacturesPdf(
   ecole: InfosEcole, factures: FactureDoc[], couleur?: string | null,
+  /** Imprimante noir et blanc : aucun grand aplat (Paramètres → École). */
+  options: { economique?: boolean } = {},
 ): Promise<jsPDF> {
   if (factures.length === 0) throw new Error('Aucune facture à imprimer');
   const doc = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' });
@@ -406,8 +422,9 @@ export async function genererFacturesPdf(
     author: ecole.nom,
     creator: 'SenClass',
   });
-  const teinte = couleur !== undefined ? couleur : await couleurDominanteDuLogo(ecole.logo);
-  const c = paletteDepuis(teinte);
+  const c = options.economique
+    ? PALETTE_ECONOMIQUE
+    : paletteDepuis(couleur !== undefined ? couleur : await couleurDominanteDuLogo(ecole.logo));
   factures.forEach((f, i) => {
     if (i > 0) doc.addPage('a4', 'portrait');
     dessinerFacture({ doc, c, ecole, f });
