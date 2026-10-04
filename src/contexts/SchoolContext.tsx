@@ -19,6 +19,7 @@ import {
   NIVEAUX_ELEMENTAIRE, ElementaryDomaine, ElementaryRegistre,
   ELEMENTARY_DEFAULT_LINES, ELEMENTARY_OPTIONAL_CATALOG,
 } from '@/lib/elementaryDefaults';
+import { NIVEAUX_PRESCOLAIRE, estPrescolaire, classesAvecNotes } from '@/lib/prescolaire';
 
 // Tables/RPCs élémentaire ajoutées via une migration collée manuellement par
 // l'utilisateur (voir plan) — pas encore dans le Database type généré, donc
@@ -111,11 +112,12 @@ export interface Student {
  */
 // Niveaux reconnus pour l'auto-provisionnement (matières par défaut + filtrage
 // des filières par niveau). Une classe peut aussi n'avoir aucun niveau
-// (maternelle, ou école qui ne veut pas utiliser ce système).
-export { NIVEAUX_ELEMENTAIRE };
+// (école qui ne veut pas utiliser ce système). Le préscolaire (PS, MS, GS)
+// n'a ni matières ni notes — voir src/lib/prescolaire.ts.
+export { NIVEAUX_ELEMENTAIRE, NIVEAUX_PRESCOLAIRE };
 export const NIVEAUX_COLLEGE = ['6ème', '5ème', '4ème', '3ème'] as const;
 export const NIVEAUX_LYCEE = ['2nde', '1ère', 'Tle'] as const;
-export const NIVEAUX = [...NIVEAUX_ELEMENTAIRE, ...NIVEAUX_COLLEGE, ...NIVEAUX_LYCEE] as const;
+export const NIVEAUX = [...NIVEAUX_PRESCOLAIRE, ...NIVEAUX_ELEMENTAIRE, ...NIVEAUX_COLLEGE, ...NIVEAUX_LYCEE] as const;
 export type Niveau = typeof NIVEAUX[number];
 
 export interface SchoolClass {
@@ -1583,7 +1585,8 @@ export const SchoolProvider = ({ children }: { children: ReactNode }) => {
 
     // Par défaut, une nouvelle classe est concernée par toutes les périodes
     // déjà créées pour l'année en cours (personnalisable ensuite).
-    if (gradePeriods.length > 0) {
+    // Sauf en maternelle : pas de notes, donc jamais dans une période.
+    if (gradePeriods.length > 0 && !estPrescolaire(newClass.niveau)) {
       const { error: pcError } = await supabase
         .from('grade_period_classes')
         .insert(gradePeriods.map(p => ({ school_id: schoolId, period_id: p.id, class_id: newClass.id })));
@@ -2211,12 +2214,14 @@ export const SchoolProvider = ({ children }: { children: ReactNode }) => {
     // Par défaut, TOUTES les classes existantes sont concernées par cette
     // nouvelle période (personnalisable ensuite via setClassInPeriod — utile
     // par ex. pour un examen interne réservé à certaines classes).
-    if (classes.length > 0) {
+    // La maternelle n'a pas de notes : elle n'entre jamais dans une période.
+    const classesNotees = classesAvecNotes(classes);
+    if (classesNotees.length > 0) {
       const { error: pcError } = await supabase
         .from('grade_period_classes')
-        .insert(classes.map(c => ({ school_id: schoolId, period_id: row.id, class_id: c.id })));
+        .insert(classesNotees.map(c => ({ school_id: schoolId, period_id: row.id, class_id: c.id })));
       if (pcError) console.error('Erreur association classes/période:', pcError);
-      else setPeriodClasses(prev => [...prev, ...classes.map(c => ({ periodId: row.id, classId: c.id }))]);
+      else setPeriodClasses(prev => [...prev, ...classesNotees.map(c => ({ periodId: row.id, classId: c.id }))]);
     }
 
     // Trois passes de provisionnement, dans cet ordre (chacune ne recouvre

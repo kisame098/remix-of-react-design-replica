@@ -34,6 +34,7 @@ export const guideProgrammeJson = (): string[] => [
   `Élémentaire : ${NIVEAUX_ELEMENTAIRE.join(', ')} (UNIQUEMENT dans "elementaireDefaults").`,
   `Collège : ${NIVEAUX_COLLEGE.join(', ')}.`,
   `Lycée : ${NIVEAUX_LYCEE.join(', ')}.`,
+  'Maternelle (PS, MS, GS) : aucune matière, ne jamais l\'écrire dans ce fichier.',
   '',
   'LES TROIS PARTIES DU FICHIER',
   '"niveauDefaults" : les matières communes à tous les élèves d\'un niveau du COLLÈGE ou du LYCÉE (jamais CI à CM2).',

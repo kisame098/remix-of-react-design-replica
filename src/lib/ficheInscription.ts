@@ -1,4 +1,5 @@
 import type { InfosEcole } from '@/lib/documentsEcole';
+import { libelleParDefautNiveau } from '@/lib/prescolaire';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // DONNÉES DE LA FICHE D'INSCRIPTION — pur, sans PDF ni réseau.
@@ -105,7 +106,7 @@ export const construireFiche = (e: EntreeFiche): FicheInscriptionData => {
       email: e.eleve.email?.trim() || undefined,
       photo: e.eleve.photoUrl?.startsWith('data:image/') ? e.eleve.photoUrl : null,
     },
-    scolarite: { classe: e.classe?.name, niveau: e.classe?.niveau, filiere: e.filiere },
+    scolarite: { classe: e.classe?.name, niveau: e.classe?.niveau && libelleParDefautNiveau(e.classe.niveau), filiere: e.filiere },
     // Le tuteur 2 n'apparaît que s'il a été renseigné.
     tuteurs: [tuteur(e.eleve.tutor1), ...(e.eleve.tutor2?.phone ? [tuteur(e.eleve.tutor2)] : [])],
     frais: e.tarifs

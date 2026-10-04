@@ -1,4 +1,5 @@
 import { NIVEAUX, NIVEAUX_COLLEGE, NIVEAUX_ELEMENTAIRE, type Filiere, type NiveauDefaultSubject, type ElementaryDefaultLine } from '@/contexts/SchoolContext';
+import { NIVEAUX_PRESCOLAIRE, libelleParDefautNiveau } from '@/lib/prescolaire';
 
 // ─── Blocs du programme/cursus ───────────────────────────────────────────────
 // Source UNIQUE de vérité pour "quels blocs existent dans Cursus" — utilisée à
@@ -43,6 +44,9 @@ export const buildProgrammeCards = (
     })));
 
   return [
+    // Maternelle : un bloc sans contenu (ni matières ni barème), qui existe
+    // pour qu'on puisse y créer des classes — et le supprimer si l'école n'en a pas.
+    ...visibles(NIVEAUX_PRESCOLAIRE).map(niveau => ({ type: 'niveau' as const, niveau })),
     ...elementaireNiveaux.map(niveau => ({ type: 'niveau' as const, niveau })),
     ...collegeNiveaux.map(niveau => ({ type: 'niveau' as const, niveau })),
     ...filiereCards,
@@ -66,7 +70,7 @@ export const getNiveauLabels = (settings: Record<string, unknown> | undefined | 
   (settings?.niveauLabels as Record<string, string> | undefined) ?? {};
 
 export const resolveNiveauLabel = (niveauLabels: Record<string, string>, niveau: string): string =>
-  niveauLabels[niveau]?.trim() || niveau;
+  niveauLabels[niveau]?.trim() || libelleParDefautNiveau(niveau);
 
 export const programmeCardLabel = (card: ProgrammeCard, niveauLabels: Record<string, string> = {}): string =>
   card.type === 'niveau'

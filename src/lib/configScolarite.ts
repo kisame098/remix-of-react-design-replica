@@ -18,6 +18,7 @@
 // (configScolarite.test.ts).
 // ═══════════════════════════════════════════════════════════════════════════
 import { NIVEAUX_ELEMENTAIRE } from '@/lib/elementaryDefaults';
+import { estPrescolaire } from '@/lib/prescolaire';
 
 export type Cycle = 'elementaire' | 'college' | 'lycee';
 export type NombrePeriodes = 2 | 3;
@@ -47,9 +48,10 @@ export const CONFIG_PAR_DEFAUT: ConfigScolarite = {
 
 const NIVEAUX_LYCEE = ['2nde', '1ère', 'Tle'];
 
-/** Cycle d'un niveau de classe. Niveau libre (hors listes) : traité comme le collège (barème sur 20). */
+/** Cycle d'un niveau de classe. Niveau libre (hors listes) : traité comme le collège (barème sur 20).
+ *  La maternelle n'a pas de cycle noté : ni périodes, ni seuil de passage. */
 export const cycleDuNiveau = (niveau: string | undefined): Cycle | undefined => {
-  if (!niveau) return undefined;
+  if (!niveau || estPrescolaire(niveau)) return undefined;
   if ((NIVEAUX_ELEMENTAIRE as readonly string[]).includes(niveau)) return 'elementaire';
   if (NIVEAUX_LYCEE.includes(niveau)) return 'lycee';
   return 'college';

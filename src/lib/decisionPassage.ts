@@ -19,6 +19,8 @@
 // résultats catastrophiques recevait un bulletin l'autorisant à passer.
 // ═══════════════════════════════════════════════════════════════════════════
 
+import { estPrescolaire } from '@/lib/prescolaire';
+
 /** Moyenne minimale pour passer, par système de notation. */
 export const SEUIL_ELEMENTAIRE = 5;   // sur 10
 export const SEUIL_SECONDAIRE  = 10;  // sur 20
@@ -43,13 +45,13 @@ const estElementaire = (niveau: string): boolean =>
 
 /** Seuil applicable au niveau — utile pour l'afficher à côté de la décision. */
 export const seuilDePassage = (niveau: string | undefined): number | undefined => {
-  if (!niveau) return undefined;
+  if (!niveau || estPrescolaire(niveau)) return undefined;
   return estElementaire(niveau) ? SEUIL_ELEMENTAIRE : SEUIL_SECONDAIRE;
 };
 
 /** Barème du niveau : 10 en élémentaire, 20 ensuite. */
 export const baremeDuNiveau = (niveau: string | undefined): number | undefined => {
-  if (!niveau) return undefined;
+  if (!niveau || estPrescolaire(niveau)) return undefined;
   return estElementaire(niveau) ? 10 : 20;
 };
 
@@ -62,7 +64,8 @@ export const baremeDuNiveau = (niveau: string | undefined): number | undefined =
  *     redoubler un élève sur du vide.
  */
 export const decisionDePassage = (c: ContexteDecision): string | undefined => {
-  if (!c.estDernierePeriode || !c.niveau) return undefined;
+  // Pas de notes en maternelle : jamais de décision de passage.
+  if (!c.estDernierePeriode || !c.niveau || estPrescolaire(c.niveau)) return undefined;
   if (c.moyenneAnnuelle === undefined || Number.isNaN(c.moyenneAnnuelle)) return undefined;
 
   const seuil = c.seuil ?? seuilDePassage(c.niveau)!;
