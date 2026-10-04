@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { LayoutDashboard, CreditCard, BarChart3, Settings2, Wallet, UsersRound, ScanLine, History, BadgePercent } from 'lucide-react';
+import { LayoutDashboard, CreditCard, BarChart3, Settings2, Wallet, UsersRound, ScanLine, History, BadgePercent, FileText } from 'lucide-react';
 import PaymentOverview from '@/components/payment/PaymentOverview';
 import PaymentEntry from '@/components/payment/PaymentEntry';
 import PaymentTracking from '@/components/payment/PaymentTracking';
@@ -7,8 +7,9 @@ import PaymentConfig from '@/components/payment/PaymentConfig';
 import PaymentHistory from '@/components/payment/PaymentHistory';
 import ServiceRoster from '@/components/payment/ServiceRoster';
 import TarifsEleves from '@/components/payment/TarifsEleves';
+import Facturation from '@/components/payment/Facturation';
 
-type Tab = 'overview' | 'entry' | 'scan' | 'tracking' | 'history' | 'roster' | 'reductions' | 'config';
+type Tab = 'overview' | 'entry' | 'scan' | 'tracking' | 'facturation' | 'history' | 'roster' | 'reductions' | 'config';
 
 interface NavTab {
   id: Tab;
@@ -22,6 +23,7 @@ const TABS: NavTab[] = [
   { id: 'entry',     label: 'Paiement',         icon: CreditCard,      description: 'Encaisser un paiement'      },
   { id: 'scan',      label: 'Scanner',          icon: ScanLine,        description: 'Scan QR direct à la caisse' },
   { id: 'tracking',  label: 'Suivi',             icon: BarChart3,       description: 'Qui a payé / pas payé'      },
+  { id: 'facturation', label: 'Facturation',     icon: FileText,        description: 'Factures et rappels'        },
   { id: 'history',   label: 'Historique',        icon: History,         description: 'Tous les paiements, annulation' },
   { id: 'roster',    label: 'Services',          icon: UsersRound,      description: 'Inscriptions aux services'  },
   { id: 'reductions', label: 'Réductions',       icon: BadgePercent,    description: 'Tarif personnalisé d\'un élève' },
@@ -82,6 +84,7 @@ const PaymentManagement = () => {
           {activeTab === 'entry'     && <PaymentEntry />}
           {activeTab === 'scan'      && <PaymentEntry initialMode="scan" />}
           {activeTab === 'tracking'  && <PaymentTracking />}
+          {activeTab === 'facturation' && <Facturation />}
           {activeTab === 'history'   && <PaymentHistory />}
           {activeTab === 'roster'    && <ServiceRoster />}
           {activeTab === 'reductions' && <TarifsEleves />}

@@ -94,6 +94,7 @@ describe('garde-fou : aucune écriture comptable n\'est supprimable', () => {
     'salary_payments',
     'billing_transactions',
     'platform_payment_claims',
+    'factures',
   ];
 
   it.each(LEDGERS)('personne ne supprime de ligne dans %s', (table) => {
