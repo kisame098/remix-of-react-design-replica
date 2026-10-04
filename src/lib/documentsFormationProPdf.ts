@@ -1,7 +1,7 @@
 import jsPDF from 'jspdf';
 import type { InfosEcole } from '@/lib/documentsEcole';
 import { dateDakar } from '@/lib/documentsEcole';
-import { couleurDominanteDuLogo, paletteDepuis, type Palette } from '@/lib/couleurLogo';
+import { couleurDominanteDuLogo, paletteDepuis, PALETTE_ECONOMIQUE, type Palette } from '@/lib/couleurLogo';
 import {
   ENCRE, GRIS, dessinerBandeau, dessinerTitre, ecrireAjuste, etiquette, filigrane, guilloche, signatureSenClass,
 } from '@/lib/documentsDesign';
@@ -45,7 +45,11 @@ const note = (n: number | null | undefined) => (n == null ? '—' : (Math.round(
 
 const civilite = (sexe?: string) => (sexe === 'femme' ? 'Mme' : 'M.');
 
-const palette = async (ecole: InfosEcole): Promise<Palette> => paletteDepuis(await couleurDominanteDuLogo(ecole.logo));
+/** Imprimante noir et blanc : aucun grand aplat (choix retenu dans la fenêtre d'aperçu). */
+export interface OptionsImpression { economique?: boolean }
+
+const palette = async (ecole: InfosEcole, o: OptionsImpression = {}): Promise<Palette> =>
+  o.economique ? PALETTE_ECONOMIQUE : paletteDepuis(await couleurDominanteDuLogo(ecole.logo));
 
 // ─── Briques communes ─────────────────────────────────────────────────────────
 
@@ -358,8 +362,8 @@ const pageBulletin = (doc: jsPDF, d: DonneesBulletins, b: BulletinEleve, c: Pale
 };
 
 /** Un bulletin par élève, chacun sur sa page, dans un seul PDF. */
-export async function genererBulletinsPdf(d: DonneesBulletins): Promise<jsPDF> {
-  const c = await palette(d.ecole);
+export async function genererBulletinsPdf(d: DonneesBulletins, o: OptionsImpression = {}): Promise<jsPDF> {
+  const c = await palette(d.ecole, o);
   const doc = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' });
   d.eleves.forEach((b, i) => {
     if (i > 0) doc.addPage('a4', 'portrait');
@@ -523,8 +527,8 @@ const pageReleve = (doc: jsPDF, d: DonneesReleves, k: CandidatReleve, c: Palette
 };
 
 /** Un relevé par candidat, chacun sur sa page, dans un seul PDF. */
-export async function genererRelevesPdf(d: DonneesReleves): Promise<jsPDF> {
-  const c = await palette(d.ecole);
+export async function genererRelevesPdf(d: DonneesReleves, o: OptionsImpression = {}): Promise<jsPDF> {
+  const c = await palette(d.ecole, o);
   const doc = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' });
   d.candidats.forEach((k, i) => {
     if (i > 0) doc.addPage('a4', 'portrait');
@@ -546,8 +550,8 @@ export interface DonneesConvocations {
 }
 
 /** Une convocation par candidat, avec le planning de ses épreuves. */
-export async function genererConvocationsPdf(d: DonneesConvocations): Promise<jsPDF> {
-  const c = await palette(d.ecole);
+export async function genererConvocationsPdf(d: DonneesConvocations, o: OptionsImpression = {}): Promise<jsPDF> {
+  const c = await palette(d.ecole, o);
   const doc = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' });
   d.candidats.forEach((cand, i) => {
     if (i > 0) doc.addPage('a4', 'portrait');
@@ -571,11 +575,11 @@ export async function genererConvocationsPdf(d: DonneesConvocations): Promise<js
     const cols = [30, U - 30 - 34 - 20 - 32, 34, 20, 32];
     const titres = ['TOUR', 'ÉPREUVE', 'DATE', 'HEURE', 'SALLE'];
     let x = M;
-    doc.setFillColor(c.fonce);
+    doc.setFillColor(c.economique ? c.pale : c.fonce);
     doc.rect(M, y, U, 8, 'F');
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(8.4);
-    doc.setTextColor('#FFFFFF');
+    doc.setTextColor(c.economique ? c.fonce : '#FFFFFF');
     titres.forEach((t, j) => { doc.text(t, x + 3, y + 5.4); x += cols[j]; });
     y += 8;
     d.planning.forEach((l, j) => {
@@ -609,8 +613,8 @@ export interface DonneesAttestationStage {
   duree?: string;
 }
 
-export async function genererAttestationStagePdf(d: DonneesAttestationStage): Promise<jsPDF> {
-  const c = await palette(d.ecole);
+export async function genererAttestationStagePdf(d: DonneesAttestationStage, o: OptionsImpression = {}): Promise<jsPDF> {
+  const c = await palette(d.ecole, o);
   const doc = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' });
   enTete(doc, d.ecole, c);
   let y = HAUT_BANDEAU + 22;
@@ -727,9 +731,9 @@ const pageDiplome = (doc: jsPDF, d: DocumentOfficiel, ecole: InfosEcole, c: Pale
 };
 
 /** Un document officiel déjà émis (ou qui vient de l'être) : il s'imprime depuis son contenu figé. */
-export async function genererDocumentOfficielPdf(d: DocumentOfficiel, logo: string | null | undefined): Promise<jsPDF> {
+export async function genererDocumentOfficielPdf(d: DocumentOfficiel, logo: string | null | undefined, o: OptionsImpression = {}): Promise<jsPDF> {
   const ecole: InfosEcole = { ...d.contenu.ecole, logo: logo ?? null };
-  const c = await palette(ecole);
+  const c = await palette(ecole, o);
   const orientation = d.type === 'diplome' ? 'landscape' : 'portrait';
   const doc = new jsPDF({ unit: 'mm', format: 'a4', orientation });
   if (d.type === 'diplome') pageDiplome(doc, d, ecole, c);

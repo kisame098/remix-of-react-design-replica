@@ -10,7 +10,7 @@ interface Props {
   description?: string;
   nomFichier: string;
   /** Fabrique le PDF — le générateur n'est chargé qu'à ce moment (import dynamique). */
-  fabriquer: () => Promise<jsPDF>;
+  fabriquer: (o: { economique: boolean }) => Promise<jsPDF>;
   variant?: ButtonProps['variant'];
   size?: ButtonProps['size'];
   className?: string;
@@ -30,10 +30,13 @@ export const BoutonDocument = ({ children, titre, description, nomFichier, fabri
           {children}
         </Button>
       </span>
-      <DocumentDialog
-        ouvert={ouvert} onFermer={() => setOuvert(false)}
-        titre={titre} description={description} nomFichier={nomFichier} generer={fabriquer}
-      />
+      {/* Monté à l'ouverture seulement : le mode d'impression retenu est relu à chaque fois. */}
+      {ouvert && (
+        <DocumentDialog
+          ouvert onFermer={() => setOuvert(false)}
+          titre={titre} description={description} nomFichier={nomFichier} generer={fabriquer} typeDocument="formation"
+        />
+      )}
     </>
   );
 };

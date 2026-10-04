@@ -109,9 +109,10 @@ export function useRecus(): { montrerRecu: (paiements: Payment[], options?: Opti
           ? 'Reçu annulé : il garde son numéro et fait foi de l\'annulation. Remettez-le à la famille.'
           : ouvert.duplicata ? 'Duplicata d\'un reçu déjà remis.' : 'Le paiement est enregistré : remettez ce reçu à la famille.'}
         nomFichier={`Recu_${numero}_${nomDeFichier(eleve ? `${eleve.lastName}_${eleve.firstName}` : premier.studentUniqueId)}`}
-        generer={async () => {
+        typeDocument="recu"
+        generer={async ({ economique }) => {
           const [{ genererRecuPdf }] = await Promise.all([import('@/lib/recuPdf')]);
-          return genererRecuPdf(construireRecu({
+          return genererRecuPdf({ economique, ...construireRecu({
             ecole: infosEcole(school),
             recu: ouvert.recu,
             paiements: ouvert.paiements,
@@ -123,7 +124,7 @@ export function useRecus(): { montrerRecu: (paiements: Payment[], options?: Opti
             services: annexServices,
             libelleMois,
             duplicata: ouvert.duplicata,
-          }));
+          }) });
         }}
       />
     );

@@ -2,10 +2,10 @@ import jsPDF from 'jspdf';
 import type { RecuData } from '@/lib/recu';
 import { dateDakar, dateLongueDakar } from '@/lib/documentsEcole';
 import {
-  ENCRE, FILET, GRIS, ROUGE, VERT_TAMPON, dessinerBandeau, dessinerTitre, ecrireAjuste, espace, etiquette,
+  ENCRE, FILET, GRIS, ROUGE, VERT_TAMPON, blocFort, dessinerBandeau, dessinerTitre, ecrireAjuste, espace, etiquette,
   filigrane, guilloche, opacite, polygone, signatureSenClass, texteTourne, tourne,
 } from '@/lib/documentsDesign';
-import { couleurDominanteDuLogo, paletteDepuis, type Palette } from '@/lib/couleurLogo';
+import { couleurDominanteDuLogo, paletteDepuis, PALETTE_ECONOMIQUE, type Palette } from '@/lib/couleurLogo';
 import { formaterMontant, montantEnLettres } from '@/lib/montantEnLettres';
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -143,11 +143,17 @@ const enteteTableau = ({ doc, c }: Etat, y: number): number => {
 };
 
 const enTeteDeSuite = ({ doc, c, data }: Etat): number => {
-  doc.setFillColor(c.fonce);
-  doc.rect(0, 0, L, 14, 'F');
+  if (c.economique) {
+    doc.setDrawColor(c.fonce);
+    doc.setLineWidth(0.6);
+    doc.line(M, 14, L - M, 14);
+  } else {
+    doc.setFillColor(c.fonce);
+    doc.rect(0, 0, L, 14, 'F');
+  }
   doc.setFont('times', 'bold');
   doc.setFontSize(10);
-  doc.setTextColor('#FFFFFF');
+  doc.setTextColor(c.economique ? c.fonce : '#FFFFFF');
   doc.text(`${data.ecole.nom.toUpperCase()}`, M, 8.6);
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(8);
@@ -184,15 +190,15 @@ const blocTotal = ({ doc, c, data, d }: Etat, y: number, annule: boolean): numbe
   const montant = annule ? data.lignes.reduce((s, l) => s + l.montant, 0) : data.total;
   const w = 84;
   const x = L - M - w;
-  doc.setFillColor(annule ? GRIS : c.fonce);
-  doc.roundedRect(x, y, w, d.hTotal, 1.8, 1.8, 'F');
+  const texte = blocFort(doc, c, x, y, w, d.hTotal, annule ? GRIS : c.fonce);
   const dy = d.hTotal - 13.6;
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(7.4);
-  doc.setTextColor('#FFFFFF');
+  doc.setTextColor(texte);
   opacite(doc, 0.85);
   espace(doc, annule ? 'TOTAL ANNULÉ' : 'TOTAL PAYÉ', x + 5, y + 5.6 + dy / 2, 0.22);
   opacite(doc, 1);
+  doc.setTextColor(texte);
   doc.setFontSize(17);
   doc.text(`${formaterMontant(montant)}`, x + w - 15.5, y + 10.6 + dy, { align: 'right' });
   doc.setFontSize(8.4);
@@ -200,11 +206,12 @@ const blocTotal = ({ doc, c, data, d }: Etat, y: number, annule: boolean): numbe
   return y + d.hTotal;
 };
 
-const tamponAcquitte = ({ doc, data }: Etat, cx: number, cy: number) => {
+const tamponAcquitte = ({ doc, c, data }: Etat, cx: number, cy: number) => {
+  const encre = c.economique ? ENCRE : VERT_TAMPON;
   doc.saveGraphicsState();
   opacite(doc, 0.88);
-  cadreTampon(doc, cx, cy, 34, 15.5, 11, VERT_TAMPON);
-  doc.setTextColor(VERT_TAMPON);
+  cadreTampon(doc, cx, cy, 34, 15.5, 11, encre);
+  doc.setTextColor(encre);
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(13.5);
   texteTourne(doc, 'ACQUITTÉ', cx, cy - 1.4, 11, 0.4);
@@ -310,7 +317,11 @@ const marqueAnnule = ({ doc, data }: Etat, yLegende: number) => {
 
 // ─── Assemblage ───────────────────────────────────────────────────────────────
 
-export async function genererRecuPdf(data: RecuData & { couleur?: string | null }): Promise<jsPDF> {
+export async function genererRecuPdf(data: RecuData & {
+  couleur?: string | null;
+  /** Imprimante noir et blanc : aucun grand aplat (Paramètres → École). */
+  economique?: boolean;
+}): Promise<jsPDF> {
   const doc = new jsPDF({ unit: 'mm', format: 'a5', orientation: 'portrait' });
   doc.setProperties({
     title: `Reçu ${data.numero}`,
@@ -320,9 +331,11 @@ export async function genererRecuPdf(data: RecuData & { couleur?: string | null 
   });
 
   // La teinte du document : celle du logo de l'école (ou la couleur passée).
-  const couleur = data.couleur !== undefined ? data.couleur : await couleurDominanteDuLogo(data.ecole.logo);
+  const c = data.economique
+    ? PALETTE_ECONOMIQUE
+    : paletteDepuis(data.couleur !== undefined ? data.couleur : await couleurDominanteDuLogo(data.ecole.logo));
   const d = data.lignes.length > LIGNES_MODE_NORMAL ? COMPACTE : NORMALE;
-  const e: Etat = { doc, c: paletteDepuis(couleur), data, d };
+  const e: Etat = { doc, c, data, d };
   const annule = data.annule !== null;
 
   filigrane(doc, data.ecole, L, H, 84, e.c.fonce);
