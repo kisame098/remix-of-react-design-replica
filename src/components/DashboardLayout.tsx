@@ -3,6 +3,7 @@ import { Outlet } from 'react-router-dom';
 import { DashboardSidebar } from './DashboardSidebar';
 import { ChargementPage } from './ChargementPage';
 import { BandeauDonneesEnregistrees } from './BandeauDonneesEnregistrees';
+import { BandeauAbonnement } from './BandeauAbonnement';
 import { useSchool } from '@/contexts/SchoolContext';
 
 export const DashboardLayout = () => {
@@ -14,6 +15,8 @@ export const DashboardLayout = () => {
     <div className="flex h-screen bg-background overflow-hidden">
       <DashboardSidebar />
       <main className="flex-1 min-h-0 overflow-y-auto relative">
+        {/* Fin d'essai ou d'abonnement proche : visible sur tous les écrans de l'école. */}
+        <BandeauAbonnement />
         {instantaneLe && (
           <div className="px-4 pt-4 md:px-6">
             <BandeauDonneesEnregistrees enregistreLe={instantaneLe} />
