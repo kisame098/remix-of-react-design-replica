@@ -12,7 +12,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
   Search, CreditCard, CheckCircle2, Circle, User, Lock,
-  AlertCircle, Loader2, QrCode, ScanLine,
+  AlertCircle, Loader2, QrCode, ScanLine, LockOpen,
 } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import { useRecus } from '@/hooks/useRecus';
@@ -49,7 +49,13 @@ const MethodButton = ({ method, selected, onSelect }: { method: PaymentMethod; s
 );
 
 
-const PaymentRow = ({ item, selected, onToggle }: { item: PayableItem; selected: boolean; onToggle: () => void }) => {
+const PaymentRow = ({ item, selected, deverrouille, onToggle }: {
+  item: PayableItem;
+  selected: boolean;
+  /** Le verrou levé (sélection libre) rend cette ligne cochable. */
+  deverrouille: boolean;
+  onToggle: () => void;
+}) => {
   if (item.paid) {
     return (
       <div className="flex items-center gap-3 px-3 py-2.5 rounded-lg bg-green-50 dark:bg-green-950/20">
@@ -63,7 +69,7 @@ const PaymentRow = ({ item, selected, onToggle }: { item: PayableItem; selected:
       </div>
     );
   }
-  if (item.blocked) {
+  if (item.blocked && !deverrouille) {
     return (
       <div className="flex items-center gap-3 px-3 py-2.5 rounded-lg bg-muted/30 opacity-55">
         <Lock className="h-4 w-4 text-muted-foreground flex-shrink-0" />
@@ -105,6 +111,11 @@ const PaymentRow = ({ item, selected, onToggle }: { item: PayableItem; selected:
           <AlertCircle className="h-3 w-3" /> En retard
         </Badge>
       )}
+      {item.blocked && (
+        <Badge variant="outline" className="text-xs gap-1 text-violet-700 border-violet-300 bg-violet-50">
+          <LockOpen className="h-3 w-3" /> verrou levé
+        </Badge>
+      )}
       <span className="text-sm font-semibold">{fmt(item.amount)}</span>
     </button>
   );
@@ -136,6 +147,7 @@ const PaymentEntry = ({ initialMode = 'search' }: { initialMode?: 'search' | 'sc
   const [scanFeedback, setScanFeedback]       = useState<{ type: 'ok' | 'error'; text: string } | null>(null);
   const [selectedStudentId, setSelectedStudentId] = useState<string | null>(null);
   const [selectedItems, setSelectedItems]     = useState<Set<string>>(new Set());
+  const [verrouLeve, setVerrouLeve]       = useState(false);
   const [method, setMethod]                   = useState<PaymentMethod>('especes');
   const [reference, setReference]             = useState('');
   const [note, setNote]                       = useState('');
@@ -190,9 +202,16 @@ const PaymentEntry = ({ initialMode = 'search' }: { initialMode?: 'search' | 'sc
     });
   }, [selectedStudent, tuitionConfig, studentServices, hasPaidInscription, hasPaidTuitionMonth, hasPaidService, getAcomptes, getAjustementsEleve, isEnrolledInService, selectedClass, academicMonths, billingRules]);
 
+  // Éléments cochables : verrou fermé, le verrou séquentiel masque les mois
+  // bloqués ; verrou levé, tout ce qui n'est pas payé devient cochable.
+  const selectionnables = useMemo(
+    () => payableItems.filter(i => !i.paid && (verrouLeve || !i.blocked)),
+    [payableItems, verrouLeve],
+  );
+
   const itemsSelectionnes = useMemo(
-    () => payableItems.filter(i => selectedItems.has(i.id) && !i.paid && !i.blocked),
-    [payableItems, selectedItems],
+    () => selectionnables.filter(i => selectedItems.has(i.id)),
+    [selectionnables, selectedItems],
   );
   // Ce que la caisse va encaisser pour chaque élément : le montant saisi, sinon le reste.
   const versements = useMemo(
@@ -204,7 +223,7 @@ const PaymentEntry = ({ initialMode = 'search' }: { initialMode?: 'search' | 'sc
     [versements],
   );
 
-  const unpaidCount = payableItems.filter(i => !i.paid && !i.blocked).length;
+  const unpaidCount = selectionnables.length;
 
   const toggleItem = (id: string) => {
     setMontantsSaisis(prev => { const n = { ...prev }; delete n[id]; return n; });
@@ -215,11 +234,33 @@ const PaymentEntry = ({ initialMode = 'search' }: { initialMode?: 'search' | 'sc
     });
   };
 
+  // Verrou de la caisse : FERMÉ par défaut — chaque mois se paie dans l'ordre,
+  // le précédent d'abord (règle de src/lib/dueItems.ts). Le déverrouiller est
+  // la dérogation explicite pour les familles qui règlent toute l'année en une
+  // seule visite : tous les frais deviennent cochables d'un coup (4 mois, 8,
+  // l'année entière), sans changer ni les montants ni ce qui est dû.
+  // L'encaissement reste séquentiel, élément par élément, et la base garde le
+  // dernier mot (contrôle d'unicité, code 23505). À la refermeture, tout
+  // élément qui redevient verrouillé sort de la sélection — verrou fermé, un
+  // mois verrouillé ne peut pas être encaissé. Le verrou se referme au
+  // changement d'élève ; l'encaissement part sur UN SEUL reçu, comme tout
+  // paiement groupé de la caisse (montrerRecu regroupe les paiements passés).
+  const basculerVerrou = () => {
+    if (verrouLeve) {
+      setSelectedItems(prev => new Set([...prev].filter(id => {
+        const it = payableItems.find(i => i.id === id);
+        return it ? !it.blocked : false;
+      })));
+    }
+    setVerrouLeve(o => !o);
+  };
+
   const [pendingItemId, setPendingItemId] = useState<string | null>(null);
 
   const selectStudent = (id: string) => {
     setSelectedStudentId(id);
     setSelectedItems(new Set());
+    setVerrouLeve(false);
     setMontantsSaisis({});
     setSearch('');
     setReference('');
@@ -261,14 +302,14 @@ const PaymentEntry = ({ initialMode = 'search' }: { initialMode?: 'search' | 'sc
     if (!pendingItemId) return;
     const target = payableItems.find(i => i.id === pendingItemId);
     if (!target) return; // items pas encore recalculés pour ce student — on attend le prochain rendu
-    if (!target.paid && !target.blocked) {
+    if (!target.paid && (verrouLeve || !target.blocked)) {
       setSelectedItems(new Set([pendingItemId]));
     } else if (target.paid) {
       setScanFeedback({ type: 'error', text: 'Cet élément est déjà payé' });
       setTimeout(() => setScanFeedback(null), 2500);
     }
     setPendingItemId(null);
-  }, [payableItems, pendingItemId]);
+  }, [payableItems, pendingItemId, verrouLeve]);
 
   const handlePay = async () => {
     if (!selectedStudent || selectedItems.size === 0) return;
@@ -447,7 +488,7 @@ const PaymentEntry = ({ initialMode = 'search' }: { initialMode?: 'search' | 'sc
                 </div>
               </div>
               <button
-                onClick={() => { setSelectedStudentId(null); setSelectedItems(new Set()); }}
+                onClick={() => { setSelectedStudentId(null); setSelectedItems(new Set()); setVerrouLeve(false); }}
                 className="text-xs text-muted-foreground hover:text-foreground mt-2 w-full text-center"
               >
                 Changer d'élève
@@ -482,15 +523,35 @@ const PaymentEntry = ({ initialMode = 'search' }: { initialMode?: 'search' | 'sc
                   {unpaidCount > 0 && (
                     <Badge variant="secondary" className="ml-2 text-xs">{unpaidCount} en attente</Badge>
                   )}
+                  {verrouLeve && (
+                    <Badge variant="outline" className="ml-2 text-xs gap-1 text-violet-700 border-violet-300 bg-violet-50">
+                      <LockOpen className="h-3 w-3" /> Verrou ouvert — sélection libre
+                    </Badge>
+                  )}
                 </h3>
-                {unpaidCount > 0 && (
-                  <Button
-                    variant="outline" size="sm" className="text-xs h-7"
-                    onClick={() => setSelectedItems(new Set(payableItems.filter(i => !i.paid && !i.blocked).map(i => i.id)))}
-                  >
-                    Tout sélectionner
-                  </Button>
-                )}
+                <div className="flex items-center gap-1.5">
+                  {(verrouLeve || payableItems.some(i => i.blocked)) && (
+                    <Button
+                      variant={verrouLeve ? 'default' : 'outline'} size="sm"
+                      className="text-xs h-7 gap-1.5"
+                      onClick={basculerVerrou}
+                      title={verrouLeve
+                        ? "Verrou ouvert : tous les frais de l'année sont cochables. Cliquez pour rétablir le paiement dans l'ordre, mois par mois."
+                        : "Verrou fermé : chaque mois se paie dans l'ordre, le précédent d'abord. Cliquez pour déverrouiller et cocher tous les frais de l'année d'un coup (un seul reçu)."}
+                    >
+                      {verrouLeve ? <LockOpen className="h-3.5 w-3.5" /> : <Lock className="h-3.5 w-3.5" />}
+                      {verrouLeve ? 'Déverrouillé' : 'Verrou'}
+                    </Button>
+                  )}
+                  {unpaidCount > 0 && (
+                    <Button
+                      variant="outline" size="sm" className="text-xs h-7"
+                      onClick={() => setSelectedItems(new Set(selectionnables.map(i => i.id)))}
+                    >
+                      Tout sélectionner
+                    </Button>
+                  )}
+                </div>
               </div>
 
               {payableItems.length === 0 ? (
@@ -505,7 +566,8 @@ const PaymentEntry = ({ initialMode = 'search' }: { initialMode?: 'search' | 'sc
                     key={item.id}
                     item={item}
                     selected={selectedItems.has(item.id)}
-                    onToggle={() => !item.paid && !item.blocked && toggleItem(item.id)}
+                    deverrouille={verrouLeve && item.blocked}
+                    onToggle={() => !item.paid && (verrouLeve || !item.blocked) && toggleItem(item.id)}
                   />
                 ))
               )}
