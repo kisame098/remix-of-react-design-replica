@@ -29,29 +29,56 @@ const M = 11;                      // marge
 const U = L - 2 * M;               // largeur utile
 
 /**
- * Deux densités. Un reçu ordinaire (jusqu'à 4 lignes) respire ; au-delà, on
- * resserre pour qu'un encaissement de six mois + inscription + service tienne
- * encore sur UNE page — c'est la page que l'on agrafe, pas deux.
+ * Trois densités. Un reçu ordinaire (jusqu'à 4 lignes) respire ; au-delà, on
+ * resserre ; et quand une colonne ne suffit plus (une année entière payée d'un
+ * coup : inscription + 10 à 12 mois + services), le tableau passe sur DEUX
+ * colonnes. Jusqu'à une vingtaine de lignes, tout tient sur UNE page — c'est la
+ * page que l'on agrafe, pas deux.
  */
 interface Dims {
   bandeau: number;      // hauteur du bandeau
   k: number;            // facteur appliqué aux positions internes du bandeau
+  ecartTitre: number;   // entre le bandeau et le titre
   titre: number;        // hauteur du bloc titre
   carte: number;        // hauteur de la carte élève
+  ecartCarte: number;   // entre la carte élève et le tableau
   pas: number;          // hauteur d'une ligne du tableau
   basTableau: number;   // ordonnée au-delà de laquelle le tableau passe à la page suivante
+  ecartTotal: number;   // entre le tableau et le bloc total
   hTotal: number;       // hauteur du bloc total
+  ecartLettres: number; // entre le bloc total et la somme en lettres
   signatures: number;   // ordonnée minimale du haut des signatures, depuis le bas
   cachet: number;       // rayon du cachet
+  tampon: number;       // échelle du tampon ACQUITTÉ
 }
 
-const NORMALE: Dims = { bandeau: 32, k: 1, titre: 20.5, carte: 22.5, pas: 6.8, basTableau: H - 84, hTotal: 13.6, signatures: 46, cachet: 10.5 };
-const COMPACTE: Dims = { bandeau: 27, k: 0.85, titre: 17.5, carte: 19.5, pas: 5.6, basTableau: H - 76, hTotal: 12.4, signatures: 40, cachet: 8.5 };
+const NORMALE: Dims = {
+  bandeau: 32, k: 1, ecartTitre: 9, titre: 20.5, carte: 22.5, ecartCarte: 5, pas: 6.8, basTableau: H - 84,
+  ecartTotal: 4.5, hTotal: 13.6, ecartLettres: 8, signatures: 46, cachet: 10.5, tampon: 1,
+};
+const COMPACTE: Dims = {
+  bandeau: 27, k: 0.85, ecartTitre: 7.5, titre: 17.5, carte: 19.5, ecartCarte: 3.5, pas: 5.6, basTableau: H - 76,
+  ecartTotal: 3.5, hTotal: 12.4, ecartLettres: 6.5, signatures: 40, cachet: 8.5, tampon: 1,
+};
+/** Tableau sur deux colonnes ; `pas` est recalculé selon le nombre de lignes. */
+const DENSE: Dims = {
+  bandeau: 25, k: 0.8, ecartTitre: 5.5, titre: 17.5, carte: 18.5, ecartCarte: 3, pas: 5.6, basTableau: H - 76,
+  ecartTotal: 4, hTotal: 11, ecartLettres: 6.5, signatures: 38, cachet: 7.5, tampon: 0.85,
+};
 
 /** Au-delà de ce nombre de lignes, le reçu passe en mode compact. */
 export const LIGNES_MODE_NORMAL = 4;
 
-type Etat = { doc: jsPDF; c: Palette; data: RecuData; d: Dims };
+/** Hauteur de ligne en deçà de laquelle le tableau à deux colonnes deviendrait illisible. */
+export const PAS_MINIMAL = 4.3;
+
+/** Écart entre les deux colonnes du tableau. */
+const GOUTTIERE = 6;
+
+/** Ligne de base du pied de page. */
+const Y_PIED = H - 12.4;
+
+type Etat = { doc: jsPDF; c: Palette; data: RecuData; d: Dims; colonnes: 1 | 2 };
 
 // ─── Petits outils ────────────────────────────────────────────────────────────
 
@@ -130,15 +157,24 @@ const carteEleve = ({ doc, c, data, d }: Etat, y: number): number => {
     doc.setTextColor(ENCRE);
     ecrireAjuste(doc, valeur, x, y + 20 * k, largeur - 3, { taille: 9.4, tailleMin: 7 });
   });
-  return y + h + (d.k < 1 ? 3.5 : 5);
+  return y + h + d.ecartCarte;
 };
 
-const enteteTableau = ({ doc, c }: Etat, y: number): number => {
-  etiquette(doc, 'Désignation', M + 1, y + 3.4, c.accent);
-  etiquette(doc, 'Montant (FCFA)', L - M - 1, y + 3.4, c.accent, 'right');
-  doc.setDrawColor(c.accent);
-  doc.setLineWidth(0.5);
-  doc.line(M, y + 5.2, L - M, y + 5.2);
+/** Les colonnes du tableau : une seule sur toute la largeur, ou deux séparées d'une gouttière. */
+const colonnesTableau = (colonnes: 1 | 2): { x: number; w: number }[] => {
+  if (colonnes === 1) return [{ x: M, w: U }];
+  const w = (U - GOUTTIERE) / 2;
+  return [{ x: M, w }, { x: M + w + GOUTTIERE, w }];
+};
+
+const enteteTableau = ({ doc, c, colonnes }: Etat, y: number): number => {
+  for (const { x, w } of colonnesTableau(colonnes)) {
+    etiquette(doc, 'Désignation', x + 1, y + 3.4, c.accent);
+    etiquette(doc, colonnes === 1 ? 'Montant (FCFA)' : 'FCFA', x + w - 1, y + 3.4, c.accent, 'right');
+    doc.setDrawColor(c.accent);
+    doc.setLineWidth(0.5);
+    doc.line(x, y + 5.2, x + w, y + 5.2);
+  }
   return y + 5.2;
 };
 
@@ -161,28 +197,42 @@ const enTeteDeSuite = ({ doc, c, data }: Etat): number => {
   return 22;
 };
 
-const ligneTableau = ({ doc, c, d }: Etat, l: RecuData['lignes'][number], y: number, rang: number) => {
+const ligneTableau = (
+  { doc, c, d, colonnes }: Etat, l: RecuData['lignes'][number], y: number, rang: number,
+  col: { x: number; w: number } = colonnesTableau(1)[0],
+) => {
   const pas = d.pas;
   const h = pas / 6.8;
-  if (rang % 2 === 1) { doc.setFillColor(c.pale); doc.rect(M, y, U, pas, 'F'); }
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(9.6);
+  const { x, w } = col;
+  // Deux colonnes : la police suit la hauteur de ligne, le texte est centré dans la ligne.
+  const taille = colonnes === 1 ? 9.6 : Math.min(9.6, Math.max(7.4, pas * 1.75));
+  const hauteurCapitale = taille * 0.3528 * 0.72;
+  const ligneY = colonnes === 1 ? y + 4.6 * (0.55 + 0.45 * h) : y + pas / 2 + hauteurCapitale / 2;
+  const barreY = colonnes === 1 ? y + 3.6 * (0.55 + 0.45 * h) : ligneY - hauteurCapitale * 0.4;
+
+  if (rang % 2 === 1) { doc.setFillColor(c.pale); doc.rect(x, y, w, pas, 'F'); }
+  const montant = formaterMontant(l.montant);
   doc.setTextColor(l.annulee ? GRIS : ENCRE);
-  const designation = l.annulee ? `${l.designation} (annulé)` : l.designation;
-  const ligneY = y + 4.6 * (0.55 + 0.45 * h);
-  // Désignation entière : on rétrécit un peu avant de tronquer (« … » visible).
-  ecrireAjuste(doc, designation, M + 1, ligneY, U - 42, { taille: 9.6, tailleMin: 7.6 });
-  const coupe = designation;
   doc.setFont('helvetica', 'bold');
-  doc.text(formaterMontant(l.montant), L - M - 1, y + 4.6 * (0.55 + 0.45 * h), { align: 'right' });
+  doc.setFontSize(taille);
+  // La désignation prend toute la place que le montant lui laisse.
+  const largeurDesignation = colonnes === 1 ? U - 42 : w - 2 - doc.getTextWidth(montant) - 3;
+  doc.text(montant, x + w - 1, ligneY, { align: 'right' });
+
+  doc.setFont('helvetica', 'normal');
+  const designation = l.annulee ? `${l.designation} (annulé)` : l.designation;
+  // Désignation entière : on rétrécit un peu avant de tronquer (« … » visible).
+  ecrireAjuste(doc, designation, x + 1, ligneY, largeurDesignation, {
+    taille, tailleMin: colonnes === 1 ? 7.6 : 6.4,
+  });
   if (l.annulee) {
     doc.setDrawColor(GRIS);
     doc.setLineWidth(0.25);
-    doc.line(M + 1, y + 3.6 * (0.55 + 0.45 * h), M + 1 + Math.min(doc.getTextWidth(coupe), U - 42), y + 3.6 * (0.55 + 0.45 * h));
+    doc.line(x + 1, barreY, x + 1 + Math.min(doc.getTextWidth(designation), largeurDesignation), barreY);
   }
   doc.setDrawColor(FILET);
   doc.setLineWidth(0.15);
-  doc.line(M, y + pas, L - M, y + pas);
+  doc.line(x, y + pas, x + w, y + pas);
 };
 
 /** Le total : un bloc plein, encadré — lisible même sans couleur à l'impression. */
@@ -206,56 +256,74 @@ const blocTotal = ({ doc, c, data, d }: Etat, y: number, annule: boolean): numbe
   return y + d.hTotal;
 };
 
-const tamponAcquitte = ({ doc, c, data }: Etat, cx: number, cy: number) => {
+const tamponAcquitte = ({ doc, c, data, d }: Etat, cx: number, cy: number) => {
   const encre = c.economique ? ENCRE : VERT_TAMPON;
+  const s = d.tampon;
   doc.saveGraphicsState();
   opacite(doc, 0.88);
-  cadreTampon(doc, cx, cy, 34, 15.5, 11, encre);
+  cadreTampon(doc, cx, cy, 34 * s, 15.5 * s, 11, encre);
   doc.setTextColor(encre);
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(13.5);
-  texteTourne(doc, 'ACQUITTÉ', cx, cy - 1.4, 11, 0.4);
-  doc.setFontSize(6.6);
-  texteTourne(doc, dateDakar(data.date), cx, cy + 4.2, 11, 0.12);
+  doc.setFontSize(13.5 * s);
+  texteTourne(doc, 'ACQUITTÉ', cx, cy - 1.4 * s, 11, 0.4 * s);
+  doc.setFontSize(6.6 * s);
+  texteTourne(doc, dateDakar(data.date), cx, cy + 4.2 * s, 11, 0.12 * s);
   doc.restoreGraphicsState();
 };
 
-const lettres = ({ doc, c, data }: Etat, y: number): number => {
-  etiquette(doc, 'Arrêté le présent reçu à la somme de', M, y + 2.6, GRIS);
+/** La somme en lettres, découpée comme elle sera écrite. */
+const lignesEnLettres = (doc: jsPDF, data: RecuData): string[] => {
   doc.setFont('times', 'bolditalic');
   doc.setFontSize(11.6);
-  doc.setTextColor(c.fonce);
+  return doc.splitTextToSize(`${montantEnLettres(data.total)}.`, U - 6) as string[];
+};
+
+const hauteurLettres = (nbLignes: number) => 5 + 3.4 + nbLignes * 5.2 + 2.4;
+
+const lettres = ({ doc, c, data }: Etat, y: number): number => {
+  etiquette(doc, 'Arrêté le présent reçu à la somme de', M, y + 2.6, GRIS);
   // TOUTES les lignes nécessaires : la somme en lettres est ce qui protège le
   // reçu d'une falsification. La couper, c'est écrire un autre montant.
-  const lignes = doc.splitTextToSize(`${montantEnLettres(data.total)}.`, U - 6) as string[];
+  const lignes = lignesEnLettres(doc, data);
+  doc.setTextColor(c.fonce);
   const h = 3.4 + lignes.length * 5.2;
   doc.setFillColor(c.accent);
   doc.rect(M, y + 5, 0.9, h, 'F');
   lignes.forEach((l, i) => doc.text(l, M + 4, y + 9.4 + i * 5.2));
-  return y + 5 + h + 2.4;
+  return y + hauteurLettres(lignes.length);
+};
+
+// « Encaissé par » est souvent une adresse e-mail (le caissier n'a pas de nom
+// renseigné) : c'est la colonne la plus large.
+const PARTS_INFOS = [0.27, 0.23, 0.5];
+const valeursInfos = (data: RecuData): [string, string][] => ([
+  ['Mode de paiement', data.mode],
+  ['Référence', data.reference],
+  ['Encaissé par', data.encaissePar],
+] as [string, string | undefined][]).map(([nom, v]) => [nom, v && v.trim() ? v : '—']);
+
+/** Hauteur du bloc d'informations : une ligne, ou deux si une valeur ne tient pas même rétrécie. */
+const hauteurInfos = (doc: jsPDF, data: RecuData): number => {
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(7.4);
+  const deuxLignes = valeursInfos(data).some(([, v], i) => doc.getTextWidth(v) > U * PARTS_INFOS[i] - 3);
+  return 12 + (deuxLignes ? 3.4 : 0);
 };
 
 const infosPaiement = ({ doc, c, data }: Etat, y: number): number => {
   doc.setDrawColor(FILET);
   doc.setLineWidth(0.3);
   doc.line(M, y, L - M, y);
-  // « Encaissé par » est souvent une adresse e-mail (le caissier n'a pas de nom
-  // renseigné) : c'est la colonne la plus large. Les trois valeurs sont écrites en
-  // entier — rétrécies, puis sur deux lignes, jamais coupées en silence.
-  const parts = [0.27, 0.23, 0.5];
-  const infos: [string, string | undefined][] = [
-    ['Mode de paiement', data.mode || '—'],
-    ['Référence', data.reference],
-    ['Encaissé par', data.encaissePar],
-  ];
+  // Les trois valeurs sont écrites en entier — rétrécies, puis sur deux lignes,
+  // jamais coupées en silence.
   let x = M;
   let lignesMax = 1;
-  infos.forEach(([nom, valeur], i) => {
-    const largeur = U * parts[i];
+  valeursInfos(data).forEach(([nom, valeur], i) => {
+    const largeur = U * PARTS_INFOS[i];
     etiquette(doc, nom, x, y + 4.6, c.accent);
     doc.setFont('helvetica', 'bold');
     doc.setTextColor(ENCRE);
-    lignesMax = Math.max(lignesMax, ecrireAjuste(doc, valeur && valeur.trim() ? valeur : '—', x, y + 9.4, largeur - 3, {
+    lignesMax = Math.max(lignesMax, ecrireAjuste(doc, valeur, x, y + 9.4, largeur - 3, {
       taille: 9, tailleMin: 7.4, lignesMax: 2, interligne: 3.4,
     }));
     x += largeur;
@@ -315,6 +383,53 @@ const marqueAnnule = ({ doc, data }: Etat, yLegende: number) => {
   doc.text(`REÇU ANNULÉ${detail ? ` ${detail}` : ''} — sans valeur.`, L / 2, yLegende, { align: 'center' });
 };
 
+// ─── Mise en page ─────────────────────────────────────────────────────────────
+
+/** Le choix de mise en page d'un reçu : densité, nombre de colonnes, et s'il tient sur une page. */
+export interface PlanRecu {
+  densite: 'normale' | 'compacte' | 'dense';
+  colonnes: 1 | 2;
+  /** Hauteur d'une ligne du tableau, en mm. */
+  pas: number;
+  /** Lignes par colonne. */
+  lignesParColonne: number;
+  unePage: boolean;
+}
+
+/** Ordonnée de la fin de l'en-tête du tableau (bandeau, titre, carte élève). */
+const debutTableau = (d: Dims) => d.bandeau + d.ecartTitre + d.titre + d.carte + d.ecartCarte + 5.2;
+
+/** Plus basse position du haut des signatures : le cachet et les légendes restent au-dessus du pied de page. */
+const ySignaturesMax = (d: Dims) => Y_PIED - 2 * d.cachet - 4.5;
+
+/** Tout ce qui suit le tableau, jusqu'aux signatures : total, somme en lettres, informations. */
+const hauteurApresTableau = (doc: jsPDF, data: RecuData, d: Dims): number =>
+  d.ecartTotal + d.hTotal + d.ecartLettres
+  + (data.annule !== null ? 0 : hauteurLettres(lignesEnLettres(doc, data).length))
+  + hauteurInfos(doc, data) + 2;
+
+/** Place disponible pour les lignes du tableau, sur une seule page. */
+const placeTableau = (doc: jsPDF, data: RecuData, d: Dims): number =>
+  ySignaturesMax(d) - hauteurApresTableau(doc, data, d) - debutTableau(d);
+
+export const planifierRecu = (doc: jsPDF, data: RecuData): PlanRecu => {
+  const n = data.lignes.length;
+  if (n <= LIGNES_MODE_NORMAL) {
+    return { densite: 'normale', colonnes: 1, pas: NORMALE.pas, lignesParColonne: n, unePage: true };
+  }
+  if (n * COMPACTE.pas <= placeTableau(doc, data, COMPACTE)) {
+    return { densite: 'compacte', colonnes: 1, pas: COMPACTE.pas, lignesParColonne: n, unePage: true };
+  }
+  // Une année entière payée d'un coup : deux colonnes, lignes resserrées juste ce qu'il faut.
+  const lignesParColonne = Math.ceil(n / 2);
+  const pas = Math.min(DENSE.pas, placeTableau(doc, data, DENSE) / lignesParColonne);
+  if (pas >= PAS_MINIMAL) {
+    return { densite: 'dense', colonnes: 2, pas, lignesParColonne, unePage: true };
+  }
+  // Au-delà (plus d'une vingtaine de lignes) : une colonne, suite sur une autre page.
+  return { densite: 'compacte', colonnes: 1, pas: COMPACTE.pas, lignesParColonne: n, unePage: false };
+};
+
 // ─── Assemblage ───────────────────────────────────────────────────────────────
 
 export async function genererRecuPdf(data: RecuData & {
@@ -334,42 +449,54 @@ export async function genererRecuPdf(data: RecuData & {
   const c = data.economique
     ? PALETTE_ECONOMIQUE
     : paletteDepuis(data.couleur !== undefined ? data.couleur : await couleurDominanteDuLogo(data.ecole.logo));
-  const d = data.lignes.length > LIGNES_MODE_NORMAL ? COMPACTE : NORMALE;
-  const e: Etat = { doc, c, data, d };
+  const plan = planifierRecu(doc, data);
+  const base = { normale: NORMALE, compacte: COMPACTE, dense: DENSE }[plan.densite];
+  const d: Dims = { ...base, pas: plan.pas };
+  const e: Etat = { doc, c, data, d, colonnes: plan.colonnes };
   const annule = data.annule !== null;
 
   filigrane(doc, data.ecole, L, H, 84, e.c.fonce);
   dessinerBandeau(doc, data.ecole, e.c, { largeurPage: L, marge: M, hauteur: d.bandeau, k: d.k });
-  let y = titre(e, d.bandeau + (d.k < 1 ? 7.5 : 9));
+  let y = titre(e, d.bandeau + d.ecartTitre);
   y = carteEleve(e, y);
 
   // ── Tableau ──
   y = enteteTableau(e, y);
-  let rang = 0;
-  for (const ligne of data.lignes) {
-    if (y + d.pas > d.basTableau) {
-      doc.addPage('a5', 'portrait');
-      filigrane(doc, data.ecole, L, H, 84, e.c.fonce);
-      y = enteteTableau(e, enTeteDeSuite(e));
-      rang = 0;
+  if (plan.colonnes === 2) {
+    // Lecture en colonnes, comme un relevé : la première de haut en bas, puis la seconde.
+    const cols = colonnesTableau(2);
+    data.lignes.forEach((ligne, i) => {
+      const rang = i % plan.lignesParColonne;
+      ligneTableau(e, ligne, y + rang * d.pas, rang, cols[Math.floor(i / plan.lignesParColonne)]);
+    });
+    y += plan.lignesParColonne * d.pas;
+  } else {
+    let rang = 0;
+    for (const ligne of data.lignes) {
+      if (!plan.unePage && y + d.pas > d.basTableau) {
+        doc.addPage('a5', 'portrait');
+        filigrane(doc, data.ecole, L, H, 84, e.c.fonce);
+        y = enteteTableau(e, enTeteDeSuite(e));
+        rang = 0;
+      }
+      ligneTableau(e, ligne, y, rang++);
+      y += d.pas;
     }
-    ligneTableau(e, ligne, y, rang++);
-    y += d.pas;
   }
 
   // ── Total, tampon, somme en lettres ──
-  y += d.k < 1 ? 3.5 : 4.5;
+  y += d.ecartTotal;
   const yTotal = y;
   y = blocTotal(e, y, annule);
   if (!annule) tamponAcquitte(e, M + 24, yTotal + d.hTotal / 2 + 0.6);
-  y += d.k < 1 ? 6.5 : 8;
+  y += d.ecartLettres;
   if (!annule) y = lettres(e, y);
   y = infosPaiement(e, y);
 
   // ── Signatures et pied, calés en bas de page ──
   const ySign = Math.max(y + 2, H - d.signatures);
   signatures(e, ySign);
-  pied(e, H - 12.4);
+  pied(e, Y_PIED);
   if (annule) marqueAnnule(e, ySign - 2);
 
   return doc;

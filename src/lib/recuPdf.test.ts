@@ -1,8 +1,10 @@
 import { describe, it, expect } from 'vitest';
 import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import jsPDF from 'jspdf';
 import type { RecuData } from './recu';
-import { genererRecuPdf, LIGNES_MODE_NORMAL } from './recuPdf';
+import { genererRecuPdf, LIGNES_MODE_NORMAL, PAS_MINIMAL, planifierRecu } from './recuPdf';
+import { formaterMontant } from './montantEnLettres';
 import { logoDeTest } from '@/test/helpers/png';
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -232,6 +234,53 @@ describe('reçu PDF — robustesse', () => {
     expect(LIGNES_MODE_NORMAL).toBe(4);
   });
 
+  const MOIS = ['Octobre', 'Novembre', 'Décembre', 'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre'];
+  /** Une année payée d'un coup : inscription, puis les mois, puis des services. */
+  const annee = (n: number): RecuData['lignes'] => Array.from({ length: n }, (_, i) => {
+    if (i === 0) return { designation: "Frais d'inscription", montant: 50000, annulee: false };
+    if (i <= 12) return { designation: `Scolarité — ${MOIS[i - 1]} 2026`, montant: 25000, annulee: false };
+    return { designation: `Transport — ${MOIS[(i - 13) % 12]} 2026`, montant: 15000, annulee: false };
+  });
+
+  it.each([8, 10, 13, 15, 18, 20])('UNE ANNÉE ENTIÈRE (%i lignes) tient sur UNE page, chaque ligne écrite', async (n) => {
+    const lignes = annee(n);
+    const total = lignes.reduce((s, l) => s + l.montant, 0);
+    const { doc, texte } = await brut(base({ lignes, total }));
+    expect(doc.getNumberOfPages()).toBe(1);
+    expect(texte).toContain('ACQUITT');
+    for (const l of lignes) expect(texte, l.designation).toContain(l.designation.split(' — ')[1] ?? l.designation);
+    expect(texte).toContain(formaterMontant(total));
+  });
+
+  it('13 lignes (inscription + 12 mois) : tableau sur deux colonnes, lisible', () => {
+    const lignes = annee(13);
+    const plan = planifierRecu(new jsPDF({ unit: 'mm', format: 'a5' }), base({ lignes, total: 350000 }));
+    expect(plan).toMatchObject({ densite: 'dense', colonnes: 2, lignesParColonne: 7, unePage: true });
+    expect(plan.pas).toBeGreaterThanOrEqual(PAS_MINIMAL);
+  });
+
+  it('20 lignes, somme en lettres sur deux lignes, références longues : toujours une page', async () => {
+    const lignes = annee(20);
+    const total = 1_987_777;
+    const { doc } = await brut(base({
+      lignes, total, mode: 'Espèces, Wave, Orange Money', reference: 'WV-2026-09-19-000088213-XYZ',
+      encaissePar: 'mamadou.lamine.diallo.comptabilite@collegesainteanne.sn',
+    }));
+    expect(doc.getNumberOfPages()).toBe(1);
+  });
+
+  it('un reçu annulé de 15 lignes tient aussi sur une page', async () => {
+    const lignes = annee(15);
+    const { doc, texte } = await brut(base({ lignes, total: 0, annule: { le: '2026-09-20T08:00:00Z', par: 'Le directeur' } }));
+    expect(doc.getNumberOfPages()).toBe(1);
+    expect(texte).toContain('sans valeur');
+  });
+
+  it('jusqu\'à 7 lignes, le tableau reste sur une seule colonne', () => {
+    const plan = planifierRecu(new jsPDF({ unit: 'mm', format: 'a5' }), base({ lignes: annee(7), total: 200000 }));
+    expect(plan.colonnes).toBe(1);
+  });
+
   it('beaucoup de lignes : le tableau continue sur une seconde page, le total reste sur la dernière', async () => {
     const lignes = Array.from({ length: 30 }, (_, i) => ({
       designation: `Scolarité — Mois ${i + 1}`, montant: 1000, annulee: false,
@@ -289,6 +338,22 @@ describe.runIf(process.env.SORTIE_PDF)('exemplaires pour relecture visuelle', ()
         { designation: 'Cantine — Septembre 2026', montant: 12500, annulee: false },
         { designation: 'Transport — Septembre 2026', montant: 15000, annulee: false },
       ], total: 127500, mode: 'Espèces, Wave', reference: 'WV-88213' })],
+      ['recu-annee-13-lignes', base({ couleur: '#1F5FA9', lignes: [
+        { designation: "Frais d'inscription", montant: 50000, annulee: false },
+        ...['Octobre', 'Novembre', 'Décembre'].map(m => ({ designation: `Scolarité — ${m} 2026`, montant: 25000, annulee: false })),
+        ...['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre'].map(m => ({ designation: `Scolarité — ${m} 2027`, montant: 25000, annulee: false })),
+      ], total: 350000, mode: 'Espèces', reference: 'WV-88213' })],
+      ['recu-annee-20-lignes', base({ couleur: '#1F5FA9', lignes: [
+        { designation: "Frais d'inscription", montant: 50000, annulee: false },
+        ...['Octobre', 'Novembre', 'Décembre', 'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet'].map(m => ({ designation: `Scolarité — ${m} 2026`, montant: 25000, annulee: false })),
+        ...['Octobre', 'Novembre', 'Décembre', 'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin'].map(m => ({ designation: `Transport — ${m} 2026 (acompte)`, montant: 15000, annulee: false })),
+      ], total: 435000, mode: 'Espèces, Wave', reference: 'WV-88213' })],
+      ['recu-annee-20-pire-cas', base({ couleur: '#1E9E5A', lignes: [
+        { designation: "Frais d'inscription", montant: 50000, annulee: false },
+        ...['Octobre', 'Novembre', 'Décembre', 'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre'].map(m => ({ designation: `Scolarité — ${m} 2026`, montant: 25000, annulee: false })),
+        ...['Octobre', 'Novembre', 'Décembre', 'Janvier', 'Février', 'Mars', 'Avril'].map(m => ({ designation: `Transport scolaire — ${m} 2026`, montant: 15000, annulee: false })),
+      ], total: 1_987_777, mode: 'Espèces, Wave, Orange Money', reference: 'WV-2026-09-19-000088213-XYZ',
+      encaissePar: 'mamadou.lamine.diallo.comptabilite@collegesainteanne.sn' })],
     ];
     for (const [nom, data] of cas) {
       const doc = await genererRecuPdf(data);
