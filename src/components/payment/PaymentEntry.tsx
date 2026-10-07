@@ -575,26 +575,31 @@ const PaymentEntry = ({ initialMode = 'search' }: { initialMode?: 'search' | 'sc
 
             {/* Payment panel */}
             {versements.length > 0 && (
-              <div className="flex-shrink-0 border-t p-5 space-y-4 bg-muted/20">
-                {/* Montant versé par élément : moins que le reste = acompte */}
+              <div className="flex-shrink-0 border-t px-5 pt-4 pb-5 space-y-4 bg-muted/20">
+                {/* Montant versé par élément : moins que le reste = acompte.
+                    Liste plafonnée à ~4 lignes visibles : au-delà elle défile,
+                    sinon le total et le bouton Valider sortent de l'écran quand
+                    beaucoup de frais sont cochés d'un coup (verrou levé). */}
                 <div className="space-y-2">
                   <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Montant versé</Label>
-                  {versements.map(({ item, decision }) => (
-                    <div key={item.id} className="flex items-center gap-2">
-                      <span className="flex-1 min-w-0 text-sm truncate" title={item.label}>{item.label}</span>
-                      {decision.ok && decision.partiel && (
-                        <Badge variant="outline" className="text-xs text-amber-700 border-amber-300 bg-amber-50">Acompte</Badge>
-                      )}
-                      <Input
-                        inputMode="numeric"
-                        className={cn('w-32 text-right', !decision.ok && 'border-destructive')}
-                        value={montantsSaisis[item.id] ?? String(item.amount)}
-                        onChange={e => setMontantsSaisis(prev => ({ ...prev, [item.id]: e.target.value.replace(/[^\d\s]/g, '') }))}
-                        aria-label={`Montant versé pour ${item.label}`}
-                        title={decision.ok ? `Reste à payer : ${fmt(item.amount)}` : decision.erreur}
-                      />
-                    </div>
-                  ))}
+                  <div className="max-h-44 overflow-y-auto space-y-2 pr-1">
+                    {versements.map(({ item, decision }) => (
+                      <div key={item.id} className="flex items-center gap-2">
+                        <span className="flex-1 min-w-0 text-sm truncate" title={item.label}>{item.label}</span>
+                        {decision.ok && decision.partiel && (
+                          <Badge variant="outline" className="text-xs text-amber-700 border-amber-300 bg-amber-50">Acompte</Badge>
+                        )}
+                        <Input
+                          inputMode="numeric"
+                          className={cn('w-32 text-right', !decision.ok && 'border-destructive')}
+                          value={montantsSaisis[item.id] ?? String(item.amount)}
+                          onChange={e => setMontantsSaisis(prev => ({ ...prev, [item.id]: e.target.value.replace(/[^\d\s]/g, '') }))}
+                          aria-label={`Montant versé pour ${item.label}`}
+                          title={decision.ok ? `Reste à payer : ${fmt(item.amount)}` : decision.erreur}
+                        />
+                      </div>
+                    ))}
+                  </div>
                   <p className="text-xs text-muted-foreground">
                     Pour un paiement en plusieurs fois, saisissez le montant versé : le reste restera dû.
                   </p>
