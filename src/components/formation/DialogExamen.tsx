@@ -92,12 +92,12 @@ export const DialogExamen = ({ open, onOpenChange, examen, nbExistants, periodes
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
-        <DialogHeader>
+      <DialogContent className="max-h-[90vh] flex flex-col">
+        <DialogHeader className="shrink-0">
           <DialogTitle>{examen ? 'Modifier l\'examen' : 'Nouvel examen'}</DialogTitle>
           <DialogDescription>Un rattrapage se crée comme un nouvel examen : le premier passage reste en mémoire.</DialogDescription>
         </DialogHeader>
-        <div className="space-y-4 pt-1">
+        <div className="flex-1 overflow-y-auto space-y-4 pt-1 pr-1 pb-1">
           <div className="space-y-2">
             <Label htmlFor="examen-nom">Nom *</Label>
             <Input id="examen-nom" placeholder="Ex : Examen blanc n°1" value={name} onChange={e => setName(e.target.value)} />
