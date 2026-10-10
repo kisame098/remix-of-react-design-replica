@@ -447,33 +447,12 @@ const DialogProduction = ({
       <DialogContent className="max-w-3xl max-h-[95vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{production?.nomFichier}</DialogTitle>
-          <DialogDescription>
-            {production && `${production.nb} document${production.nb > 1 ? 's' : ''}, un par page.`} « Imprimer » donne le rendu le plus net (et propose « Enregistrer en PDF ») ;
-            « Télécharger le PDF » donne directement un fichier.
-          </DialogDescription>
+          <DialogDescription className="sr-only">Aperçu avant impression</DialogDescription>
         </DialogHeader>
 
         {p?.refus ? (
           <Refus production={p} estDirecteur={estDirecteur} onAllerAuxModeles={onAllerAuxModeles} />
-        ) : p && (
-          <>
-            {p.vides.length > 0 && (
-              <div className="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 space-y-1">
-                <p className="flex items-center gap-2 font-medium"><TriangleAlert className="h-4 w-4" /> Informations manquantes — ces cases resteront vides :</p>
-                <ul className="ml-6 list-disc text-xs space-y-0.5">
-                  {p.vides.map(v => (
-                    <li key={v.champ}>
-                      <span className="font-mono">[{v.champ}]</span> : {v.eleves.length === 0
-                        ? `pour tous les documents — à remplir dans ${v.source ?? 'Paramètres → École'}`
-                        : <>{v.eleves.slice(0, 5).join(', ')}{v.eleves.length > 5 ? ` et ${v.eleves.length - 5} autre${v.eleves.length - 5 > 1 ? 's' : ''}` : ''}</>}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-            <ApercuHtml html={p.html} />
-          </>
-        )}
+        ) : p && <ApercuHtml html={p.html} />}
 
         <DialogFooter className="gap-2">
           <Button variant="outline" onClick={onFermer}>Fermer</Button>
