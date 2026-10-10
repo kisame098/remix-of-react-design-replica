@@ -16,7 +16,7 @@
 // ═══════════════════════════════════════════════════════════════════════════
 
 /** Fichiers chargés au clic, depuis une page qui reste à l'écran. */
-export const FICHIERS_D_ACTION = /assets\/(recuPdf|ficheInscriptionPdf|documentsFormationProPdf|modelesDocumentsPdf|modeleWordRendu|conversionEditeur)-/;
+export const FICHIERS_D_ACTION = /assets\/(recuPdf|ficheInscriptionPdf|documentsFormationProPdf|modelesDocumentsPdf|modeleWordRendu|conversionEditeur|recuModele)-/;
 
 const message = (erreur: unknown): string =>
   erreur instanceof Error ? erreur.message

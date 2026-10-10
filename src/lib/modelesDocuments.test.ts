@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   CHAMPS, champConnu, normaliserNomChamp, verifierModele, nettoyer, remplirModele, valeursChamps,
   champsVides, assemblerDocuments, versionImprimee, contexteExemple, CLASSE_FEUILLE, TAILLE_MAX_MODELE,
-  produireDocuments, eleveDocument, lireReglagesPage, professeurDocument, ELEVE_VIDE, separerFeuilles,
+  produireDocuments, eleveDocument, lireReglagesPage, professeurDocument, ELEVE_VIDE, separerFeuilles, documentPret,
   type ContexteDocument,
 } from './modelesDocuments';
 import { MODELES_PAR_DEFAUT } from './modelesDocumentsParDefaut';
@@ -283,5 +283,35 @@ describe('séparer un document assemblé', () => {
     expect(parts[1]).toContain('FALL');
     expect(parts[1]).not.toContain('DIOP');
     expect(parts[1]).toContain('p{color:red}');
+  });
+});
+
+describe('modèles de reçu', () => {
+  const recu = { ...contexteExemple(ecole, '2026-2027'), date: '2026-10-10T10:00:00Z' };
+
+  it('les champs du reçu se remplissent ; la cible est « reçu » (élève permis, professeur interdit)', () => {
+    const modele = page("<p>{NUMÉRO DU REÇU} — {NOM ET PRÉNOM DE L'ÉLÈVE} — {MONTANT TOTAL} — {MONTANT EN LETTRES} — {MODE DE PAIEMENT}</p>");
+    expect(verifierModele(modele).cible).toBe('recu');
+    const html = documentPret(modele, recu);
+    expect(html).toContain('REC-2026-00042 — DIOP Awa — 75 000 FCFA — Soixante-quinze mille francs CFA — Espèces');
+    expect(verifierModele(page('<p>{NUMÉRO DU REÇU} {NOM DU PROFESSEUR}</p>')).ok).toBe(false);
+  });
+
+  it('{TABLEAU DES PAIEMENTS} devient un vrai tableau, à l\'endroit du champ, valeurs posées comme texte', () => {
+    const c = { ...recu, recu: { ...recu.recu!, lignes: [{ designation: '<b>piège</b>', montant: 1000, annulee: true }, { designation: 'Cantine', montant: 5000, annulee: false }] } };
+    const html = documentPret(page('<div class="avant">Avant</div><div>{TABLEAU DES PAIEMENTS}</div><p>Après</p>'), c);
+    const doc = new DOMParser().parseFromString(html, 'text/html');
+    const lignes = Array.from(doc.querySelectorAll('tr')).map(tr => Array.from(tr.children).map(td => td.textContent));
+    expect(lignes).toEqual([['Désignation', 'Montant (FCFA)'], ['<b>piège</b>', '1 000'], ['Cantine', '5 000']]);
+    expect(doc.querySelector('td')!.getAttribute('style')).toContain('line-through');
+    expect(html).not.toContain('<b>piège</b>');
+    expect(doc.body.textContent).toMatch(/Avant[\s\S]*Désignation[\s\S]*Après/);
+  });
+
+  it('mention ANNULÉ / DUPLICATA', () => {
+    const v = (r: Partial<NonNullable<typeof recu.recu>>) => valeursChamps({ ...recu, recu: { ...recu.recu!, ...r } }).get(normaliserNomChamp('MENTION DU REÇU'));
+    expect(v({})).toBe('');
+    expect(v({ duplicata: true })).toBe('DUPLICATA');
+    expect(v({ annule: true, duplicata: true })).toBe('ANNULÉ');
   });
 });

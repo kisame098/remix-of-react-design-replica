@@ -1,4 +1,4 @@
-import { arrondirMm, dimensionsPage, nouvelId, type DocumentVisuel, type ElementVisuel } from '@/lib/documentVisuel';
+import { arrondirMm, dimensionsPage, nouvelId, type DocumentVisuel, type ElementVisuel, type FormatPage } from '@/lib/documentVisuel';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // CALCULS DE L'ÉDITEUR VISUEL (sans écran, donc testables)
@@ -33,7 +33,7 @@ export interface Guides {
 export const deplacer = (
   depart: ElementVisuel, dx: number, dy: number, doc: DocumentVisuel,
 ): { element: ElementVisuel; guides: Guides } => {
-  const { largeur, hauteur } = dimensionsPage(doc.orientation);
+  const { largeur, hauteur } = dimensionsPage(doc.orientation, doc.format);
   let x = arrondirMm(depart.x + dx);
   let y = arrondirMm(depart.y + dy);
   const guides: Guides = { vertical: false, horizontal: false };
@@ -101,9 +101,13 @@ export const changerPlan = (doc: DocumentVisuel, id: string, plan: Plan): Docume
   return { ...doc, elements: els };
 };
 
+/** Change le format de la feuille (A4 ↔ A5) en gardant les éléments dans la feuille. */
+export const changerFormat = (doc: DocumentVisuel, format: FormatPage): DocumentVisuel =>
+  changerOrientation({ ...doc, format }, doc.orientation);
+
 /** Bascule portrait ↔ paysage en gardant les éléments dans la feuille. */
 export const changerOrientation = (doc: DocumentVisuel, orientation: DocumentVisuel['orientation']): DocumentVisuel => {
-  const { largeur, hauteur } = dimensionsPage(orientation);
+  const { largeur, hauteur } = dimensionsPage(orientation, doc.format);
   return {
     ...doc,
     orientation,

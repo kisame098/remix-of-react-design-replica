@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import {
   POLICES, arrondirMm, type Alignement, type Bordure, type DocumentVisuel, type ElementVisuel, type StyleTrait,
 } from '@/lib/documentVisuel';
-import { changerOrientation, type Plan } from '@/lib/editeurVisuel';
+import { changerFormat, changerOrientation, type Plan } from '@/lib/editeurVisuel';
 import { CHAMPS, LIBELLES_GROUPE_CHAMP, type GroupeChamp } from '@/lib/modelesDocuments';
 
 interface PanneauProps {
@@ -23,6 +23,8 @@ interface PanneauProps {
   onInsererChamp: (champ: string) => void;
   onFormat: (commande: 'bold' | 'italic' | 'underline', cle: 'gras' | 'italique' | 'souligne') => void;
   onRemplacerImage: (id: string) => void;
+  /** Champs à ne pas proposer (ceux du reçu pour un document, ceux du professeur pour un reçu). */
+  groupesExclus?: GroupeChamp[];
 }
 
 const LIBELLES_TYPE: Record<ElementVisuel['type'], string> = { texte: 'Texte', image: 'Image', forme: 'Forme', ligne: 'Trait', bloc: 'Document importé' };
@@ -95,12 +97,12 @@ const EditeurBordure = ({ bordure, onChange, obligatoire = false }: {
 };
 
 /** La liste cliquable des informations de l'élève. */
-const ChampsEleve = ({ enEdition, onInserer }: { enEdition: boolean; onInserer: (champ: string) => void }) => (
+const ChampsEleve = ({ enEdition, onInserer, groupes }: { enEdition: boolean; onInserer: (champ: string) => void; groupes: GroupeChamp[] }) => (
   <Section titre="Champs">
     <p className="text-[11px] text-muted-foreground">
       {enEdition ? 'Cliquez : le champ s\'insère à l\'endroit du curseur.' : 'Cliquez d\'abord dans le texte pour choisir l\'endroit.'}
     </p>
-    {GROUPES.map(g => (
+    {groupes.map(g => (
       <div key={g}>
         <p className="text-[11px] font-semibold text-muted-foreground mt-1 mb-0.5">{LIBELLES_GROUPE_CHAMP[g]}</p>
         <div className="flex flex-wrap gap-1">
@@ -118,12 +120,16 @@ const ChampsEleve = ({ enEdition, onInserer }: { enEdition: boolean; onInserer: 
 
 /** Le panneau de droite : réglages de l'élément choisi, ou de la feuille. */
 export const PanneauProprietes = ({
-  doc, element: el, enEdition, onDocument, onElement, onSupprimer, onDupliquer, onPlan, onInsererChamp, onFormat, onRemplacerImage,
+  doc, element: el, enEdition, onDocument, onElement, onSupprimer, onDupliquer, onPlan, onInsererChamp, onFormat, onRemplacerImage, groupesExclus,
 }: PanneauProps) => {
   if (!el) {
     return (
       <>
-        <Section titre="Feuille A4">
+        <Section titre="Feuille">
+          <div className="grid grid-cols-2 gap-2">
+            <Button size="sm" variant={(doc.format ?? 'A4') === 'A4' ? 'secondary' : 'outline'} onClick={() => onDocument(changerFormat(doc, 'A4'))} title="Feuille entière">A4</Button>
+            <Button size="sm" variant={doc.format === 'A5' ? 'secondary' : 'outline'} onClick={() => onDocument(changerFormat(doc, 'A5'))} title="Demi-feuille (format des reçus)">A5</Button>
+          </div>
           <div className="grid grid-cols-2 gap-2">
             <Button size="sm" variant={doc.orientation === 'portrait' ? 'secondary' : 'outline'} onClick={() => onDocument(changerOrientation(doc, 'portrait'))}>Portrait</Button>
             <Button size="sm" variant={doc.orientation === 'paysage' ? 'secondary' : 'outline'} onClick={() => onDocument(changerOrientation(doc, 'paysage'))}>Paysage</Button>
@@ -192,7 +198,7 @@ export const PanneauProprietes = ({
             <p className="text-[11px] font-medium pt-1">Cadre</p>
             <EditeurBordure bordure={el.bordure} onChange={b => maj({ bordure: b })} />
           </Section>
-          <ChampsEleve enEdition={enEdition} onInserer={onInsererChamp} />
+          <ChampsEleve enEdition={enEdition} onInserer={onInsererChamp} groupes={GROUPES.filter(g => !groupesExclus?.includes(g))} />
         </>
       )}
 
@@ -206,7 +212,7 @@ export const PanneauProprietes = ({
               <Button size="icon" variant="ghost" className="h-8 w-8" onMouseDown={garderFocus} onClick={() => onFormat('underline', 'souligne')} aria-label="Souligné"><Underline className="h-4 w-4" /></Button>
             </div>
           </Section>
-          <ChampsEleve enEdition={enEdition} onInserer={onInsererChamp} />
+          <ChampsEleve enEdition={enEdition} onInserer={onInsererChamp} groupes={GROUPES.filter(g => !groupesExclus?.includes(g))} />
         </>
       )}
 

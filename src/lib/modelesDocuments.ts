@@ -1,5 +1,6 @@
 import DOMPurify from 'dompurify';
-import { dateDakar, type InfosEcole } from '@/lib/documentsEcole';
+import { dateDakar, dateHeureDakar, type InfosEcole } from '@/lib/documentsEcole';
+import { formaterMontant, montantEnLettres } from '@/lib/montantEnLettres';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // MODÈLES DE DOCUMENTS (écoles en mode classique)
@@ -17,7 +18,7 @@ import { dateDakar, type InfosEcole } from '@/lib/documentsEcole';
 // ressource chargée depuis Internet) et affiché dans un cadre isolé.
 // ═══════════════════════════════════════════════════════════════════════════
 
-export type GroupeChamp = 'ecole' | 'document' | 'eleve' | 'scolarite' | 'professeur';
+export type GroupeChamp = 'ecole' | 'document' | 'eleve' | 'scolarite' | 'professeur' | 'recu';
 
 export const LIBELLES_GROUPE_CHAMP: Record<GroupeChamp, string> = {
   ecole: "L'établissement",
@@ -25,7 +26,22 @@ export const LIBELLES_GROUPE_CHAMP: Record<GroupeChamp, string> = {
   eleve: "L'élève",
   scolarite: 'La scolarité',
   professeur: 'Le professeur',
+  recu: 'Le reçu',
 };
+
+/** Ce qu'il faut pour remplir un modèle de REÇU (src/lib/recu.ts → RecuData). */
+export interface RecuDocument {
+  numero: string;
+  /** ISO — moment du paiement. */
+  date: string;
+  lignes: { designation: string; montant: number; annulee: boolean }[];
+  total: number;
+  mode: string;
+  reference?: string;
+  encaissePar?: string;
+  annule: boolean;
+  duplicata: boolean;
+}
 
 /** Ce qu'il faut pour remplir un modèle pour un professeur. */
 export interface ProfesseurDocument {
@@ -68,6 +84,8 @@ export interface ContexteDocument {
   professeur?: ProfesseurDocument;
   /** Numéro attribué par SenClass (CS-2026-00001) ; à l'aperçu, un numéro provisoire. */
   numero?: string;
+  /** Pour un modèle de reçu : le paiement. */
+  recu?: RecuDocument;
   anneeScolaire?: string;
   /** Date du document (ISO) — aujourd'hui, à l'heure de Dakar. */
   date: string;
@@ -81,6 +99,11 @@ export interface ChampModele {
   source: string;
   /** Une image : ne s'écrit que dans un attribut, ex. <img src="{LOGO DE L'ÉTABLISSEMENT}">. */
   image?: true;
+  /**
+   * Un bloc (le tableau des paiements) : inséré comme élément, pas comme
+   * texte. `valeur` donne alors sa version texte (Word, champ dans un attribut).
+   */
+  bloc?: (doc: Document, c: ContexteDocument) => HTMLElement;
   valeur: (c: ContexteDocument) => string;
 }
 
@@ -102,6 +125,38 @@ const dateEnLettres = (iso: string): string => {
   if (!m) return courte;
   const jour = Number(m[1]);
   return `${jour === 1 ? '1er' : jour} ${MOIS[Number(m[2]) - 1]} ${m[3]}`;
+};
+
+/**
+ * Le tableau des paiements d'un reçu : deux colonnes, noir et blanc, il prend
+ * la police et la taille du texte qui l'entoure. Les valeurs sont posées
+ * comme TEXTE (jamais interprétées comme du HTML).
+ */
+const tableauPaiements = (doc: Document, lignes: RecuDocument['lignes']): HTMLElement => {
+  const table = doc.createElement('table');
+  table.setAttribute('style', 'width:100%;border-collapse:collapse;font:inherit;color:inherit');
+  const cellule = (balise: 'th' | 'td', texte: string, droite: boolean, style = '') => {
+    const c = doc.createElement(balise);
+    c.textContent = texte;
+    c.setAttribute('style', `padding:1.2mm 1.5mm;text-align:${droite ? 'right' : 'left'};${style}`);
+    return c;
+  };
+  const tete = doc.createElement('tr');
+  tete.append(
+    cellule('th', 'Désignation', false, 'border-bottom:0.4mm solid #000;font-weight:bold'),
+    cellule('th', 'Montant (FCFA)', true, 'border-bottom:0.4mm solid #000;font-weight:bold;white-space:nowrap'),
+  );
+  table.appendChild(tete);
+  for (const l of lignes) {
+    const tr = doc.createElement('tr');
+    const barre = l.annulee ? 'text-decoration:line-through;' : '';
+    tr.append(
+      cellule('td', l.designation, false, `border-bottom:0.2mm solid #000;${barre}`),
+      cellule('td', formaterMontant(l.montant), true, `border-bottom:0.2mm solid #000;white-space:nowrap;${barre}`),
+    );
+    table.appendChild(tr);
+  }
+  return table;
 };
 
 const PROF_VIDE: ProfesseurDocument = { matricule: '', prenom: '', nom: '', matieres: [], classes: [] };
@@ -152,6 +207,20 @@ export const CHAMPS: readonly ChampModele[] = [
   { nom: 'CLASSE', groupe: 'scolarite', source: "Classe de l'élève cette année", valeur: c => c.eleve.classe ?? '' },
   { nom: 'ANNÉE SCOLAIRE', groupe: 'scolarite', source: 'Année choisie en haut de l\'écran : 2026-2027', valeur: c => c.anneeScolaire ?? '' },
   { nom: "DATE D'INSCRIPTION", groupe: 'scolarite', source: "Inscription de l'élève pour l'année", valeur: c => dateCourte(c.eleve.dateInscription) },
+  // ── Le reçu ──
+  { nom: 'NUMÉRO DU REÇU', groupe: 'recu', source: 'REC-2026-00042', valeur: c => c.recu?.numero ?? '' },
+  { nom: 'DATE DU PAIEMENT', groupe: 'recu', source: 'Date et heure du paiement : 10/10/2026 à 14:32', valeur: c => (c.recu ? dateHeureDakar(c.recu.date) : '') },
+  { nom: 'MONTANT TOTAL', groupe: 'recu', source: 'Total payé : 75 000 FCFA', valeur: c => (c.recu ? `${formaterMontant(c.recu.total)} FCFA` : '') },
+  { nom: 'MONTANT EN LETTRES', groupe: 'recu', source: 'Soixante-quinze mille francs CFA', valeur: c => (c.recu ? montantEnLettres(c.recu.total) : '') },
+  { nom: 'MODE DE PAIEMENT', groupe: 'recu', source: 'Espèces, Wave, Orange Money…', valeur: c => c.recu?.mode ?? '' },
+  { nom: 'RÉFÉRENCE DU PAIEMENT', groupe: 'recu', source: 'Référence de la transaction (vide en espèces)', valeur: c => c.recu?.reference ?? '' },
+  { nom: 'ENCAISSÉ PAR', groupe: 'recu', source: 'Nom de la personne qui a encaissé', valeur: c => c.recu?.encaissePar ?? '' },
+  { nom: 'MENTION DU REÇU', groupe: 'recu', source: 'ANNULÉ ou DUPLICATA (vide sinon)', valeur: c => (c.recu?.annule ? 'ANNULÉ' : c.recu?.duplicata ? 'DUPLICATA' : '') },
+  {
+    nom: 'TABLEAU DES PAIEMENTS', groupe: 'recu', source: 'La liste des paiements du reçu (désignation, montant)',
+    valeur: c => (c.recu?.lignes ?? []).map(l => `${l.designation} : ${formaterMontant(l.montant)} FCFA${l.annulee ? ' (annulé)' : ''}`).join('\n'),
+    bloc: (doc, c) => tableauPaiements(doc, c.recu?.lignes ?? []),
+  },
   // ── Le professeur ──
   { nom: 'NOM ET PRÉNOM DU PROFESSEUR', groupe: 'professeur', source: 'Fiche professeur : SARR Mamadou', valeur: c => [prof(c).nom, prof(c).prenom].filter(Boolean).join(' ') },
   { nom: 'PRÉNOM ET NOM DU PROFESSEUR', groupe: 'professeur', source: 'Fiche professeur : Mamadou SARR', valeur: c => [prof(c).prenom, prof(c).nom].filter(Boolean).join(' ') },
@@ -271,14 +340,16 @@ export const verifierModele = (html: string, tailleMax = TAILLE_MAX_MODELE): Ver
 };
 
 /** Pour qui le document est produit, d'après ses champs. */
-export type Cible = 'eleve' | 'professeur' | 'aucune';
+export type Cible = 'eleve' | 'professeur' | 'aucune' | 'recu';
 
-export const ERREUR_MIXTE = "Un document concerne soit un élève, soit un professeur : n'utilisez pas les champs des deux.";
+export const ERREUR_MIXTE = "Un document concerne soit un élève, soit un professeur : n'utilisez pas les champs des deux (un reçu concerne toujours un élève).";
 
 export const cibleDesChamps = (utilises: string[]): Cible | 'mixte' => {
   const groupes = new Set(utilises.map(nom => champConnu(nom)?.groupe));
   const eleve = groupes.has('eleve') || groupes.has('scolarite');
   const professeur = groupes.has('professeur');
+  // Un reçu concerne un élève : ses champs y sont permis, pas ceux d'un professeur.
+  if (groupes.has('recu')) return professeur ? 'mixte' : 'recu';
   if (eleve && professeur) return 'mixte';
   return eleve ? 'eleve' : professeur ? 'professeur' : 'aucune';
 };
@@ -367,8 +438,28 @@ const remplacer = (texte: string, valeurs: Map<string, string>): string =>
  * un champ inconnu resterait tel quel. Les valeurs sont posées comme TEXTE
  * (jamais interprétées comme du HTML) : un nom contenant « < » reste un nom.
  */
-export const remplirModele = (html: string, valeurs: Map<string, string>): string => {
+export const remplirModele = (html: string, valeurs: Map<string, string>, contexte?: ContexteDocument): string => {
   const doc = lireDocument(html);
+  // D'abord les blocs (tableau des paiements) : un vrai tableau à la place du champ.
+  if (contexte) {
+    for (const t of noeudsTexte(doc)) {
+      if (!t.data.includes('{')) continue;
+      const morceaux: Node[] = [];
+      let dernier = 0;
+      let bloc = false;
+      for (const m of t.data.matchAll(MOTIF_CHAMP)) {
+        const ch = champConnu(m[1]);
+        if (!ch?.bloc) continue;
+        bloc = true;
+        morceaux.push(doc.createTextNode(t.data.slice(dernier, m.index)), ch.bloc(doc, contexte));
+        dernier = (m.index ?? 0) + m[0].length;
+      }
+      if (bloc) {
+        morceaux.push(doc.createTextNode(t.data.slice(dernier)));
+        t.replaceWith(...morceaux);
+      }
+    }
+  }
   for (const t of noeudsTexte(doc)) {
     if (t.data.includes('{')) t.data = remplacer(t.data, valeurs);
   }
@@ -514,6 +605,15 @@ export const contexteExemple = (ecole: InfosEcole, anneeScolaire?: string): Cont
     ],
     classe: '6ème A',
   },
+  // Un paiement d'exemple, pour l'aperçu des modèles de reçu.
+  recu: {
+    numero: 'REC-2026-00042', date: '2026-10-10T14:32:00Z',
+    lignes: [
+      { designation: "Frais d'inscription", montant: 50000, annulee: false },
+      { designation: 'Scolarité — Octobre 2026', montant: 25000, annulee: false },
+    ],
+    total: 75000, mode: 'Espèces', encaissePar: 'Fatou SOW', annule: false, duplicata: false,
+  },
   // Les deux exemples à la fois : un modèle valide n'utilise que l'un des deux.
   professeur: {
     matricule: 'PROF-2026-00001', prenom: 'Mamadou', nom: 'SARR', sexe: 'homme',
@@ -583,7 +683,7 @@ export const professeurDocument = (t: ProfesseurSource, seances: SeanceSource[])
 
 /** Un document prêt à afficher : rempli PUIS nettoyé (le nettoyage passe en dernier). */
 export const documentPret = (modeleHtml: string, c: ContexteDocument): string =>
-  nettoyer(remplirModele(modeleHtml, valeursChamps(c))).html;
+  nettoyer(remplirModele(modeleHtml, valeursChamps(c), c)).html;
 
 export interface Production {
   /** Refus : le modèle a un champ inconnu (ou est vide) — rien n'est produit. */

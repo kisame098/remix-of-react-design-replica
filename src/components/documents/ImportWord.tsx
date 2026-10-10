@@ -120,7 +120,7 @@ export const ImportWord = ({ ouvert, onFermer, titre, initial, onEnregistrer, on
           <div className="rounded-lg border p-3 space-y-2">
             <p className="text-sm font-medium">Champs disponibles <span className="font-normal text-muted-foreground">— cliquez pour copier, puis collez dans Word</span></p>
             <div className="max-h-56 overflow-y-auto space-y-2 pr-1">
-              {GROUPES.map(g => (
+              {GROUPES.filter(g => g !== 'recu').map(g => (
                 <div key={g}>
                   <p className="text-xs font-semibold text-muted-foreground mb-1">{LIBELLES_GROUPE_CHAMP[g]}</p>
                   <div className="flex flex-wrap gap-1">

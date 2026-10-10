@@ -127,10 +127,14 @@ export const fabriquerPdfHtml = async (html: string): Promise<jsPDF> => {
       });
       // Une page plus large que haute (paysage) part sur une feuille paysage.
       const paysage = toile.width > toile.height;
+      // Une page A5 (reçu) sort sur une page A5 ; tout le reste en A4.
+      const largeurMm = feuille.getBoundingClientRect().width / (96 / 25.4);
+      const a5 = Math.abs(largeurMm - (paysage ? 210 : 148)) < 3;
       if (i === 0) pdf.deletePage(1);
-      pdf.addPage('a4', paysage ? 'landscape' : 'portrait');
-      const largeurPage = paysage ? 297 : 210;
-      const hauteurPage = paysage ? 210 : 297;
+      pdf.addPage(a5 ? 'a5' : 'a4', paysage ? 'landscape' : 'portrait');
+      const [petit, grand] = a5 ? [148, 210] : [210, 297];
+      const largeurPage = paysage ? grand : petit;
+      const hauteurPage = paysage ? petit : grand;
       // Toute la largeur ; si la feuille dépasse un peu en hauteur, on réduit pour qu'elle tienne.
       const ratio = Math.min(largeurPage / toile.width, hauteurPage / toile.height);
       const w = toile.width * ratio;

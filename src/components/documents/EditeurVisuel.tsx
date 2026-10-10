@@ -16,7 +16,7 @@ import {
   PX_PAR_MM, POIGNEES, changerPlan, deplacer, dupliquerElement, historiqueInitial, redimensionner,
   reduireHistorique, remplacerElement, supprimerElement, type Guides, type Plan, type Poignee,
 } from '@/lib/editeurVisuel';
-import { nettoyerFragment, produireDocuments, type ContexteDocument } from '@/lib/modelesDocuments';
+import { nettoyerFragment, produireDocuments, type ContexteDocument, type GroupeChamp } from '@/lib/modelesDocuments';
 import { verifierSource } from '@/lib/modeleDocument';
 import { compressImage } from '@/lib/imageCompress';
 
@@ -29,6 +29,8 @@ interface EditeurVisuelProps {
   /** Élève d'EXEMPLE pour l'aperçu (jamais un vrai élève). */
   exemple: ContexteDocument;
   onEnregistrer: (nom: string, contenu: DocumentVisuel) => Promise<void>;
+  /** Champs à ne pas proposer dans le panneau. */
+  groupesExclus?: GroupeChamp[];
 }
 
 /** Lecture d'une image choisie sur l'ordinateur, réduite pour ne pas alourdir le modèle. */
@@ -57,7 +59,7 @@ const POSITION_POIGNEE: Record<Poignee, React.CSSProperties> = {
  * texte, le logo, des images, des formes et des traits, à la souris.
  * Les champs de l'élève s'insèrent depuis le panneau de droite.
  */
-export const EditeurVisuel = ({ ouvert, onFermer, initial, logo, exemple, onEnregistrer }: EditeurVisuelProps) => {
+export const EditeurVisuel = ({ ouvert, onFermer, initial, logo, exemple, onEnregistrer, groupesExclus }: EditeurVisuelProps) => {
   const [nom, setNom] = useState(initial.nom);
   const [h, dispatch] = useReducer(reduireHistorique, initial.contenu, historiqueInitial);
   const doc = h.present;
@@ -76,7 +78,7 @@ export const EditeurVisuel = ({ ouvert, onFermer, initial, logo, exemple, onEnre
   const zoneTexte = useRef<HTMLDivElement | null>(null);
   const avantEdition = useRef<DocumentVisuel | null>(null);
 
-  const { largeur, hauteur } = dimensionsPage(doc.orientation);
+  const { largeur, hauteur } = dimensionsPage(doc.orientation, doc.format);
   const element = doc.elements.find(e => e.id === selection) ?? null;
   const modifie = doc !== initial.contenu || nom !== initial.nom;
 
@@ -191,7 +193,7 @@ export const EditeurVisuel = ({ ouvert, onFermer, initial, logo, exemple, onEnre
   // ── Ajouter des éléments ──
   const ajouter = (type: TypeElement, extra: Parameters<typeof nouvelElement>[2] = {}) => {
     if (edition) terminerEdition();
-    const el = nouvelElement(type, doc.orientation, extra);
+    const el = nouvelElement(type, doc.orientation, extra, doc.format);
     valider({ ...docRef.current, elements: [...docRef.current.elements, el] });
     setSelection(el.id);
     if (type === 'texte') window.setTimeout(() => commencerEditionApresAjout(el.id), 0);
@@ -396,6 +398,7 @@ export const EditeurVisuel = ({ ouvert, onFermer, initial, logo, exemple, onEnre
                 onInsererChamp={insererChamp}
                 onFormat={formatTexte}
                 onRemplacerImage={id => { imageARemplacer.current = id; fichierImage.current?.click(); }}
+                groupesExclus={groupesExclus}
               />
             )}
           </aside>
