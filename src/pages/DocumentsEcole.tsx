@@ -252,7 +252,7 @@ const DocumentsEcole = () => {
             <div className="space-y-6 max-w-4xl">
               {estDirecteur && (
                 <div className="flex flex-wrap gap-2">
-                  <Button onClick={() => { setCategorieEdition('recu'); setEdition({ genre: 'visuel', id: null, initial: { nom: '', contenu: structuredClone(MODELES_RECUS_PAR_DEFAUT[0].contenu) } }); }}>
+                  <Button onClick={() => { setCategorieEdition('recu'); setEdition({ genre: 'visuel', id: null, initial: { nom: '', contenu: documentVierge('portrait', 'A5') } }); }}>
                     <FilePlus2 className="h-4 w-4 mr-2" /> Créer un reçu
                   </Button>
                   <Button variant="outline" onClick={() => { setCategorieEdition('recu'); setEdition({ genre: 'html', id: null, titre: 'Nouveau reçu HTML', initial: { nom: '', html: MODELE_HTML_RECU } }); }}>
