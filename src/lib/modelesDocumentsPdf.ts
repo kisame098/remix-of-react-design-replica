@@ -71,6 +71,19 @@ const ajusterImagesContenues = (doc: Document): void => {
 };
 
 /**
+ * Un pied de page en `position: fixed` se pose, à l'écran, dans sa feuille
+ * (voir assemblerDocuments) ; la capture, elle, l'enverrait au bord de la
+ * fenêtre. En `absolute`, il reste dans sa feuille — même place qu'imprimé.
+ */
+const ancrerElementsFixes = (doc: Document): void => {
+  const vue = doc.defaultView;
+  if (!vue) return;
+  for (const el of Array.from(doc.body.querySelectorAll<HTMLElement>('*'))) {
+    if (vue.getComputedStyle(el).position === 'fixed') el.style.position = 'absolute';
+  }
+};
+
+/**
  * Imprime avec le moteur du navigateur : rendu exactement fidèle au HTML,
  * texte net ; « Enregistrer en PDF » y est proposé par le navigateur.
  */
@@ -100,6 +113,7 @@ export const fabriquerPdfHtml = async (html: string): Promise<jsPDF> => {
     if (!doc) throw new Error('Document illisible.');
     await imagesChargees(doc);
     ajusterImagesContenues(doc);
+    ancrerElementsFixes(doc);
     // Une page précise (éditeur visuel, page Word) si le document en a ; sinon
     // chaque feuille d'élève ; sinon tout le document.
     const pages = Array.from(doc.querySelectorAll<HTMLElement>(`.${CLASSE_PAGE}`));
