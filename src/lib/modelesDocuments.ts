@@ -6,9 +6,9 @@ import { dateDakar, type InfosEcole } from '@/lib/documentsEcole';
 //
 // Une école écrit — ou envoie — un modèle en HTML : certificat de scolarité,
 // attestation d'inscription… Les informations qui changent d'un élève à
-// l'autre s'écrivent entre crochets : [NOM ET PRÉNOM DE L'ÉLÈVE].
+// l'autre s'écrivent entre accolades : {NOM ET PRÉNOM DE L'ÉLÈVE}.
 //
-// RÈGLE : tout texte entre crochets est un CHAMP, et un champ que SenClass ne
+// RÈGLE : tout texte entre accolades est un CHAMP, et un champ que SenClass ne
 // connaît pas est REFUSÉ — à l'enregistrement comme à l'impression. Ce qui ne
 // change jamais (dénomination, 2e téléphone…) s'écrit en clair dans le modèle.
 //
@@ -51,12 +51,12 @@ export interface ContexteDocument {
 }
 
 export interface ChampModele {
-  /** Tel qu'il s'écrit dans le modèle, entre crochets. */
+  /** Tel qu'il s'écrit dans le modèle, entre accolades. */
   nom: string;
   groupe: GroupeChamp;
   /** D'où vient la valeur dans SenClass. */
   source: string;
-  /** Une image : ne s'écrit que dans un attribut, ex. <img src="[LOGO DE L'ÉTABLISSEMENT]">. */
+  /** Une image : ne s'écrit que dans un attribut, ex. <img src="{LOGO DE L'ÉTABLISSEMENT}">. */
   image?: true;
   valeur: (c: ContexteDocument) => string;
 }
@@ -125,7 +125,7 @@ export const CHAMPS: readonly ChampModele[] = [
 
 /**
  * Forme comparable d'un nom de champ : majuscules, sans accents, espaces
- * simples, apostrophe droite. [nom de l'etablissement] = [NOM DE L’ÉTABLISSEMENT].
+ * simples, apostrophe droite. [nom de l'etablissement] = {NOM DE L’ÉTABLISSEMENT}.
  */
 export const normaliserNomChamp = (brut: string): string =>
   brut.normalize('NFD').replace(/[̀-ͯ]/g, '')
@@ -138,10 +138,10 @@ export const champConnu = (brut: string): ChampModele | undefined => CHAMPS_PAR_
 
 // ─── Lecture du HTML ───────────────────────────────────────────────────────
 
-/** Un champ entre crochets : pas de crochet ni de chevron dedans, 80 caractères au plus. */
-const MOTIF_CHAMP = /\[([^[\]<>]{1,80})\]/g;
+/** Un champ entre accolades : pas d'accolade ni de chevron dedans, 80 caractères au plus. */
+const MOTIF_CHAMP = /\{([^{}<>]{1,80})\}/g;
 
-/** Les balises dont le texte n'est pas du contenu (CSS, code) : leurs crochets ne sont pas des champs. */
+/** Les balises dont le texte n'est pas du contenu (CSS, code) : leurs accolades ne sont pas des champs. */
 const BALISES_HORS_CONTENU = new Set(['STYLE', 'SCRIPT', 'NOSCRIPT', 'TEMPLATE']);
 
 const lireDocument = (html: string): Document => new DOMParser().parseFromString(html, 'text/html');
@@ -181,7 +181,7 @@ export const TAILLE_MAX_MODELE = 1_000_000;
 
 export interface VerificationModele {
   ok: boolean;
-  /** Champs entre crochets que SenClass ne connaît pas, tels qu'écrits. */
+  /** Champs entre accolades que SenClass ne connaît pas, tels qu'écrits. */
   inconnus: string[];
   /** Champs image écrits dans le texte au lieu d'un attribut src. */
   imagesMalPlacees: string[];
@@ -193,12 +193,13 @@ export interface VerificationModele {
   erreur?: string;
 }
 
-export const verifierModele = (html: string): VerificationModele => {
+export const verifierModele = (html: string, tailleMax = TAILLE_MAX_MODELE): VerificationModele => {
   const vide: VerificationModele = { ok: false, inconnus: [], imagesMalPlacees: [], utilises: [], retraits: [] };
   if (!html.trim()) return { ...vide, erreur: 'Le modèle est vide.' };
-  if (html.length > TAILLE_MAX_MODELE) return { ...vide, erreur: 'Le modèle dépasse 1 Mo : allégez les images qu\'il contient.' };
+  if (html.length > tailleMax) return { ...vide, erreur: `Le modèle dépasse ${Math.round(tailleMax / 1_000_000)} Mo : allégez les images qu'il contient.` };
   const doc = lireDocument(html);
-  if (!doc.body || !doc.body.textContent?.trim() && !doc.body.querySelector('img')) {
+  // Vide = ni texte, ni élément (une page faite seulement de cadres et de formes compte).
+  if (!doc.body || !doc.body.textContent?.trim() && doc.body.childElementCount === 0) {
     return { ...vide, erreur: "Le modèle n'a aucun contenu à imprimer." };
   }
   const inconnus = new Set<string>();
@@ -222,7 +223,7 @@ export const verifierModele = (html: string): VerificationModele => {
 /** Une adresse est acceptée si elle ne charge rien depuis Internet. */
 const adresseSure = (v: string): boolean => {
   const s = v.trim();
-  return s === '' || s.startsWith('#') || /^data:image\//i.test(s) || /^\[[^[\]]+\]$/.test(s);
+  return s === '' || s.startsWith('#') || /^data:image\//i.test(s) || /^\{[^{}]+\}$/.test(s);
 };
 
 const ATTRIBUTS_ADRESSE = ['src', 'href', 'srcset', 'xlink:href', 'background', 'poster', 'action', 'formaction'];
@@ -230,7 +231,7 @@ const ATTRIBUTS_ADRESSE = ['src', 'href', 'srcset', 'xlink:href', 'background', 
 /** Dans du CSS : @import et url(...) vers l'extérieur sont neutralisés ; data: reste permis. */
 const nettoyerCss = (css: string): string =>
   css.replace(/@import[^;]*;?/gi, '')
-    .replace(/url\(\s*(['"]?)(?!data:image\/)[^)]*\1\s*\)/gi, 'none')
+    .replace(/url\(\s*(['"]?)(?!data:(?:image|font)\/|data:application\/(?:x-)?font)[^)]*\1\s*\)/gi, 'none')
     .replace(/expression\s*\(/gi, '(');
 
 /**
@@ -294,11 +295,11 @@ const remplacer = (texte: string, valeurs: Map<string, string>): string =>
 export const remplirModele = (html: string, valeurs: Map<string, string>): string => {
   const doc = lireDocument(html);
   for (const t of noeudsTexte(doc)) {
-    if (t.data.includes('[')) t.data = remplacer(t.data, valeurs);
+    if (t.data.includes('{')) t.data = remplacer(t.data, valeurs);
   }
   for (const el of Array.from(doc.querySelectorAll('*'))) {
     for (const attr of Array.from(el.attributes)) {
-      if (attr.value.includes('[')) el.setAttribute(attr.name, remplacer(attr.value, valeurs));
+      if (attr.value.includes('{')) el.setAttribute(attr.name, remplacer(attr.value, valeurs));
     }
     // École sans logo : pas d'icône d'image cassée sur le document.
     if (el.tagName === 'IMG' && el.hasAttribute('src') && !el.getAttribute('src')?.trim()) el.remove();
@@ -308,6 +309,12 @@ export const remplirModele = (html: string, valeurs: Map<string, string>): strin
 
 /** Classe de chaque feuille quand plusieurs élèves sont imprimés d'un coup. */
 export const CLASSE_FEUILLE = 'senclass-feuille';
+
+/**
+ * Classe d'une page A4 précise dans une feuille (page de l'éditeur visuel,
+ * page d'un Word) : le PDF photographie chacune sur sa propre page.
+ */
+export const CLASSE_PAGE = 'senclass-page';
 
 /**
  * Plusieurs documents remplis (un par élève) → un seul document : les styles
@@ -408,19 +415,24 @@ export interface Production {
 export const produireDocuments = (modeleHtml: string, contextes: ContexteDocument[]): Production => {
   const verification = verifierModele(modeleHtml);
   if (!verification.ok) return { refus: verification, html: '', vides: [] };
+  return {
+    html: assemblerDocuments(contextes.map(c => documentPret(modeleHtml, c))),
+    vides: listerVides(verification.utilises, contextes),
+  };
+};
+
+/** Les champs utilisés restés vides, élève par élève (ceux de l'école : une seule fois). */
+export const listerVides = (utilises: string[], contextes: ContexteDocument[]): Production['vides'] => {
   const vides = new Map<string, string[]>();
   for (const c of contextes) {
-    for (const champ of champsVides(verification, c)) {
+    for (const champ of utilises.filter(nom => !champConnu(nom)?.valeur(c).trim())) {
       vides.set(champ, [...(vides.get(champ) ?? []), `${c.eleve.nom} ${c.eleve.prenom}`.trim()]);
     }
   }
-  return {
-    html: assemblerDocuments(contextes.map(c => documentPret(modeleHtml, c))),
-    vides: [...vides].map(([champ, eleves]) => {
-      const ch = champConnu(champ);
-      return ch && ch.groupe !== 'eleve' && ch.groupe !== 'scolarite'
-        ? { champ, eleves: [], source: ch.source }
-        : { champ, eleves };
-    }),
-  };
+  return [...vides].map(([champ, eleves]) => {
+    const ch = champConnu(champ);
+    return ch && ch.groupe !== 'eleve' && ch.groupe !== 'scolarite'
+      ? { champ, eleves: [], source: ch.source }
+      : { champ, eleves };
+  });
 };

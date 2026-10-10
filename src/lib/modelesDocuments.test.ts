@@ -6,6 +6,7 @@ import {
   type ContexteDocument,
 } from './modelesDocuments';
 import { MODELES_PAR_DEFAUT } from './modelesDocumentsParDefaut';
+import { visuelVersHtml } from './documentVisuel';
 import type { InfosEcole } from './documentsEcole';
 
 const ecole: InfosEcole = {
@@ -21,16 +22,16 @@ const page = (corps: string, tete = '') => `<!DOCTYPE html><html><head>${tete}</
 
 // Le modèle envoyé par l'utilisateur (raccourci), tel quel.
 const CERTIFICAT_UTILISATEUR = page(`
-  <div class="school-name">[NOM DE L'ÉTABLISSEMENT]</div>
-  <div class="school-type">[TYPE / DÉNOMINATION DE L'ÉTABLISSEMENT]</div>
-  <div>Aut. [NUMÉRO D'AUTORISATION] / MEN / DEP / [ANNÉE]</div>
-  <div>Tel : [TÉLÉPHONE 1] / [TÉLÉPHONE 2]</div>
-  <div>[VILLE] le [DATE]</div>
-  <span class="value">[NOM ET PRÉNOM DE L'ÉLÈVE]</span>
-  <span>[DATE DE NAISSANCE] à [LIEU DE NAISSANCE]</span>
-  <span>[NOM DU PÈRE] et de [NOM DE LA MÈRE]</span>
-  <span>[CLASSE]</span> <span>[ANNÉE SCOLAIRE]</span>
-  <div class="signature-name">[NOM DU DIRECTEUR]</div>`,
+  <div class="school-name">{NOM DE L'ÉTABLISSEMENT}</div>
+  <div class="school-type">{TYPE / DÉNOMINATION DE L'ÉTABLISSEMENT}</div>
+  <div>Aut. {NUMÉRO D'AUTORISATION} / MEN / DEP / {ANNÉE}</div>
+  <div>Tel : {TÉLÉPHONE 1} / {TÉLÉPHONE 2}</div>
+  <div>{VILLE} le {DATE}</div>
+  <span class="value">{NOM ET PRÉNOM DE L'ÉLÈVE}</span>
+  <span>{DATE DE NAISSANCE} à {LIEU DE NAISSANCE}</span>
+  <span>{NOM DU PÈRE} et de {NOM DE LA MÈRE}</span>
+  <span>{CLASSE}</span> <span>{ANNÉE SCOLAIRE}</span>
+  <div class="signature-name">{NOM DU DIRECTEUR}</div>`,
 '<style>.label{white-space:nowrap} input[type="text"]{border:0} @media print { body { background: white; } }</style>');
 
 describe('le catalogue des champs', () => {
@@ -58,27 +59,27 @@ describe('vérifier un modèle : un champ inconnu de SenClass est refusé', () =
 
   it('les constantes écrites en clair et les champs connus suffisent : accepté', () => {
     const corrige = CERTIFICAT_UTILISATEUR
-      .replace("[TYPE / DÉNOMINATION DE L'ÉTABLISSEMENT]", 'Établissement privé laïc')
-      .replace('[ANNÉE]', '2015')
-      .replace('[TÉLÉPHONE 1] / [TÉLÉPHONE 2]', "[TÉLÉPHONE DE L'ÉTABLISSEMENT] / 77 111 22 33");
+      .replace("{TYPE / DÉNOMINATION DE L'ÉTABLISSEMENT}", 'Établissement privé laïc')
+      .replace('{ANNÉE}', '2015')
+      .replace('{TÉLÉPHONE 1} / {TÉLÉPHONE 2}', "{TÉLÉPHONE DE L'ÉTABLISSEMENT} / 77 111 22 33");
     const v = verifierModele(corrige);
     expect(v.inconnus).toEqual([]);
     expect(v.ok).toBe(true);
   });
 
   it('les crochets du CSS (sélecteurs d\'attribut) ne sont pas des champs', () => {
-    const v = verifierModele(page('<p>[CLASSE]</p>', '<style>input[type="text"]{color:red} a[href]{x:y}</style>'));
+    const v = verifierModele(page('<p>{CLASSE}</p>', '<style>input[type="text"]{color:red} a[href]{x:y}</style>'));
     expect(v.ok).toBe(true);
     expect(v.utilises).toEqual(['CLASSE']);
   });
 
   it('un champ caché dans un attribut est vérifié aussi', () => {
-    expect(verifierModele(page('<p title="[INVENTÉ]">x</p>')).inconnus).toEqual(['INVENTÉ']);
+    expect(verifierModele(page('<p title="{INVENTÉ}">x</p>')).inconnus).toEqual(['INVENTÉ']);
   });
 
   it('le logo ne se met que dans <img src="…"> : écrit dans le texte, il est refusé', () => {
-    expect(verifierModele(page('<img src="[LOGO DE L\'ÉTABLISSEMENT]"><p>x</p>')).ok).toBe(true);
-    const v = verifierModele(page("<p>[LOGO DE L'ÉTABLISSEMENT]</p>"));
+    expect(verifierModele(page('<img src="{LOGO DE L\'ÉTABLISSEMENT}"><p>x</p>')).ok).toBe(true);
+    const v = verifierModele(page("<p>{LOGO DE L'ÉTABLISSEMENT}</p>"));
     expect(v.ok).toBe(false);
     expect(v.imagesMalPlacees).toEqual(["LOGO DE L'ÉTABLISSEMENT"]);
   });
@@ -92,7 +93,7 @@ describe('vérifier un modèle : un champ inconnu de SenClass est refusé', () =
   it('chaque modèle fourni par SenClass passe sa propre vérification', () => {
     expect(MODELES_PAR_DEFAUT.length).toBeGreaterThan(0);
     for (const m of MODELES_PAR_DEFAUT) {
-      const v = verifierModele(m.html);
+      const v = verifierModele(visuelVersHtml(m.contenu));
       expect(v, m.nom).toMatchObject({ ok: true, inconnus: [], retraits: [] });
     }
   });
@@ -111,14 +112,14 @@ describe('le nettoyage : un modèle piégé ne peut rien exécuter ni appeler In
 
   it('les styles du modèle, les images intégrées (data:) et les champs dans src sont gardés', () => {
     const { html, retraits } = nettoyer(page(
-      '<div class="page" style="color:red"><img src="data:image/png;base64,AAAA"><img src="[LOGO DE L\'ÉTABLISSEMENT]"></div>',
+      '<div class="page" style="color:red"><img src="data:image/png;base64,AAAA"><img src="{LOGO DE L\'ÉTABLISSEMENT}"></div>',
       '<style>.page{width:210mm} @page{size:A4;margin:0} @media print{body{background:white}}</style>',
     ));
     expect(retraits).toEqual([]);
     expect(html).toContain('.page{width:210mm}');
     expect(html).toContain('@media print');
     expect(html).toContain('data:image/png;base64,AAAA');
-    expect(html).toContain('[LOGO DE L');
+    expect(html).toContain('{LOGO DE L');
     expect(html).toContain('style="color:red"');
   });
 });
@@ -127,26 +128,26 @@ describe('remplir un modèle pour un élève', () => {
   it('chaque champ reçoit la donnée de SenClass', () => {
     const v = valeursChamps(contexte());
     const html = remplirModele(page(
-      "<p>[NOM DE L'ÉTABLISSEMENT] — [VILLE] le [DATE] ([DATE EN LETTRES])</p><p>[NOM ET PRÉNOM DE L'ÉLÈVE], [NÉ OU NÉE] le [DATE DE NAISSANCE] à [LIEU DE NAISSANCE]</p><p>[NOM DU PÈRE] / [NOM DE LA MÈRE] — [CLASSE] [ANNÉE SCOLAIRE] — [NOM DU DIRECTEUR]</p>"), v);
+      "<p>{NOM DE L'ÉTABLISSEMENT} — {VILLE} le {DATE} ({DATE EN LETTRES})</p><p>{NOM ET PRÉNOM DE L'ÉLÈVE}, {NÉ OU NÉE} le {DATE DE NAISSANCE} à {LIEU DE NAISSANCE}</p><p>{NOM DU PÈRE} / {NOM DE LA MÈRE} — {CLASSE} {ANNÉE SCOLAIRE} — {NOM DU DIRECTEUR}</p>"), v);
     expect(html).toContain('Les Roses — Thiès le 10/10/2026 (10 octobre 2026)');
     expect(html).toContain('DIOP Awa, née le 05/03/2012 à Dakar');
     expect(html).toContain('Moussa DIOP / Fatou NDIAYE — 6ème A 2026-2027 — Ousmane FALL');
   });
 
   it('une valeur est posée comme TEXTE : un nom contenant du HTML ne devient jamais du code', () => {
-    const html = remplirModele(page("<p>[NOM DE L'ÉLÈVE]</p>"), valeursChamps(contexte({ nom: '<img src=x onerror=alert(1)>' })));
+    const html = remplirModele(page("<p>{NOM DE L'ÉLÈVE}</p>"), valeursChamps(contexte({ nom: '<img src=x onerror=alert(1)>' })));
     expect(html).toContain('&lt;img src=x onerror=alert(1)&gt;');
     expect(html).not.toContain('<img src=x');
   });
 
   it('les crochets du CSS ne sont pas touchés', () => {
-    const html = remplirModele(page('<p>[CLASSE]</p>', '<style>a[href]{color:red}</style>'), valeursChamps(contexte()));
+    const html = remplirModele(page('<p>{CLASSE}</p>', '<style>a[href]{color:red}</style>'), valeursChamps(contexte()));
     expect(html).toContain('a[href]{color:red}');
   });
 
   it('le logo va dans src ; sans père ni mère enregistrés, ces champs restent vides et sont signalés', () => {
     const c = { ...contexte({ tuteurs: [{ nom: 'Aliou SECK', qualite: 'oncle', telephone: '70' }] }), ecole: { ...ecole, logo: 'data:image/png;base64,LOGO' } };
-    const modele = page('<img src="[LOGO DE L\'ÉTABLISSEMENT]"><p>[NOM DU PÈRE] [NOM DE LA MÈRE] [NOM DU TUTEUR]</p>');
+    const modele = page('<img src="{LOGO DE L\'ÉTABLISSEMENT}"><p>{NOM DU PÈRE} {NOM DE LA MÈRE} {NOM DU TUTEUR}</p>');
     const html = remplirModele(modele, valeursChamps(c));
     expect(html).toContain('src="data:image/png;base64,LOGO"');
     expect(html).toContain('Aliou SECK');
@@ -154,7 +155,7 @@ describe('remplir un modèle pour un élève', () => {
   });
 
   it('une école sans logo : l\'image disparaît au lieu d\'afficher une icône cassée', () => {
-    const html = remplirModele(page('<img src="[LOGO DE L\'ÉTABLISSEMENT]"><p>x</p>'), valeursChamps({ ...contexte(), ecole: { ...ecole, logo: null } }));
+    const html = remplirModele(page('<img src="{LOGO DE L\'ÉTABLISSEMENT}"><p>x</p>'), valeursChamps({ ...contexte(), ecole: { ...ecole, logo: null } }));
     expect(html).not.toContain('<img');
   });
 
@@ -168,7 +169,7 @@ describe('remplir un modèle pour un élève', () => {
 
 describe('plusieurs élèves d\'un coup', () => {
   it('une feuille par élève, chacune sur sa page, avec les styles du modèle', () => {
-    const modele = page("<div class=\"page\">[NOM DE L'ÉLÈVE]</div>", '<style>.page{width:210mm}</style>');
+    const modele = page("<div class=\"page\">{NOM DE L'ÉLÈVE}</div>", '<style>.page{width:210mm}</style>');
     const html = assemblerDocuments(['DIOP', 'FALL', 'SECK'].map(nom => remplirModele(modele, valeursChamps(contexte({ nom })))));
     const doc = new DOMParser().parseFromString(html, 'text/html');
     const feuilles = doc.querySelectorAll(`.${CLASSE_FEUILLE}`);
@@ -187,13 +188,13 @@ describe('produire les documents d\'une classe', () => {
   const c2 = contexte({ nom: 'FALL', prenom: 'Modou', tuteurs: [] });
 
   it('un modèle avec un champ inconnu ne produit RIEN, même s\'il a été enregistré avant', () => {
-    const p = produireDocuments(page('<p>[TÉLÉPHONE 2]</p>'), [c1]);
+    const p = produireDocuments(page('<p>{TÉLÉPHONE 2}</p>'), [c1]);
     expect(p.refus?.inconnus).toEqual(['TÉLÉPHONE 2']);
     expect(p.html).toBe('');
   });
 
   it('une feuille par élève, et la liste des champs restés vides avec les élèves concernés', () => {
-    const p = produireDocuments(page("<p>[NOM ET PRÉNOM DE L'ÉLÈVE] fils de [NOM DU PÈRE]</p>"), [c1, c2]);
+    const p = produireDocuments(page("<p>{NOM ET PRÉNOM DE L'ÉLÈVE} fils de {NOM DU PÈRE}</p>"), [c1, c2]);
     expect(p.refus).toBeUndefined();
     expect(p.html).toContain('DIOP Awa fils de Moussa DIOP');
     expect(p.html).toContain('FALL Modou fils de');
@@ -201,7 +202,7 @@ describe('produire les documents d\'une classe', () => {
   });
 
   it('le document produit est nettoyé APRÈS remplissage', () => {
-    const p = produireDocuments(page('<p onclick="x()">[CLASSE]</p><script>vol()</script>'), [c1]);
+    const p = produireDocuments(page('<p onclick="x()">{CLASSE}</p><script>vol()</script>'), [c1]);
     expect(p.html).not.toMatch(/onclick|<script/);
     expect(p.html).toContain('6ème A');
   });
@@ -215,7 +216,7 @@ describe('produire les documents d\'une classe', () => {
   });
 
   it('une information de l\'école manquante (logo) est signalée UNE fois, avec où la remplir', () => {
-    const p = produireDocuments(page('<img src="[LOGO DE L\'ÉTABLISSEMENT]"><p>[CLASSE]</p>'), [c1, c2]);
+    const p = produireDocuments(page('<img src="{LOGO DE L\'ÉTABLISSEMENT}"><p>{CLASSE}</p>'), [c1, c2]);
     expect(p.vides).toEqual([{ champ: "LOGO DE L'ÉTABLISSEMENT", eleves: [], source: expect.stringContaining('Paramètres') }]);
   });
 });
