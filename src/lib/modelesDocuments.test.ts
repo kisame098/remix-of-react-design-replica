@@ -302,7 +302,7 @@ describe('modèles de reçu', () => {
     const html = documentPret(page('<div class="avant">Avant</div><div>{TABLEAU DES PAIEMENTS}</div><p>Après</p>'), c);
     const doc = new DOMParser().parseFromString(html, 'text/html');
     const lignes = Array.from(doc.querySelectorAll('tr')).map(tr => Array.from(tr.children).map(td => td.textContent));
-    expect(lignes).toEqual([['Désignation', 'Montant (FCFA)'], ['<b>piège</b>', '1 000'], ['Cantine', '5 000']]);
+    expect(lignes).toEqual([['Désignation', 'Montant (FCFA)'], ['<b>piège</b> (annulé)', '1 000'], ['Cantine', '5 000']]);
     expect(doc.querySelector('td')!.getAttribute('style')).toContain('line-through');
     expect(html).not.toContain('<b>piège</b>');
     expect(doc.body.textContent).toMatch(/Avant[\s\S]*Désignation[\s\S]*Après/);
@@ -313,5 +313,17 @@ describe('modèles de reçu', () => {
     expect(v({})).toBe('');
     expect(v({ duplicata: true })).toBe('DUPLICATA');
     expect(v({ annule: true, duplicata: true })).toBe('ANNULÉ');
+  });
+});
+
+describe('tableau des paiements — beaucoup de lignes', () => {
+  it('au-delà de huit lignes, deux colonnes lues de haut en bas, comme le reçu SenClass', () => {
+    const base = contexteExemple(ecole, '2026-2027');
+    const lignes = Array.from({ length: 11 }, (_, i) => ({ designation: `Mois ${i + 1}`, montant: 1000, annulee: false }));
+    const html = documentPret(page('<div>{TABLEAU DES PAIEMENTS}</div>'), { ...base, recu: { ...base.recu!, lignes } });
+    const tables = Array.from(new DOMParser().parseFromString(html, 'text/html').querySelectorAll('table'));
+    expect(tables).toHaveLength(2);
+    expect(tables.map(t => t.querySelectorAll('tr').length - 1)).toEqual([6, 5]);
+    expect(tables[1].querySelector('td')!.textContent).toBe('Mois 7');
   });
 });

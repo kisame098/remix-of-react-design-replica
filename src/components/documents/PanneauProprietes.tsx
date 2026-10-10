@@ -225,7 +225,9 @@ export const PanneauProprietes = ({
             <Button size="icon" variant="outline" className="h-8 w-8" onClick={() => onRemplacerImage(el.id)} title="Choisir une image" aria-label="Choisir une image"><ImageIcon className="h-4 w-4" /></Button>
             {el.source !== 'logo' && <Button size="icon" variant="outline" className="h-8 w-8" onClick={() => maj({ source: 'logo' })} title="Utiliser le logo de l'école" aria-label="Utiliser le logo de l'école"><School className="h-4 w-4" /></Button>}
           </div>
-          <p className="text-[11px] text-muted-foreground">Par un coin, l'image garde ses proportions.</p>
+          <Nombre label="Opacité" unite="%" pas={5} min={0} max={100} valeur={Math.round((el.opacite ?? 1) * 100)}
+            onChange={v => maj({ opacite: Math.min(1, Math.max(0, v / 100)) })} />
+          <p className="text-[11px] text-muted-foreground">Par un coin, l'image garde ses proportions. Une opacité faible en fait un filigrane.</p>
         </Section>
       )}
 

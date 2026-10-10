@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { ajusterTextesDebordants } from '@/lib/modelesDocuments';
 
 /** Largeur d'une feuille A4 à l'écran (210 mm à 96 points par pouce). */
 const LARGEUR_A4_PX = 794;
@@ -40,6 +41,7 @@ export const ApercuHtml = ({ html, titre = 'Aperçu du document' }: { html: stri
     const doc = cadre.current?.contentDocument;
     const vue = doc?.defaultView;
     if (!doc?.body || !vue) return;
+    ajusterTextesDebordants(doc);
     let bas = 0;
     let droite = 0;
     for (const el of Array.from(doc.body.children)) {

@@ -259,10 +259,60 @@ export const MODELES_PAR_DEFAUT: readonly ModeleParDefaut[] = [
 export const estModeleParDefaut = (idModele: string): boolean => idModele.startsWith('senclass:');
 
 // ─── Modèle de REÇU (A5) ───────────────────────────────────────────────────
-// Notre reçu, refait en page de l'éditeur : l'école en fait une copie et la
-// modifie à son goût (onglet Documents → Reçus). Même contenu que le reçu
-// SenClass : numéro, élève, tableau des paiements, total, somme en lettres,
-// mode de paiement, signatures.
+// Le reçu SenClass (src/lib/recuPdf.ts, version noir et blanc) refait en page
+// de l'éditeur, aux mêmes mesures : en-tête à double filet et logo dans un
+// cercle, titre à empattements, numéro en pastille, carte de l'élève, tableau,
+// total encadré, tampon ACQUITTÉ, somme en lettres, mode / référence /
+// encaissé par, signatures et cachet, pied de page. L'école en fait une copie
+// et la modifie à son goût (Documents → Reçus).
+//
+// Le tableau, le total et la somme en lettres sont dans UN bloc qui s'allonge
+// avec le nombre de lignes, comme sur le reçu SenClass.
+
+const R_FONCE = '#111827';
+const R_ACCENT = '#374151';
+const R_PALE = '#F6F6F6';
+const R_GRIS = '#6B7280';
+const R_ENCRE = '#1F2937';
+const R_FILET = '#E5E7EB';
+
+/** Le motif de sécurité du pied de page (mêmes ondes que le reçu SenClass), en image. */
+const MOTIF_GUILLOCHE = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxNDgwIiBoZWlnaHQ9IjkyIiB2aWV3Qm94PSIwIDAgMTQ4IDkuMiIgcHJlc2VydmVBc3BlY3RSYXRpbz0ibm9uZSI+PGcgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjQkRCREJEIiBzdHJva2Utd2lkdGg9IjAuMTgiPjxwYXRoIGQ9Ik0wLjAgNC42MCBMMC43IDUuNjEgTDEuNCA2LjU1IEwyLjEgNy4zMyBMMi44IDcuOTEgTDMuNSA4LjI0IEw0LjIgOC4yOSBMNC45IDguMDggTDUuNiA3LjYzIEw2LjMgNi45NyBMNy4wIDYuMTYgTDcuNyA1LjI3IEw4LjQgNC4zOCBMOS4xIDMuNTQgTDkuOCAyLjg0IEwxMC41IDIuMzAgTDExLjIgMS45NyBMMTEuOSAxLjg1IEwxMi42IDEuOTUgTDEzLjMgMi4yMyBMMTQuMCAyLjY2IEwxNC43IDMuMTkgTDE1LjQgMy43NyBMMTYuMSA0LjM0IEwxNi44IDQuODUgTDE3LjUgNS4yNiBMMTguMiA1LjU1IEwxOC45IDUuNzEgTDE5LjYgNS43NCBMMjAuMyA1LjY1IEwyMS4wIDUuNDcgTDIxLjcgNS4yNSBMMjIuNCA1LjAyIEwyMy4xIDQuODIgTDIzLjggNC42NyBMMjQuNSA0LjYwIEwyNS4yIDQuNjMgTDI1LjkgNC43NCBMMjYuNiA0LjkyIEwyNy4zIDUuMTQgTDI4LjAgNS4zNyBMMjguNyA1LjU3IEwyOS40IDUuNzEgTDMwLjEgNS43NCBMMzAuOCA1LjY1IEwzMS41IDUuNDIgTDMyLjIgNS4wNiBMMzIuOSA0LjU5IEwzMy42IDQuMDUgTDM0LjMgMy40NyBMMzUuMCAyLjkxIEwzNS43IDIuNDIgTDM2LjQgMi4wNiBMMzcuMSAxLjg3IEwzNy44IDEuODkgTDM4LjUgMi4xMiBMMzkuMiAyLjU2IEwzOS45IDMuMTkgTDQwLjYgMy45NyBMNDEuMyA0Ljg0IEw0Mi4wIDUuNzQgTDQyLjcgNi41OSBMNDMuNCA3LjMzIEw0NC4xIDcuODkgTDQ0LjggOC4yMyBMNDUuNSA4LjMwIEw0Ni4yIDguMTAgTDQ2LjkgNy42NCBMNDcuNiA2Ljk0IEw0OC4zIDYuMDcgTDQ5LjAgNS4wOSBMNDkuNyA0LjA2IEw1MC40IDMuMDggTDUxLjEgMi4yMiBMNTEuOCAxLjU0IEw1Mi41IDEuMDkgTDUzLjIgMC45MCBMNTMuOSAwLjk4IEw1NC42IDEuMzMgTDU1LjMgMS45MCBMNTYuMCAyLjY0IEw1Ni43IDMuNTAgTDU3LjQgNC40MCBMNTguMSA1LjI3IEw1OC44IDYuMDUgTDU5LjUgNi42NyBMNjAuMiA3LjEwIEw2MC45IDcuMzIgTDYxLjYgNy4zMiBMNjIuMyA3LjEyIEw2My4wIDYuNzYgTDYzLjcgNi4yNyBMNjQuNCA1LjcxIEw2NS4xIDUuMTMgTDY1LjggNC41OCBMNjYuNSA0LjEyIEw2Ny4yIDMuNzcgTDY3LjkgMy41NSBMNjguNiAzLjQ2IEw2OS4zIDMuNTAgTDcwLjAgMy42MyBMNzAuNyAzLjg0IEw3MS40IDQuMDcgTDcyLjEgNC4yOSBMNzIuOCA0LjQ3IEw3My41IDQuNTggTDc0LjIgNC42MCBMNzQuOSA0LjUzIEw3NS42IDQuMzggTDc2LjMgNC4xNyBMNzcuMCAzLjk0IEw3Ny43IDMuNzIgTDc4LjQgMy41NSBMNzkuMSAzLjQ2IEw3OS44IDMuNDkgTDgwLjUgMy42NiBMODEuMiAzLjk1IEw4MS45IDQuMzcgTDgyLjYgNC44OSBMODMuMyA1LjQ2IEw4NC4wIDYuMDMgTDg0LjcgNi41NiBMODUuNCA2Ljk4IEw4Ni4xIDcuMjYgTDg2LjggNy4zNSBMODcuNSA3LjIyIEw4OC4yIDYuODggTDg4LjkgNi4zMyBMODkuNiA1LjYyIEw5MC4zIDQuNzggTDkxLjAgMy44OSBMOTEuNyAzLjAwIEw5Mi40IDIuMjAgTDkzLjEgMS41NSBMOTMuOCAxLjEwIEw5NC41IDAuOTAgTDk1LjIgMC45NyBMOTUuOSAxLjMxIEw5Ni42IDEuOTAgTDk3LjMgMi43MCBMOTguMCAzLjYzIEw5OC43IDQuNjUgTDk5LjQgNS42NiBMMTAwLjEgNi41OSBMMTAwLjggNy4zNiBMMTAxLjUgNy45MyBMMTAyLjIgOC4yNSBMMTAyLjkgOC4yOSBMMTAzLjYgOC4wNyBMMTA0LjMgNy42MCBMMTA1LjAgNi45MyBMMTA1LjcgNi4xMiBMMTA2LjQgNS4yMyBMMTA3LjEgNC4zMyBMMTA3LjggMy41MSBMMTA4LjUgMi44MSBMMTA5LjIgMi4yOCBMMTA5LjkgMS45NiBMMTEwLjYgMS44NSBMMTExLjMgMS45NiBMMTEyLjAgMi4yNSBMMTEyLjcgMi42OSBMMTEzLjQgMy4yMiBMMTE0LjEgMy44MCBMMTE0LjggNC4zNiBMMTE1LjUgNC44NyBMMTE2LjIgNS4yOCBMMTE2LjkgNS41NiBMMTE3LjYgNS43MSBMMTE4LjMgNS43MyBMMTE5LjAgNS42NCBMMTE5LjcgNS40NiBMMTIwLjQgNS4yNCBMMTIxLjEgNS4wMSBMMTIxLjggNC44MSBMMTIyLjUgNC42NiBMMTIzLjIgNC42MCBMMTIzLjkgNC42MyBMMTI0LjYgNC43NCBMMTI1LjMgNC45MyBMMTI2LjAgNS4xNSBMMTI2LjcgNS4zOCBMMTI3LjQgNS41OCBMMTI4LjEgNS43MSBMMTI4LjggNS43NCBMMTI5LjUgNS42NCBMMTMwLjIgNS40MCBMMTMwLjkgNS4wNCBMMTMxLjYgNC41NyBMMTMyLjMgNC4wMiBMMTMzLjAgMy40NCBMMTMzLjcgMi44OCBMMTM0LjQgMi40MCBMMTM1LjEgMi4wNSBMMTM1LjggMS44NyBMMTM2LjUgMS44OSBMMTM3LjIgMi4xMyBMMTM3LjkgMi41OCBMMTM4LjYgMy4yMiBMMTM5LjMgNC4wMSBMMTQwLjAgNC44OCBMMTQwLjcgNS43OCBMMTQxLjQgNi42MyBMMTQyLjEgNy4zNiBMMTQyLjggNy45MiBMMTQzLjUgOC4yNCBMMTQ0LjIgOC4zMCBMMTQ0LjkgOC4wOCBMMTQ1LjYgNy42MSBMMTQ2LjMgNi45MCBMMTQ3LjAgNi4wMyBMMTQ3LjcgNS4wNCIvPjxwYXRoIGQ9Ik0wLjAgNy4zNyBMMC43IDcuNzggTDEuNCA3Ljk1IEwyLjEgNy44NyBMMi44IDcuNTYgTDMuNSA3LjA1IEw0LjIgNi4zOSBMNC45IDUuNjUgTDUuNiA0Ljg4IEw2LjMgNC4xNiBMNy4wIDMuNTMgTDcuNyAzLjA1IEw4LjQgMi43MiBMOS4xIDIuNTggTDkuOCAyLjYxIEwxMC41IDIuNzkgTDExLjIgMy4wOSBMMTEuOSAzLjQ2IEwxMi42IDMuODYgTDEzLjMgNC4yNCBMMTQuMCA0LjU2IEwxNC43IDQuODEgTDE1LjQgNC45NSBMMTYuMSA0Ljk5IEwxNi44IDQuOTMgTDE3LjUgNC44MSBMMTguMiA0LjY1IEwxOC45IDQuNDggTDE5LjYgNC4zNSBMMjAuMyA0LjI4IEwyMS4wIDQuMjkgTDIxLjcgNC40MSBMMjIuNCA0LjYzIEwyMy4xIDQuOTQgTDIzLjggNS4zMCBMMjQuNSA1LjY4IEwyNS4yIDYuMDQgTDI1LjkgNi4zMyBMMjYuNiA2LjUxIEwyNy4zIDYuNTUgTDI4LjAgNi40MSBMMjguNyA2LjExIEwyOS40IDUuNjQgTDMwLjEgNS4wMyBMMzAuOCA0LjMyIEwzMS41IDMuNTcgTDMyLjIgMi44NCBMMzIuOSAyLjIwIEwzMy42IDEuNjkgTDM0LjMgMS4zNyBMMzUuMCAxLjI5IEwzNS43IDEuNDUgTDM2LjQgMS44NiBMMzcuMSAyLjQ5IEwzNy44IDMuMzEgTDM4LjUgNC4yNCBMMzkuMiA1LjIzIEwzOS45IDYuMTkgTDQwLjYgNy4wNSBMNDEuMyA3Ljc1IEw0Mi4wIDguMjIgTDQyLjcgOC40MiBMNDMuNCA4LjM1IEw0NC4xIDguMDEgTDQ0LjggNy40MiBMNDUuNSA2LjYzIEw0Ni4yIDUuNzAgTDQ2LjkgNC43MSBMNDcuNiAzLjczIEw0OC4zIDIuODUgTDQ5LjAgMi4xMSBMNDkuNyAxLjU5IEw1MC40IDEuMzAgTDUxLjEgMS4yNiBMNTEuOCAxLjQ3IEw1Mi41IDEuODkgTDUzLjIgMi40OCBMNTMuOSAzLjE5IEw1NC42IDMuOTUgTDU1LjMgNC43MCBMNTYuMCA1LjM4IEw1Ni43IDUuOTQgTDU3LjQgNi4zNCBMNTguMSA2LjU3IEw1OC44IDYuNjIgTDU5LjUgNi41MSBMNjAuMiA2LjI3IEw2MC45IDUuOTIgTDYxLjYgNS41MyBMNjIuMyA1LjE0IEw2My4wIDQuNzggTDYzLjcgNC41MCBMNjQuNCA0LjMxIEw2NS4xIDQuMjIgTDY1LjggNC4yMyBMNjYuNSA0LjMzIEw2Ny4yIDQuNDcgTDY3LjkgNC42NCBMNjguNiA0LjgwIEw2OS4zIDQuOTAgTDcwLjAgNC45MyBMNzAuNyA0Ljg2IEw3MS40IDQuNjggTDcyLjEgNC40MiBMNzIuOCA0LjA4IEw3My41IDMuNzAgTDc0LjIgMy4zMyBMNzQuOSAzLjAwIEw3NS42IDIuNzYgTDc2LjMgMi42NSBMNzcuMCAyLjcwIEw3Ny43IDIuOTIgTDc4LjQgMy4zMiBMNzkuMSAzLjg3IEw3OS44IDQuNTMgTDgwLjUgNS4yNyBMODEuMiA2LjAxIEw4MS45IDYuNzEgTDgyLjYgNy4yOSBMODMuMyA3LjcwIEw4NC4wIDcuOTAgTDg0LjcgNy44NiBMODUuNCA3LjU2IEw4Ni4xIDcuMDMgTDg2LjggNi4zMCBMODcuNSA1LjQxIEw4OC4yIDQuNDQgTDg4LjkgMy40NiBMODkuNiAyLjU0IEw5MC4zIDEuNzYgTDkxLjAgMS4xOCBMOTEuNyAwLjg0IEw5Mi40IDAuNzggTDkzLjEgMC45OSBMOTMuOCAxLjQ3IEw5NC41IDIuMTggTDk1LjIgMy4wNSBMOTUuOSA0LjAyIEw5Ni42IDUuMDEgTDk3LjMgNS45NSBMOTguMCA2Ljc2IEw5OC43IDcuMzkgTDk5LjQgNy44MCBMMTAwLjEgNy45NSBMMTAwLjggNy44NiBMMTAxLjUgNy41NCBMMTAyLjIgNy4wMiBMMTAyLjkgNi4zNiBMMTAzLjYgNS42MSBMMTA0LjMgNC44NSBMMTA1LjAgNC4xMyBMMTA1LjcgMy41MSBMMTA2LjQgMy4wMyBMMTA3LjEgMi43MSBMMTA3LjggMi41OCBMMTA4LjUgMi42MiBMMTA5LjIgMi44MCBMMTA5LjkgMy4xMCBMMTEwLjYgMy40OCBMMTExLjMgMy44OCBMMTEyLjAgNC4yNSBMMTEyLjcgNC41OCBMMTEzLjQgNC44MiBMMTE0LjEgNC45NSBMMTE0LjggNC45OSBMMTE1LjUgNC45MyBMMTE2LjIgNC44MCBMMTE2LjkgNC42NCBMMTE3LjYgNC40NyBMMTE4LjMgNC4zNCBMMTE5LjAgNC4yNyBMMTE5LjcgNC4zMCBMMTIwLjQgNC40MiBMMTIxLjEgNC42NSBMMTIxLjggNC45NSBMMTIyLjUgNS4zMiBMMTIzLjIgNS43MCBMMTIzLjkgNi4wNSBMMTI0LjYgNi4zNCBMMTI1LjMgNi41MiBMMTI2LjAgNi41NCBMMTI2LjcgNi40MCBMMTI3LjQgNi4wOSBMMTI4LjEgNS42MSBMMTI4LjggNS4wMCBMMTI5LjUgNC4yOSBMMTMwLjIgMy41NCBMMTMwLjkgMi44MSBMMTMxLjYgMi4xNyBMMTMyLjMgMS42NyBMMTMzLjAgMS4zNyBMMTMzLjcgMS4yOSBMMTM0LjQgMS40NyBMMTM1LjEgMS44OSBMMTM1LjggMi41MyBMMTM2LjUgMy4zNSBMMTM3LjIgNC4yOSBMMTM3LjkgNS4yOCBMMTM4LjYgNi4yMyBMMTM5LjMgNy4wOSBMMTQwLjAgNy43NyBMMTQwLjcgOC4yMyBMMTQxLjQgOC40MyBMMTQyLjEgOC4zNCBMMTQyLjggNy45OSBMMTQzLjUgNy4zOCBMMTQ0LjIgNi41OCBMMTQ0LjkgNS42NSBMMTQ1LjYgNC42NiBMMTQ2LjMgMy42OSBMMTQ3LjAgMi44MSBMMTQ3LjcgMi4wOCIvPjxwYXRoIGQ9Ik0wLjAgNy4yMCBMMC43IDYuODQgTDEuNCA2LjM0IEwyLjEgNS43NyBMMi44IDUuMTcgTDMuNSA0LjYxIEw0LjIgNC4xMiBMNC45IDMuNzQgTDUuNiAzLjUwIEw2LjMgMy4zOSBMNy4wIDMuNDEgTDcuNyAzLjU0IEw4LjQgMy43NCBMOS4xIDMuOTggTDkuOCA0LjIyIEwxMC41IDQuNDIgTDExLjIgNC41NiBMMTEuOSA0LjYwIEwxMi42IDQuNTYgTDEzLjMgNC40NCBMMTQuMCA0LjI1IEwxNC43IDQuMDMgTDE1LjQgMy44MSBMMTYuMSAzLjY0IEwxNi44IDMuNTUgTDE3LjUgMy41NiBMMTguMiAzLjcwIEwxOC45IDMuOTcgTDE5LjYgNC4zNiBMMjAuMyA0Ljg1IEwyMS4wIDUuNDAgTDIxLjcgNS45NiBMMjIuNCA2LjQ4IEwyMy4xIDYuOTAgTDIzLjggNy4xOCBMMjQuNSA3LjI4IEwyNS4yIDcuMTggTDI1LjkgNi44NiBMMjYuNiA2LjMzIEwyNy4zIDUuNjQgTDI4LjAgNC44MiBMMjguNyAzLjk0IEwyOS40IDMuMDYgTDMwLjEgMi4yNiBMMzAuOCAxLjYwIEwzMS41IDEuMTQgTDMyLjIgMC45MyBMMzIuOSAwLjk4IEwzMy42IDEuMzEgTDM0LjMgMS44OCBMMzUuMCAyLjY2IEwzNS43IDMuNTkgTDM2LjQgNC42MCBMMzcuMSA1LjYxIEwzNy44IDYuNTUgTDM4LjUgNy4zNCBMMzkuMiA3LjkyIEwzOS45IDguMjYgTDQwLjYgOC4zMiBMNDEuMyA4LjExIEw0Mi4wIDcuNjUgTDQyLjcgNi45OSBMNDMuNCA2LjE3IEw0NC4xIDUuMjggTDQ0LjggNC4zNyBMNDUuNSAzLjUzIEw0Ni4yIDIuODEgTDQ2LjkgMi4yNiBMNDcuNiAxLjkyIEw0OC4zIDEuNzkgTDQ5LjAgMS44OSBMNDkuNyAyLjE3IEw1MC40IDIuNjEgTDUxLjEgMy4xNSBMNTEuOCAzLjc0IEw1Mi41IDQuMzMgTDUzLjIgNC44NiBMNTMuOSA1LjI5IEw1NC42IDUuNjAgTDU1LjMgNS43OCBMNTYuMCA1LjgyIEw1Ni43IDUuNzMgTDU3LjQgNS41NiBMNTguMSA1LjMzIEw1OC44IDUuMDkgTDU5LjUgNC44NyBMNjAuMiA0LjcwIEw2MC45IDQuNjEgTDYxLjYgNC42MSBMNjIuMyA0LjcwIEw2My4wIDQuODYgTDYzLjcgNS4wNiBMNjQuNCA1LjI5IEw2NS4xIDUuNDkgTDY1LjggNS42MiBMNjYuNSA1LjY2IEw2Ny4yIDUuNTggTDY3LjkgNS4zOCBMNjguNiA1LjA0IEw2OS4zIDQuNTkgTDcwLjAgNC4wNyBMNzAuNyAzLjUxIEw3MS40IDIuOTYgTDcyLjEgMi40OCBMNzIuOCAyLjEzIEw3My41IDEuOTQgTDc0LjIgMS45NSBMNzQuOSAyLjE2IEw3NS42IDIuNTkgTDc2LjMgMy4yMSBMNzcuMCAzLjk4IEw3Ny43IDQuODQgTDc4LjQgNS43MyBMNzkuMSA2LjU3IEw3OS44IDcuMzEgTDgwLjUgNy44NyBMODEuMiA4LjIwIEw4MS45IDguMjggTDgyLjYgOC4wOCBMODMuMyA3LjYyIEw4NC4wIDYuOTQgTDg0LjcgNi4wNyBMODUuNCA1LjA5IEw4Ni4xIDQuMDYgTDg2LjggMy4wOCBMODcuNSAyLjIxIEw4OC4yIDEuNTMgTDg4LjkgMS4wNyBMODkuNiAwLjg4IEw5MC4zIDAuOTYgTDkxLjAgMS4zMCBMOTEuNyAxLjg3IEw5Mi40IDIuNjIgTDkzLjEgMy40OSBMOTMuOCA0LjQwIEw5NC41IDUuMjggTDk1LjIgNi4wNyBMOTUuOSA2LjcwIEw5Ni42IDcuMTUgTDk3LjMgNy4zOCBMOTguMCA3LjM4IEw5OC43IDcuMTkgTDk5LjQgNi44MiBMMTAwLjEgNi4zMiBMMTAwLjggNS43NCBMMTAxLjUgNS4xNSBMMTAyLjIgNC41OCBMMTAyLjkgNC4xMCBMMTAzLjYgMy43MyBMMTA0LjMgMy40OSBMMTA1LjAgMy4zOSBMMTA1LjcgMy40MSBMMTA2LjQgMy41NSBMMTA3LjEgMy43NSBMMTA3LjggNC4wMCBMMTA4LjUgNC4yMyBMMTA5LjIgNC40MyBMMTA5LjkgNC41NiBMMTEwLjYgNC42MCBMMTExLjMgNC41NiBMMTEyLjAgNC40MyBMMTEyLjcgNC4yNCBMMTEzLjQgNC4wMiBMMTE0LjEgMy44MCBMMTE0LjggMy42MyBMMTE1LjUgMy41NCBMMTE2LjIgMy41NiBMMTE2LjkgMy43MSBMMTE3LjYgMy45OSBMMTE4LjMgNC4zOCBMMTE5LjAgNC44OCBMMTE5LjcgNS40MyBMMTIwLjQgNS45OSBMMTIxLjEgNi41MCBMMTIxLjggNi45MiBMMTIyLjUgNy4xOSBMMTIzLjIgNy4yOCBMMTIzLjkgNy4xNyBMMTI0LjYgNi44NCBMMTI1LjMgNi4zMCBMMTI2LjAgNS42MCBMMTI2LjcgNC43OCBMMTI3LjQgMy45MCBMMTI4LjEgMy4wMiBMMTI4LjggMi4yMiBMMTI5LjUgMS41NyBMMTMwLjIgMS4xMyBMMTMwLjkgMC45MyBMMTMxLjYgMC45OSBMMTMyLjMgMS4zMyBMMTMzLjAgMS45MSBMMTMzLjcgMi43MCBMMTM0LjQgMy42NCBMMTM1LjEgNC42NSBMMTM1LjggNS42NiBMMTM2LjUgNi41OSBMMTM3LjIgNy4zNyBMMTM3LjkgNy45NCBMMTM4LjYgOC4yNiBMMTM5LjMgOC4zMSBMMTQwLjAgOC4wOSBMMTQwLjcgNy42MiBMMTQxLjQgNi45NSBMMTQyLjEgNi4xMyBMMTQyLjggNS4yNCBMMTQzLjUgNC4zMyBMMTQ0LjIgMy40OSBMMTQ0LjkgMi43OCBMMTQ1LjYgMi4yNCBMMTQ2LjMgMS45MCBMMTQ3LjAgMS43OSBMMTQ3LjcgMS45MCIvPjxwYXRoIGQ9Ik0wLjAgNS4xOSBMMC43IDQuODEgTDEuNCA0LjUwIEwyLjEgNC4yOCBMMi44IDQuMTcgTDMuNSA0LjE2IEw0LjIgNC4yNCBMNC45IDQuMzggTDUuNiA0LjU1IEw2LjMgNC43MSBMNy4wIDQuODMgTDcuNyA0Ljg3IEw4LjQgNC44MyBMOS4xIDQuNjggTDkuOCA0LjQ1IEwxMC41IDQuMTMgTDExLjIgMy43NyBMMTEuOSAzLjQxIEwxMi42IDMuMDkgTDEzLjMgMi44NSBMMTQuMCAyLjczIEwxNC43IDIuNzYgTDE1LjQgMi45NiBMMTYuMSAzLjMzIEwxNi44IDMuODYgTDE3LjUgNC41MCBMMTguMiA1LjIyIEwxOC45IDUuOTUgTDE5LjYgNi42NCBMMjAuMyA3LjIyIEwyMS4wIDcuNjQgTDIxLjcgNy44NSBMMjIuNCA3LjgyIEwyMy4xIDcuNTUgTDIzLjggNy4wNCBMMjQuNSA2LjMyIEwyNS4yIDUuNDUgTDI1LjkgNC40OSBMMjYuNiAzLjUxIEwyNy4zIDIuNTkgTDI4LjAgMS44MCBMMjguNyAxLjIxIEwyOS40IDAuODYgTDMwLjEgMC43OCBMMzAuOCAwLjk4IEwzMS41IDEuNDQgTDMyLjIgMi4xMyBMMzIuOSAzLjAwIEwzMy42IDMuOTYgTDM0LjMgNC45NiBMMzUuMCA1LjkxIEwzNS43IDYuNzQgTDM2LjQgNy4zOSBMMzcuMSA3LjgyIEwzNy44IDcuOTkgTDM4LjUgNy45MiBMMzkuMiA3LjYwIEwzOS45IDcuMDkgTDQwLjYgNi40MiBMNDEuMyA1LjY3IEw0Mi4wIDQuODkgTDQyLjcgNC4xNSBMNDMuNCAzLjUxIEw0NC4xIDMuMDAgTDQ0LjggMi42NyBMNDUuNSAyLjUxIEw0Ni4yIDIuNTQgTDQ2LjkgMi43MSBMNDcuNiAzLjAyIEw0OC4zIDMuNDAgTDQ5LjAgMy44MSBMNDkuNyA0LjIxIEw1MC40IDQuNTYgTDUxLjEgNC44MyBMNTEuOCA0Ljk5IEw1Mi41IDUuMDUgTDUzLjIgNS4wMSBMNTMuOSA0LjkwIEw1NC42IDQuNzQgTDU1LjMgNC41NyBMNTYuMCA0LjQyIEw1Ni43IDQuMzQgTDU3LjQgNC4zNCBMNTguMSA0LjQzIEw1OC44IDQuNjMgTDU5LjUgNC45MSBMNjAuMiA1LjI1IEw2MC45IDUuNjIgTDYxLjYgNS45NyBMNjIuMyA2LjI1IEw2My4wIDYuNDMgTDYzLjcgNi40NyBMNjQuNCA2LjM1IEw2NS4xIDYuMDYgTDY1LjggNS42MSBMNjYuNSA1LjAyIEw2Ny4yIDQuMzMgTDY3LjkgMy42MCBMNjguNiAyLjg4IEw2OS4zIDIuMjQgTDcwLjAgMS43NCBMNzAuNyAxLjQyIEw3MS40IDEuMzQgTDcyLjEgMS40OSBMNzIuOCAxLjg5IEw3My41IDIuNTEgTDc0LjIgMy4zMiBMNzQuOSA0LjI0IEw3NS42IDUuMjIgTDc2LjMgNi4xOCBMNzcuMCA3LjA0IEw3Ny43IDcuNzQgTDc4LjQgOC4yMSBMNzkuMSA4LjQyIEw3OS44IDguMzUgTDgwLjUgOC4wMSBMODEuMiA3LjQyIEw4MS45IDYuNjMgTDgyLjYgNS43MSBMODMuMyA0LjcxIEw4NC4wIDMuNzMgTDg0LjcgMi44MyBMODUuNCAyLjA5IEw4Ni4xIDEuNTUgTDg2LjggMS4yNiBMODcuNSAxLjIyIEw4OC4yIDEuNDIgTDg4LjkgMS44NCBMODkuNiAyLjQ1IEw5MC4zIDMuMTYgTDkxLjAgMy45NCBMOTEuNyA0LjcxIEw5Mi40IDUuNDAgTDkzLjEgNS45OCBMOTMuOCA2LjQwIEw5NC41IDYuNjQgTDk1LjIgNi43MCBMOTUuOSA2LjU5IEw5Ni42IDYuMzQgTDk3LjMgNS45OSBMOTguMCA1LjU5IEw5OC43IDUuMTcgTDk5LjQgNC44MCBMMTAwLjEgNC40OSBMMTAwLjggNC4yNyBMMTAxLjUgNC4xNyBMMTAyLjIgNC4xNiBMMTAyLjkgNC4yNCBMMTAzLjYgNC4zOCBMMTA0LjMgNC41NSBMMTA1LjAgNC43MSBMMTA1LjcgNC44MyBMMTA2LjQgNC44NyBMMTA3LjEgNC44MiBMMTA3LjggNC42NyBMMTA4LjUgNC40MyBMMTA5LjIgNC4xMiBMMTA5LjkgMy43NiBMMTEwLjYgMy40MCBMMTExLjMgMy4wNyBMMTEyLjAgMi44NCBMMTEyLjcgMi43MyBMMTEzLjQgMi43NyBMMTE0LjEgMi45OCBMMTE0LjggMy4zNiBMMTE1LjUgMy44OSBMMTE2LjIgNC41MyBMMTE2LjkgNS4yNSBMMTE3LjYgNS45OSBMMTE4LjMgNi42NyBMMTE5LjAgNy4yNCBMMTE5LjcgNy42NSBMMTIwLjQgNy44NSBMMTIxLjEgNy44MSBMMTIxLjggNy41MyBMMTIyLjUgNy4wMSBMMTIzLjIgNi4yOCBMMTIzLjkgNS40MSBMMTI0LjYgNC40NCBMMTI1LjMgMy40NyBMMTI2LjAgMi41NSBMMTI2LjcgMS43NyBMMTI3LjQgMS4xOCBMMTI4LjEgMC44NCBMMTI4LjggMC43OCBMMTI5LjUgMC45OSBMMTMwLjIgMS40NyBMMTMwLjkgMi4xNyBMMTMxLjYgMy4wNCBMMTMyLjMgNC4wMSBMMTMzLjAgNS4wMSBMMTMzLjcgNS45NiBMMTM0LjQgNi43OCBMMTM1LjEgNy40MiBMMTM1LjggNy44MyBMMTM2LjUgOC4wMCBMMTM3LjIgNy45MSBMMTM3LjkgNy41OCBMMTM4LjYgNy4wNiBMMTM5LjMgNi4zOSBMMTQwLjAgNS42MyBMMTQwLjcgNC44NSBMMTQxLjQgNC4xMiBMMTQyLjEgMy40OCBMMTQyLjggMi45OCBMMTQzLjUgMi42NSBMMTQ0LjIgMi41MSBMMTQ0LjkgMi41NCBMMTQ1LjYgMi43MyBMMTQ2LjMgMy4wMyBMMTQ3LjAgMy40MiBMMTQ3LjcgMy44MyIvPjwvZz48L3N2Zz4=';
+
+/** Les petites étiquettes du reçu : capitales espacées, gras, 6,6 pt. */
+const etiquetteRecu = (t: string, couleur = R_ACCENT) =>
+  `<span style="font-family:Arial,Helvetica,sans-serif;font-size:6.6pt;font-weight:bold;letter-spacing:0.2mm;text-transform:uppercase;color:${couleur}">${t}</span>`;
+
+const recuTexte = (x: number, y: number, l: number, h: number, html: string, style: Partial<StyleTexte> = {}): ElementVisuel =>
+  texte(x, y, l, h, html, { police: 'Arial', taille: 9.4, couleur: R_ENCRE, interligne: 1.25, ...style });
+
+const forme = (x: number, y: number, l: number, h: number, o: { fond?: string | null; bord?: string | null; epaisseur?: number; arrondi?: number; ellipse?: boolean; rotation?: number; style?: 'solid' | 'dashed' | 'dotted' | 'double' } = {}): ElementVisuel => ({
+  id: id(), type: 'forme', forme: o.ellipse ? 'ellipse' : 'rectangle', x, y, l, h, rotation: o.rotation ?? 0,
+  fond: o.fond ?? null,
+  bordure: o.bord ? { couleur: o.bord, epaisseur: o.epaisseur ?? 0.3, style: o.style ?? 'solid' } : null,
+  arrondi: o.arrondi ?? 0,
+});
+
+/** Le bloc qui suit le tableau et s'allonge avec lui. */
+const BLOC_PAIEMENT =
+  '{TABLEAU DES PAIEMENTS}'
+  // Tampon et total, côte à côte.
+  + '<div style="display:flex;align-items:center;justify-content:space-between;margin-top:4.5mm">'
+  + `<div style="margin-left:7mm;transform:rotate(-11deg);border:0.9mm double ${R_ENCRE};padding:0.8mm 3.2mm;text-align:center;opacity:0.88;color:${R_ENCRE}">`
+  + '<div style="font-family:Arial,Helvetica,sans-serif;font-weight:bold;font-size:13.5pt;letter-spacing:0.4mm;line-height:1.1">{ÉTAT DU PAIEMENT}</div>'
+  + '<div style="font-family:Arial,Helvetica,sans-serif;font-weight:bold;font-size:6.6pt;letter-spacing:0.12mm">{JOUR DU PAIEMENT}</div></div>'
+  + `<div style="width:84mm;height:13.6mm;box-sizing:border-box;border:0.8mm solid ${R_FONCE};border-radius:2mm;display:flex;align-items:center;justify-content:space-between;padding:0 5mm;color:${R_FONCE};font-family:Arial,Helvetica,sans-serif;font-weight:bold">`
+  + '<span style="font-size:7.4pt;letter-spacing:0.22mm">TOTAL PAYÉ</span>'
+  + '<span><span style="font-size:17pt">{TOTAL EN CHIFFRES}</span>&nbsp;&nbsp;<span style="font-size:8.4pt">FCFA</span></span></div></div>'
+  // Somme en lettres.
+  + `<div style="margin-top:8mm">${etiquetteRecu('Arrêté le présent reçu à la somme de', R_GRIS)}</div>`
+  + `<div style="margin-top:2mm;border-left:0.9mm solid ${R_ACCENT};padding:0.8mm 0 0.6mm 3.1mm;font-family:'Times New Roman',Times,serif;font-style:italic;font-weight:bold;font-size:11.6pt;color:${R_FONCE}">{MONTANT EN LETTRES}.</div>`
+  // Mode de paiement, référence, encaissé par.
+  + `<div style="display:flex;margin-top:2.4mm;border-top:0.3mm solid ${R_FILET};padding-top:2mm">`
+  + `<div style="width:27%">${etiquetteRecu('Mode de paiement')}<br><b style="font-size:9pt">{MODE DE PAIEMENT}</b></div>`
+  + `<div style="width:23%">${etiquetteRecu('Référence')}<br><b style="font-size:9pt">{RÉFÉRENCE DU PAIEMENT}</b></div>`
+  + `<div style="width:50%">${etiquetteRecu('Encaissé par')}<br><b style="font-size:9pt">{ENCAISSÉ PAR}</b></div>`
+  + '</div>';
 
 export const MODELES_RECUS_PAR_DEFAUT: readonly ModeleParDefaut[] = [
   {
@@ -274,36 +324,48 @@ export const MODELES_RECUS_PAR_DEFAUT: readonly ModeleParDefaut[] = [
       format: 'A5',
       fond: '#ffffff',
       elements: [
-        { id: id(), type: 'image', x: 10, y: 9, l: 18, h: 18, rotation: 0, source: 'logo' },
-        texte(31, 9, 66, 18,
-          `<span style="font-size:11pt;font-weight:bold;text-transform:uppercase">{NOM DE L'ÉTABLISSEMENT}</span><br>`
-          + "{ADRESSE DE L'ÉTABLISSEMENT}<br>Tél. : {TÉLÉPHONE DE L'ÉTABLISSEMENT}",
-          { taille: 8, interligne: 1.35 }),
-        cadre(99, 9, 39, 14),
-        texte(99, 10.5, 39, 5, 'REÇU N°', { taille: 7.5, alignement: 'center', interligne: 1.2 }),
-        texte(99, 15, 39, 6, '<b>{NUMÉRO DU REÇU}</b>', { taille: 10, alignement: 'center', interligne: 1.2 }),
-        trait(10, 30, 128, 0.4),
-        texte(10, 34, 128, 8, 'REÇU DE PAIEMENT', { taille: 15, gras: true, souligne: true, alignement: 'center', interligne: 1.2 }),
-        texte(10, 43, 128, 6, '{MENTION DU REÇU}', { taille: 12, gras: true, alignement: 'center', interligne: 1.2 }),
-        cadre(10, 50, 128, 22),
-        texte(14, 52, 120, 18,
-          "Reçu de :&nbsp;&nbsp;<b>{NOM ET PRÉNOM DE L'ÉLÈVE}</b><br>"
-          + 'Matricule :&nbsp;&nbsp;{MATRICULE}&nbsp;&nbsp;&nbsp;&nbsp;Classe :&nbsp;&nbsp;<b>{CLASSE}</b><br>'
-          + 'Année scolaire :&nbsp;&nbsp;{ANNÉE SCOLAIRE}',
-          { taille: 9.5, interligne: 1.7 }),
-        texte(10, 76, 128, 48, '{TABLEAU DES PAIEMENTS}', { taille: 9.5, interligne: 1.3 }),
-        cadre(74, 127, 64, 10),
-        texte(76, 129, 60, 7, 'TOTAL PAYÉ :&nbsp;&nbsp;<b>{MONTANT TOTAL}</b>', { taille: 11, alignement: 'right', interligne: 1.2 }),
-        texte(10, 141, 128, 11, 'Arrêté le présent reçu à la somme de :<br><b><i>{MONTANT EN LETTRES}</i></b>', { taille: 9.5, interligne: 1.45 }),
-        texte(10, 155, 128, 11,
-          'Mode de paiement :&nbsp;&nbsp;{MODE DE PAIEMENT}<br>Payé le {DATE DU PAIEMENT} — encaissé par {ENCAISSÉ PAR}',
-          { taille: 8.5, interligne: 1.5 }),
-        texte(10, 172, 55, 5, '<b>Le parent / tuteur</b>', { taille: 9, alignement: 'center', interligne: 1.2 }),
-        texte(83, 172, 55, 5, '<b>Le caissier</b>', { taille: 9, alignement: 'center', interligne: 1.2 }),
-        texte(83, 177, 55, 5, 'Cachet et signature', { taille: 7.5, italique: true, alignement: 'center', interligne: 1.2 }),
-        trait(10, 197, 128, 0.3),
-        texte(10, 198.5, 128, 5, "{NOM DE L'ÉTABLISSEMENT} — Ce reçu fait foi de paiement : conservez-le précieusement.",
-          { taille: 7, alignement: 'center', interligne: 1.2 }),
+        // ── Filigrane : le logo, très pâle, au centre de la page ──
+        { id: id(), type: 'image', x: 32, y: 67, l: 84, h: 84, rotation: 0, source: 'logo', opacite: 0.05 },
+        // ── En-tête : logo dans un cercle, nom de l'école, coordonnées, double filet ──
+        forme(10.4, 4.4, 23.2, 23.2, { ellipse: true, bord: R_ACCENT, epaisseur: 0.5, fond: '#ffffff' }),
+        { id: id(), type: 'image', x: 13.4, y: 7.4, l: 17.2, h: 17.2, rotation: 0, source: 'logo' },
+        recuTexte(38.5, 5.2, 98.5, 7, '<span style="letter-spacing:0.1mm">{NOM DE L\'ÉTABLISSEMENT}</span>',
+          { police: 'Times New Roman', taille: 14.5, gras: true, couleur: R_FONCE, interligne: 1.1 }),
+        recuTexte(38.5, 13.2, 98.5, 12,
+          "{ADRESSE DE L'ÉTABLISSEMENT} — {VILLE}, {PAYS}<br>Tél. {TÉLÉPHONE DE L'ÉTABLISSEMENT}  ·  {E-MAIL DE L'ÉTABLISSEMENT}",
+          { taille: 7.6, couleur: R_GRIS, interligne: 1.4 }),
+        forme(11, 32, 126, 0.9, { fond: R_FONCE }),
+        forme(11, 33.6, 126, 0.25, { fond: R_FONCE }),
+        // ── Titre et numéro ──
+        recuTexte(11, 41.2, 84, 8, '<span style="letter-spacing:0.32mm">REÇU DE PAIEMENT</span>',
+          { police: 'Times New Roman', taille: 17.5, gras: true, couleur: R_FONCE, interligne: 1 }),
+        forme(11, 50.2, 20, 0.9, { fond: R_ACCENT }),
+        forme(97, 40.5, 40, 12.4, { fond: R_PALE, bord: R_ACCENT, epaisseur: 0.4, arrondi: 1.8 }),
+        recuTexte(97, 41.9, 40, 4, etiquetteRecu('Reçu n°'), { alignement: 'center', interligne: 1 }),
+        recuTexte(97, 46, 40, 5.5, '<b>{NUMÉRO DU REÇU}</b>', { taille: 10.6, couleur: R_FONCE, alignement: 'center', interligne: 1 }),
+        recuTexte(97, 53.6, 40, 4.5, '<b>{MENTION DU REÇU}</b>', { taille: 7, couleur: R_GRIS, alignement: 'right', interligne: 1 }),
+        recuTexte(11, 53.3, 84, 4.5, 'Émis le {DATE DU PAIEMENT}', { taille: 8.6, couleur: R_GRIS, interligne: 1 }),
+        // ── Carte de l'élève ──
+        forme(11, 61.5, 126, 22.5, { fond: R_PALE, arrondi: 1.8 }),
+        forme(11, 61.5, 2, 22.5, { fond: R_ACCENT, arrondi: 1 }),
+        recuTexte(18, 63.6, 112, 4, etiquetteRecu('Reçu de'), { interligne: 1 }),
+        recuTexte(18, 67.4, 112, 6.5, "<b>{NOM ET PRÉNOM DE L'ÉLÈVE}</b>", { taille: 13, interligne: 1 }),
+        recuTexte(18, 74.4, 37, 9, `${etiquetteRecu('Matricule', R_GRIS)}<br><b>{MATRICULE}</b>`, { interligne: 1.35 }),
+        recuTexte(57, 74.4, 37, 9, `${etiquetteRecu('Classe', R_GRIS)}<br><b>{CLASSE}</b>`, { interligne: 1.35 }),
+        recuTexte(96, 74.4, 37, 9, `${etiquetteRecu('Année scolaire', R_GRIS)}<br><b>{ANNÉE SCOLAIRE}</b>`, { interligne: 1.35 }),
+        // ── Tableau, total, tampon, somme en lettres, informations (un bloc qui s'allonge) ──
+        recuTexte(11, 89, 126, 73, BLOC_PAIEMENT, { taille: 9.6, interligne: 1.25 }),
+        // ── Signatures et cachet, calés en bas ──
+        forme(11, 179.2, 48, 0.3, { bord: R_GRIS, epaisseur: 0.3, style: 'dashed' }),
+        recuTexte(11, 181, 48, 4, etiquetteRecu('Le parent / tuteur', R_GRIS), { alignement: 'center', interligne: 1 }),
+        forme(63.5, 164, 21, 21, { ellipse: true, bord: R_ACCENT, epaisseur: 0.3, style: 'dashed' }),
+        recuTexte(63.5, 173.1, 21, 4, etiquetteRecu('Cachet'), { alignement: 'center', interligne: 1 }),
+        forme(89, 179.2, 48, 0.3, { bord: R_GRIS, epaisseur: 0.3, style: 'dashed' }),
+        recuTexte(89, 181, 48, 4, etiquetteRecu('Le caissier', R_GRIS), { alignement: 'center', interligne: 1 }),
+        // ── Pied de page : mention, signature SenClass, motif de sécurité ──
+        recuTexte(11, 195, 80, 4, '<i>Ce reçu fait foi de paiement : conservez-le précieusement.</i>', { taille: 7.2, couleur: R_GRIS, interligne: 1 }),
+        recuTexte(91, 195, 46, 4, `Édité avec <b style="color:${R_ACCENT}">SenClass</b>`, { taille: 7.2, couleur: R_GRIS, alignement: 'right', interligne: 1 }),
+        { id: id(), type: 'image', x: 0, y: 200.8, l: 148, h: 9.2, rotation: 0, source: MOTIF_GUILLOCHE },
       ],
     },
   },

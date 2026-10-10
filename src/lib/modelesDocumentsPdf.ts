@@ -1,6 +1,6 @@
 import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
-import { CLASSE_FEUILLE, CLASSE_PAGE, versionImprimee } from '@/lib/modelesDocuments';
+import { CLASSE_FEUILLE, CLASSE_PAGE, ajusterTextesDebordants, versionImprimee } from '@/lib/modelesDocuments';
 import { nomDeFichier } from '@/lib/documentsEcole';
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -92,6 +92,7 @@ export const imprimerHtml = async (html: string): Promise<void> => {
   const fenetre = cadre.contentWindow;
   if (!fenetre || !cadre.contentDocument) { cadre.remove(); throw new Error("Impossible d'ouvrir l'impression."); }
   await imagesChargees(cadre.contentDocument);
+  ajusterTextesDebordants(cadre.contentDocument);
   const retirer = () => window.setTimeout(() => cadre.remove(), 1000);
   fenetre.addEventListener('afterprint', retirer, { once: true });
   fenetre.focus();
@@ -114,6 +115,7 @@ export const fabriquerPdfHtml = async (html: string): Promise<jsPDF> => {
     await imagesChargees(doc);
     ajusterImagesContenues(doc);
     ancrerElementsFixes(doc);
+    ajusterTextesDebordants(doc);
     // Une page précise (éditeur visuel, page Word) si le document en a ; sinon
     // chaque feuille d'élève ; sinon tout le document.
     const pages = Array.from(doc.querySelectorAll<HTMLElement>(`.${CLASSE_PAGE}`));

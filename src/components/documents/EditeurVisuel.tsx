@@ -435,7 +435,10 @@ const ElementSurFeuille = ({
   const taillePoignee = 9 / zoom;
   return (
     <div
-      style={{ ...position, cursor: enEdition ? 'text' : 'move', outline: choisi ? `${1.5 / zoom}px solid #2563eb` : undefined, outlineOffset: 0 }}
+      style={{
+        ...position, ...(el.type === 'image' ? versStyleReact(cssContenu(el)) : {}),
+        cursor: enEdition ? 'text' : 'move', outline: choisi ? `${1.5 / zoom}px solid #2563eb` : undefined, outlineOffset: 0,
+      }}
       onPointerDown={e => onPointerDown(e)}
       onDoubleClick={e => { pointDeClic = { x: e.clientX, y: e.clientY }; onDoubleClick(); }}
       data-element={el.type}

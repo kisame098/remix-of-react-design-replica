@@ -60,6 +60,8 @@ export interface ElementImage extends Base {
   type: 'image';
   /** 'logo' = le logo de l'école ({LOGO DE L'ÉTABLISSEMENT}) ; sinon une image intégrée (data URL). */
   source: 'logo' | string;
+  /** De 0 (invisible) à 1 (normal) : un filigrane est très transparent. Absent = 1. */
+  opacite?: number;
 }
 
 export interface ElementForme extends Base {
@@ -194,7 +196,7 @@ export const cssContenu = (el: ElementVisuel): Record<string, string> => {
       };
     }
     case 'image':
-      return {};
+      return el.opacite !== undefined && el.opacite < 1 ? { opacity: String(Math.max(0, el.opacite)) } : {};
     case 'forme':
       return {
         background: el.fond ?? 'transparent',
@@ -237,7 +239,7 @@ const elementVersHtml = (el: ElementVisuel): string => {
     case 'texte':
       return `<div class="el texte" style="${position};${versAttributStyle(cssContenu(el))}">${el.html}</div>`;
     case 'image':
-      return `<div class="el" style="${position}"><img src="${echapper(sourceImage(el))}" alt="" style="display:block;width:100%;height:100%;object-fit:contain"></div>`;
+      return `<div class="el" style="${position};${versAttributStyle(cssContenu(el))}"><img src="${echapper(sourceImage(el))}" alt="" style="display:block;width:100%;height:100%;object-fit:contain"></div>`;
     case 'forme':
       return `<div class="el" style="${position};${versAttributStyle(cssContenu(el))}"></div>`;
     case 'ligne':
