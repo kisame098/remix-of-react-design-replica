@@ -463,16 +463,95 @@ const remplacer = (texte: string, valeurs: Map<string, string>): string =>
   texte.replace(MOTIF_CHAMP, (tout, brut: string) => valeurs.get(normaliserNomChamp(brut)) ?? tout);
 
 /**
+ * Le champ {TABLEAU DES PAIEMENTS} écrit DANS le tableau de l'école (entre
+ * <tbody> et </tbody>, hors cellule) : le navigateur le sortirait du tableau
+ * avant même qu'on le voie. On l'enferme d'abord dans une ligne d'une cellule,
+ * que lignesDansTableau remplace par les vraies lignes.
+ */
+const BALISE_TABLEAU = /<\/?(table|thead|tbody|tfoot|tr|td|th|caption)\b[^>]*>/gi;
+
+const enfermerBlocsDansTableaux = (html: string): string =>
+  html.replace(MOTIF_CHAMP, (tout, brut: string, index: number) => {
+    if (!champConnu(brut)?.bloc) return tout;
+    let derniere = '';
+    for (const m of html.slice(0, index).matchAll(BALISE_TABLEAU)) derniere = m[0].toLowerCase();
+    // Juste après <table>, <tbody>…, </tr> : entre deux lignes, hors cellule.
+    const entreLignes = /^<(table|thead|tbody|tfoot)\b|^<\/(tr|thead|tbody|tfoot|caption)\b/.test(derniere);
+    return entreLignes ? `<tr><td>${tout}</td></tr>` : tout;
+  });
+
+/** Le champ occupe seul une ligne d'une seule cellule : la ligne à remplacer. */
+const ligneDuChamp = (t: Text): HTMLTableRowElement | null => {
+  const cellule = t.parentElement;
+  const ligne = cellule?.parentElement as HTMLTableRowElement | null | undefined;
+  if (!cellule || !ligne || !/^T[DH]$/.test(cellule.tagName) || ligne.tagName !== 'TR') return null;
+  if (ligne.cells.length !== 1 || cellule.childNodes.length !== 1) return null;
+  return ligne;
+};
+
+type RoleColonne = 'numero' | 'designation' | 'montant' | '';
+
+/**
+ * Les lignes des paiements, dans les colonnes du tableau de l'école,
+ * reconnues par leur en-tête : N°, Désignation, Montant (sinon : désignation
+ * puis montant en dernière colonne). Le style reste celui du modèle.
+ */
+const lignesDansTableau = (doc: Document, ligneChamp: HTMLTableRowElement, lignes: RecuDocument['lignes']): HTMLTableRowElement[] => {
+  const table = ligneChamp.closest('table');
+  const modele = table ? Array.from(table.rows).find(r => r !== ligneChamp) : undefined;
+  const entetes: string[] = [];
+  for (const c of Array.from(modele?.cells ?? [])) {
+    for (let i = 0; i < Math.max(1, c.colSpan); i++) entetes.push(i === 0 ? (c.textContent ?? '') : '');
+  }
+  if (entetes.length === 0) entetes.push('', '');
+  const roles: RoleColonne[] = entetes.map(e => {
+    const n = e.trim().toLowerCase();
+    if (/^(n°|no|n|#|num(éro|ero)?)\.?$/.test(n)) return 'numero';
+    if (/montant|fcfa|prix|somme/.test(n)) return 'montant';
+    if (/d[ée]signation|libell|motif|objet|d[ée]tail|nature|mois/.test(n)) return 'designation';
+    return '';
+  });
+  const libres = () => roles.map((r, i) => (r === '' ? i : -1)).filter(i => i >= 0);
+  if (!roles.includes('montant') && roles.length > 1) { const l = libres(); if (l.length) roles[l[l.length - 1]] = 'montant'; }
+  if (!roles.includes('designation')) { const l = libres(); if (l.length) roles[l[0]] = 'designation'; }
+  return lignes.map((l, n) => {
+    const tr = doc.createElement('tr');
+    for (const role of roles) {
+      const td = doc.createElement('td');
+      if (role === 'numero') { td.textContent = String(n + 1); td.style.textAlign = 'center'; }
+      if (role === 'designation') {
+        td.textContent = l.annulee ? `${l.designation} (annulé)` : l.designation;
+        if (l.annulee) td.style.textDecoration = 'line-through';
+        // Une seule colonne : le montant suit la désignation.
+        if (!roles.includes('montant')) td.textContent += ` : ${formaterMontant(l.montant)} FCFA`;
+      }
+      if (role === 'montant') {
+        td.textContent = formaterMontant(l.montant);
+        td.style.textAlign = 'right';
+        td.style.whiteSpace = 'nowrap';
+      }
+      tr.appendChild(td);
+    }
+    return tr;
+  });
+};
+
+/**
  * Remplace chaque champ par sa valeur. Le modèle doit avoir été vérifié :
  * un champ inconnu resterait tel quel. Les valeurs sont posées comme TEXTE
  * (jamais interprétées comme du HTML) : un nom contenant « < » reste un nom.
  */
 export const remplirModele = (html: string, valeurs: Map<string, string>, contexte?: ContexteDocument): string => {
-  const doc = lireDocument(html);
-  // D'abord les blocs (tableau des paiements) : un vrai tableau à la place du champ.
+  const doc = lireDocument(contexte ? enfermerBlocsDansTableaux(html) : html);
+  // D'abord les blocs (tableau des paiements) : un vrai tableau à la place du
+  // champ — ou, dans le tableau de l'école, ses lignes.
   if (contexte) {
     for (const t of noeudsTexte(doc)) {
       if (!t.data.includes('{')) continue;
+      const seul = MOTIF_CHAMP.exec(t.data.trim());
+      MOTIF_CHAMP.lastIndex = 0;
+      const ligne = seul && seul[0] === t.data.trim() && champConnu(seul[1])?.nom === 'TABLEAU DES PAIEMENTS' ? ligneDuChamp(t) : null;
+      if (ligne) { ligne.replaceWith(...lignesDansTableau(doc, ligne, contexte.recu?.lignes ?? [])); continue; }
       const morceaux: Node[] = [];
       let dernier = 0;
       let bloc = false;
@@ -523,6 +602,8 @@ export interface ReglagesPage {
   /** Marges de la feuille (CSS), null si le modèle n'en met pas. */
   marges: string | null;
   paysage: boolean;
+  /** Feuille A5 (reçu) déclarée par `size: A5` ; sinon A4. */
+  a5: boolean;
 }
 
 const ZERO = /^(0|0(px|mm|cm|in|pt|em|%))$/;
@@ -538,10 +619,12 @@ export const lireReglagesPage = (html: string): ReglagesPage => {
   const css = Array.from(doc.querySelectorAll('style')).map(st => st.textContent ?? '').join('\n');
   let marges: string | null = null;
   let paysage = false;
+  let a5 = false;
   for (const bloc of css.matchAll(/@page\s*(?::[a-z-]+\s*)?\{([^}]*)\}/gi)) {
     const regles = bloc[1];
     const taille = /(?:^|;)\s*size\s*:\s*([^;]+)/i.exec(regles)?.[1] ?? '';
     if (/landscape/i.test(taille)) paysage = true;
+    if (/\bA5\b/i.test(taille)) a5 = true;
     const tout = /(?:^|;)\s*margin\s*:\s*([^;]+)/i.exec(regles)?.[1]?.trim();
     const cote = (c: string) => /(?:^|;)\s*margin-COTE\s*:\s*([^;]+)/i.source.replace('COTE', c);
     const cotes = ['top', 'right', 'bottom', 'left'].map(c => new RegExp(cote(c), 'i').exec(regles)?.[1]?.trim());
@@ -553,14 +636,16 @@ export const lireReglagesPage = (html: string): ReglagesPage => {
     }
   }
   if (marges && marges.split(/\s+/).every(m => ZERO.test(m))) marges = null;
-  return { marges, paysage };
+  return { marges, paysage, a5 };
 };
 
 export const assemblerDocuments = (documents: string[]): string => {
   if (documents.length === 0) return '';
   const premier = lireDocument(documents[0]);
   const corps = premier.body;
-  const { marges, paysage } = lireReglagesPage(documents[0]);
+  const { marges, paysage, a5 } = lireReglagesPage(documents[0]);
+  // Taille de la feuille à l'écran : A4, ou A5 pour un reçu déclaré `size: A5`.
+  const [petit, grand] = a5 ? ['148mm', '210mm'] : ['210mm', '297mm'];
   const feuilles = documents.map((html, i) => {
     const d = i === 0 ? premier : lireDocument(html);
     const feuille = premier.createElement('div');
@@ -582,12 +667,12 @@ export const assemblerDocuments = (documents: string[]): string => {
   // feuille devient une page A4 avec ces marges. À l'impression, le navigateur
   // applique déjà @page : la feuille redevient neutre. (« only print » échappe
   // exprès à versionImprimee, qui ne touche que « @media print ».)
-  if (marges) {
+  if (marges || a5) {
     const feuille = premier.createElement('style');
     // La zone remplit la page entre les marges ; c'est elle qui « contient »
     // un pied de page fixé, qui se pose donc au-dessus de la marge du bas.
     feuille.textContent = `@media screen{html,body{background:#e5e5e5}body{margin:0}`
-      + `.${CLASSE_FEUILLE}{box-sizing:border-box;width:${paysage ? '297mm' : '210mm'};min-height:${paysage ? '210mm' : '297mm'};padding:${marges};margin:20px auto;background:#fff;display:flex;flex-direction:column;transform:none}`
+      + `.${CLASSE_FEUILLE}{box-sizing:border-box;width:${paysage ? grand : petit};min-height:${paysage ? petit : grand};padding:${marges ?? '0'};margin:20px auto;background:#fff;display:flex;flex-direction:column;transform:none}`
       + `.${CLASSE_ZONE}{flex:1 1 auto;position:relative;transform:translateZ(0)}}`
       + `@media only print{.${CLASSE_FEUILLE}{padding:0;width:auto;min-height:0;margin:0}}`;
     premier.head.appendChild(feuille);
@@ -615,10 +700,32 @@ export const separerFeuilles = (html: string): string[] => {
  * ce qui suit — comme le reçu SenClass, qui se resserre. À appeler sur le
  * document affiché (aperçu, impression, PDF), qui seul connaît les hauteurs.
  */
+/** Une demi-feuille (« 2 par feuille »), où un reçu est posé tel quel. */
+export const CLASSE_DEMI = 'senclass-demi';
+
+/**
+ * Un reçu plus long que sa demi-feuille est réduit pour y tenir en entier
+ * (sinon le bas — les signatures — serait coupé), centré.
+ */
+const ajusterDemiFeuilles = (doc: Document): void => {
+  for (const demi of Array.from(doc.querySelectorAll<HTMLElement>(`.${CLASSE_DEMI}`))) {
+    const recu = demi.firstElementChild as HTMLElement | null;
+    // Un document A4 (classe senclass-a4) est déjà réduit à la demi-page par son style.
+    if (!recu || recu.dataset.ajuste || recu.classList.contains('senclass-a4')) continue;
+    const place = demi.clientHeight;
+    const hauteur = recu.scrollHeight;
+    if (!place || hauteur <= place + 1) continue;
+    recu.dataset.ajuste = '1';
+    recu.style.transform = `scale(${place / hauteur})`;
+    recu.style.transformOrigin = 'top center';
+  }
+};
+
 /** Une zone de texte n'est jamais réduite en deçà de 80 % : au-delà, le texte deviendrait trop petit. */
 const REDUCTION_MAX = 0.8;
 
 export const ajusterTextesDebordants = (doc: Document): void => {
+  ajusterDemiFeuilles(doc);
   for (const boite of Array.from(doc.querySelectorAll<HTMLElement>('.el.texte, .el.bloc'))) {
     if (boite.dataset.ajuste) continue;
     const place = boite.clientHeight;

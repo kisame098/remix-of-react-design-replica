@@ -102,6 +102,21 @@ export const imprimerHtml = async (html: string): Promise<void> => {
 };
 
 /**
+ * html2canvas mesure la place du texte (sa ligne de base) dans la page de
+ * l'APPLICATION, avec une petite image posée à côté d'un mot. Le style de
+ * l'application met toute image « en bloc » : l'image passe à la ligne, la
+ * mesure est fausse et TOUT le texte du PDF descend d'une demi-lettre — il
+ * touchait les traits des tableaux, ou était coupé par la ligne suivante.
+ * Le temps de la capture, on rend à cette image sa place normale.
+ */
+const corrigerMesureDuTexte = (): (() => void) => {
+  const style = document.createElement('style');
+  style.textContent = 'body > div[style*="visibility: hidden"] > img[width="1"][height="1"] { display: inline !important; }';
+  document.head.appendChild(style);
+  return () => style.remove();
+};
+
+/**
  * Fabrique un PDF A4 : chaque feuille (un élève) est photographiée puis posée
  * sur sa page. Les règles « @media print » du modèle s'appliquent (fond blanc,
  * marges d'écran retirées). Le texte du PDF est une image : moins net qu'une
@@ -109,6 +124,7 @@ export const imprimerHtml = async (html: string): Promise<void> => {
  */
 export const fabriquerPdfHtml = async (html: string): Promise<jsPDF> => {
   const cadre = await creerCadre(versionImprimee(html), true);
+  const retablir = corrigerMesureDuTexte();
   try {
     const doc = cadre.contentDocument;
     if (!doc) throw new Error('Document illisible.');
@@ -145,6 +161,7 @@ export const fabriquerPdfHtml = async (html: string): Promise<jsPDF> => {
     }
     return pdf;
   } finally {
+    retablir();
     cadre.remove();
   }
 };

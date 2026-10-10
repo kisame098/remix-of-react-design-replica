@@ -225,9 +225,9 @@ describe('marges de la règle @page (appliquées à l\'impression seulement par 
   const avecPage = (regle: string) => page('<p>{CLASSE}</p>', `<style>@page { ${regle} } body{margin:0}</style>`);
 
   it('lit les marges et l\'orientation', () => {
-    expect(lireReglagesPage(avecPage('size: A4; margin: 2.2cm 2.5cm;'))).toEqual({ marges: '2.2cm 2.5cm', paysage: false });
-    expect(lireReglagesPage(avecPage('size: A4 landscape; margin: 1cm'))).toEqual({ marges: '1cm', paysage: true });
-    expect(lireReglagesPage(avecPage('margin: 1cm; margin-left: 3cm'))).toEqual({ marges: '1cm 1cm 1cm 3cm', paysage: false });
+    expect(lireReglagesPage(avecPage('size: A4; margin: 2.2cm 2.5cm;'))).toEqual({ marges: '2.2cm 2.5cm', paysage: false, a5: false });
+    expect(lireReglagesPage(avecPage('size: A4 landscape; margin: 1cm'))).toEqual({ marges: '1cm', paysage: true, a5: false });
+    expect(lireReglagesPage(avecPage('margin: 1cm; margin-left: 3cm'))).toEqual({ marges: '1cm 1cm 1cm 3cm', paysage: false, a5: false });
   });
 
   it('sans marge (ou marge à 0, cas des modèles qui font eux-mêmes leur page), rien n\'est ajouté', () => {
@@ -243,6 +243,12 @@ describe('marges de la règle @page (appliquées à l\'impression seulement par 
     expect(html).toContain('@media only print');
     // Le PDF transforme « @media print » en « @media all » : la remise à zéro ne doit pas s'y appliquer.
     expect(versionImprimee(html)).toContain('@media only print');
+  });
+
+  it('une feuille déclarée A5 (reçu) fait 148 mm de large à l\'écran et dans le PDF, pas 210', () => {
+    expect(lireReglagesPage(avecPage('size: A5 portrait; margin: 8mm')).a5).toBe(true);
+    const html = assemblerDocuments([avecPage('size: A5 portrait; margin: 8mm')]);
+    expect(html).toContain('width:148mm;min-height:210mm;padding:8mm');
   });
 });
 
@@ -306,6 +312,22 @@ describe('modèles de reçu', () => {
     expect(doc.querySelector('td')!.getAttribute('style')).toContain('line-through');
     expect(html).not.toContain('<b>piège</b>');
     expect(doc.body.textContent).toMatch(/Avant[\s\S]*Désignation[\s\S]*Après/);
+  });
+
+  it("dans le tableau de l'école (entre <tbody> et </tbody>), seulement des lignes, dans ses colonnes", () => {
+    const c = { ...recu, recu: { ...recu.recu!, lignes: [{ designation: 'Inscription', montant: 50000, annulee: false }, { designation: 'Cantine', montant: 5000, annulee: true }] } };
+    const modele = page(`<table><thead><tr><th>N°</th><th>Désignation</th><th>Montant</th></tr></thead>
+      <tbody>{Tableau des paiements}<tr class="total"><td colspan="2">TOTAL</td><td>{Montant total}</td></tr></tbody></table>`);
+    const doc = new DOMParser().parseFromString(documentPret(modele, c), 'text/html');
+    expect(doc.querySelectorAll('table')).toHaveLength(1);
+    const lignes = Array.from(doc.querySelectorAll('tr')).map(tr => Array.from(tr.cells).map(td => td.textContent));
+    expect(lignes).toEqual([['N°', 'Désignation', 'Montant'], ['1', 'Inscription', '50 000'], ['2', 'Cantine (annulé)', '5 000'], ['TOTAL', '75 000 FCFA']]);
+  });
+
+  it('dans un tableau sans en-tête reconnu : désignation, puis montant en dernière colonne', () => {
+    const doc = new DOMParser().parseFromString(documentPret(page('<table><tr><td>{TABLEAU DES PAIEMENTS}</td></tr><tr><td>a</td><td>b</td></tr></table>'), recu), 'text/html');
+    expect(Array.from(doc.querySelectorAll('tr')).slice(0, 2).map(tr => Array.from(tr.cells).map(td => td.textContent)))
+      .toEqual([["Frais d'inscription", '50 000'], ['Scolarité — Octobre 2026', '25 000']]);
   });
 
   it('mention ANNULÉ / DUPLICATA', () => {
