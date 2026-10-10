@@ -168,7 +168,7 @@ export const DocumentDialog = ({
           {deuxParFeuille && (
             <Button
               variant={demiPage ? 'secondary' : 'outline'} aria-pressed={demiPage} className={`gap-2 mr-auto ${demiPage ? 'ring-2 ring-primary/40' : ''}`}
-              title="Deux exemplaires sur une feuille A4 horizontale (famille et école), à couper au pointillé"
+              title="Sur une demi-feuille : A4 horizontale, l'autre moitié reste libre ; à couper au pointillé"
               onClick={() => { const v = !demiPage; setDemiPage(v); retenirDeuxParFeuille(v, deuxParFeuille); }}
             >
               <Columns2 className="h-4 w-4" /> 2 par feuille

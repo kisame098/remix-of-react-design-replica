@@ -432,7 +432,7 @@ export const planifierRecu = (doc: jsPDF, data: RecuData): PlanRecu => {
 
 // ─── Assemblage ───────────────────────────────────────────────────────────────
 
-/** Largeur d'une feuille A4 horizontale : deux reçus A5 côte à côte. */
+/** Largeur d'une feuille A4 horizontale : deux moitiés A5. */
 const A4_PAYSAGE_L = 297;
 
 export async function genererRecuPdf(data: RecuData & {
@@ -440,9 +440,9 @@ export async function genererRecuPdf(data: RecuData & {
   /** Imprimante noir et blanc : aucun grand aplat (Paramètres → École). */
   economique?: boolean;
   /**
-   * Deux exemplaires côte à côte sur une feuille A4 horizontale (un pour la
-   * famille, un pour l'école), pointillé de coupe au milieu. Le reçu est déjà
-   * en A5 : rien n'est réduit. Seulement si le reçu tient sur une page.
+   * Feuille A4 horizontale : le reçu (déjà en A5) sur une moitié, l'autre
+   * moitié reste libre ; pointillé de coupe au milieu. Rien n'est réduit.
+   * Seulement si le reçu tient sur une page.
    */
   deuxParFeuille?: boolean;
 }): Promise<jsPDF> {
@@ -515,19 +515,13 @@ export async function genererRecuPdf(data: RecuData & {
 
   dessiner();
   if (deux) {
-    // Le même reçu, décalé d'une demi-feuille : tout le dessin suit (texte, logo, filigrane).
-    const decalage = A4_PAYSAGE_L / 2;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const avance = doc as any;
-    avance.saveGraphicsState();
-    avance.setCurrentTransformationMatrix(new avance.Matrix(1, 0, 0, 1, decalage * (72 / 25.4), 0));
-    dessiner();
-    avance.restoreGraphicsState();
-    // Pointillé de coupe.
+    // Un seul reçu, sur la moitié gauche ; l'autre moitié reste libre.
+    // Pointillé de coupe au milieu.
+    const milieu = A4_PAYSAGE_L / 2;
     doc.setDrawColor(120, 120, 120);
     doc.setLineWidth(0.2);
     doc.setLineDashPattern([1.5, 1.5], 0);
-    doc.line(decalage, 4, decalage, H - 4);
+    doc.line(milieu, 4, milieu, H - 4);
     doc.setLineDashPattern([], 0);
   }
 
