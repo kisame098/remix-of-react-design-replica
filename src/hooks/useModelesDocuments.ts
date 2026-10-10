@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
-import { verifierModele } from '@/lib/modelesDocuments';
+import { lireSource, verifierSource, type SourceModele } from '@/lib/modeleDocument';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const sb = supabase as any;
@@ -9,12 +9,28 @@ const sb = supabase as any;
 export interface ModeleEcole {
   id: string;
   nom: string;
-  html: string;
+  source: SourceModele;
   updatedAt: string;
 }
 
+const COLONNES = 'id, nom, genre, contenu, html, fichier, updated_at';
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-const versModele = (r: any): ModeleEcole => ({ id: r.id, nom: r.nom, html: r.html, updatedAt: r.updated_at });
+const versModele = (r: any): ModeleEcole | null => {
+  const source = lireSource(r);
+  return source ? { id: r.id, nom: r.nom, source, updatedAt: r.updated_at } : null;
+};
+
+/** La ligne à écrire : chaque genre remplit SA colonne, les autres restent vides (contrainte SQL). */
+const versLigne = (nom: string, s: SourceModele) => ({
+  nom: nom.trim(),
+  genre: s.genre,
+  contenu: s.genre === 'visuel' ? s.contenu : null,
+  html: s.genre === 'html' ? s.html : null,
+  fichier: s.genre === 'word' ? s.fichier : null,
+});
+
+const trier = (l: ModeleEcole[]) => [...l].sort((a, b) => a.nom.localeCompare(b.nom, 'fr'));
 
 /**
  * Les modèles de documents de l'école (table `modeles_documents`).
@@ -35,40 +51,42 @@ export const useModelesDocuments = () => {
     let annule = false;
     if (!schoolId) { setModeles([]); setLoading(false); return; }
     (async () => {
-      const { data, error } = await sb.from('modeles_documents').select('id, nom, html, updated_at')
-        .eq('school_id', schoolId).order('nom');
+      const { data, error } = await sb.from('modeles_documents').select(COLONNES).eq('school_id', schoolId).order('nom');
       if (annule) return;
       setDisponible(!error);
-      setModeles((data ?? []).map(versModele));
+      setModeles(trier(((data ?? []) as unknown[]).map(versModele).filter((m): m is ModeleEcole => m !== null)));
       setLoading(false);
     })();
     return () => { annule = true; };
   }, [schoolId]);
 
-  const controler = (nom: string, html: string) => {
+  const controler = (nom: string, source: SourceModele) => {
     if (!nom.trim()) throw new Error('Donnez un nom au modèle.');
-    const v = verifierModele(html);
+    const v = verifierSource(source);
     if (v.erreur) throw new Error(v.erreur);
-    if (!v.ok) throw new Error('Le modèle contient des champs inconnus de SenClass.');
+    if (v.imagesMalPlacees.length > 0 && source.genre === 'word') throw new Error("Le logo ne peut pas être un champ dans un Word : placez-le directement dans votre fichier.");
+    if (!v.ok) throw new Error(`Champs inconnus de SenClass : ${v.inconnus.map(c => `{${c}}`).join(', ')}.`);
   };
 
-  const creer = useCallback(async (nom: string, html: string): Promise<ModeleEcole> => {
-    controler(nom, html);
+  const creer = useCallback(async (nom: string, source: SourceModele): Promise<ModeleEcole> => {
+    controler(nom, source);
     const { data, error } = await sb.from('modeles_documents')
-      .insert({ school_id: schoolId, nom: nom.trim(), html }).select('id, nom, html, updated_at').single();
+      .insert({ school_id: schoolId, ...versLigne(nom, source) }).select(COLONNES).single();
     if (error) throw error;
     const m = versModele(data);
-    setModeles(prev => [...prev, m].sort((a, b) => a.nom.localeCompare(b.nom, 'fr')));
+    if (!m) throw new Error('Modèle illisible après enregistrement.');
+    setModeles(prev => trier([...prev, m]));
     return m;
   }, [schoolId]);
 
-  const modifier = useCallback(async (id: string, nom: string, html: string): Promise<ModeleEcole> => {
-    controler(nom, html);
+  const modifier = useCallback(async (id: string, nom: string, source: SourceModele): Promise<ModeleEcole> => {
+    controler(nom, source);
     const { data, error } = await sb.from('modeles_documents')
-      .update({ nom: nom.trim(), html }).eq('id', id).select('id, nom, html, updated_at').single();
+      .update(versLigne(nom, source)).eq('id', id).select(COLONNES).single();
     if (error) throw error;
     const m = versModele(data);
-    setModeles(prev => prev.map(x => (x.id === id ? m : x)).sort((a, b) => a.nom.localeCompare(b.nom, 'fr')));
+    if (!m) throw new Error('Modèle illisible après enregistrement.');
+    setModeles(prev => trier(prev.map(x => (x.id === id ? m : x))));
     return m;
   }, []);
 

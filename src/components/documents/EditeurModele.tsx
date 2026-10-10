@@ -72,10 +72,10 @@ export const EditeurModele = ({
     if (!nom.trim()) setNom(nomDepuisFichier(texte, f.name));
   };
 
-  /** Insère [CHAMP] là où se trouve le curseur dans le HTML. */
+  /** Insère {CHAMP} là où se trouve le curseur dans le HTML. */
   const inserer = (champ: string) => {
     const el = zone.current;
-    const morceau = `[${champ}]`;
+    const morceau = `{${champ}}`;
     if (!el) { setHtml(h => h + morceau); return; }
     const debut = el.selectionStart ?? html.length;
     const fin = el.selectionEnd ?? debut;
@@ -106,8 +106,8 @@ export const EditeurModele = ({
         <DialogHeader>
           <DialogTitle>{titre}</DialogTitle>
           <DialogDescription>
-            Écrivez le document en HTML. Les informations de chaque élève s'écrivent entre crochets, par exemple
-            {' '}<code className="text-xs">[NOM ET PRÉNOM DE L'ÉLÈVE]</code>. Ce qui ne change jamais (dénomination,
+            Écrivez le document en HTML. Les informations de chaque élève s'écrivent entre accolades, par exemple
+            {' '}<code className="text-xs">{"{NOM ET PRÉNOM DE L'ÉLÈVE}"}</code>. Ce qui ne change jamais (dénomination,
             second téléphone…) s'écrit directement dans le texte.
           </DialogDescription>
         </DialogHeader>
@@ -151,7 +151,7 @@ export const EditeurModele = ({
                           key={c.nom} type="button" title={c.source} onClick={() => inserer(c.nom)}
                           className="rounded border bg-muted/40 px-1.5 py-0.5 text-[11px] font-mono hover:bg-primary/10 hover:border-primary/40"
                         >
-                          [{c.nom}]
+                          {'{'}{c.nom}{'}'}
                         </button>
                       ))}
                     </div>
@@ -193,14 +193,14 @@ const Verification = ({ verification: v }: { verification: ReturnType<typeof ver
       {v.inconnus.length > 0 && (
         <div className="rounded-md border border-destructive/40 bg-destructive/5 p-2 text-destructive">
           <p className="flex items-center gap-2 font-medium"><TriangleAlert className="h-4 w-4" /> Champs inconnus de SenClass — modèle refusé :</p>
-          <ul className="mt-1 ml-6 list-disc">{v.inconnus.map(c => <li key={c} className="font-mono text-xs">[{c}]</li>)}</ul>
+          <ul className="mt-1 ml-6 list-disc">{v.inconnus.map(c => <li key={c} className="font-mono text-xs">{'{'}{c}{'}'}</li>)}</ul>
           <p className="mt-1 text-xs">Remplacez-les par un champ de la liste ci-dessous, ou écrivez le texte en clair s'il ne change pas d'un élève à l'autre.</p>
         </div>
       )}
       {v.imagesMalPlacees.length > 0 && (
         <p className="flex items-start gap-2 text-destructive">
           <TriangleAlert className="h-4 w-4 mt-0.5 shrink-0" />
-          Le logo s'écrit dans une image : <code className="text-xs">&lt;img src="[LOGO DE L'ÉTABLISSEMENT]"&gt;</code>
+          Le logo s'écrit dans une image : <code className="text-xs">{'<img src="{LOGO DE L\'ÉTABLISSEMENT}">'}</code>
         </p>
       )}
       {v.ok && (

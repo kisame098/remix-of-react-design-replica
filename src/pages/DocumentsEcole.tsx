@@ -1,6 +1,6 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
-  Copy, Download, Eye, FilePlus2, FileText, FileUp, Loader2, Pencil, Printer, Search, Trash2, TriangleAlert, Wand2,
+  Code2, Copy, Download, Eye, FilePlus2, FileText, FileType2, FileUp, Loader2, Pencil, Printer, Search, Trash2, TriangleAlert, Wand2,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useSchool } from '@/contexts/SchoolContext';
@@ -22,11 +22,15 @@ import {
 import { toast } from '@/hooks/use-toast';
 import { ApercuHtml } from '@/components/documents/ApercuHtml';
 import { EditeurModele } from '@/components/documents/EditeurModele';
+import { EditeurVisuel } from '@/components/documents/EditeurVisuel';
+import { ImportWord } from '@/components/documents/ImportWord';
 import { useModelesDocuments } from '@/hooks/useModelesDocuments';
 import { infosEcole, nomDeFichier, type EcoleSource } from '@/lib/documentsEcole';
+import { contexteExemple, eleveDocument, type ContexteDocument, type Production } from '@/lib/modelesDocuments';
+import { documentVierge, type DocumentVisuel } from '@/lib/documentVisuel';
 import {
-  contexteExemple, eleveDocument, produireDocuments, type ContexteDocument, type Production,
-} from '@/lib/modelesDocuments';
+  LIBELLES_GENRE, produire, telechargerWordOriginal, telechargerWordRempli, type SourceModele,
+} from '@/lib/modeleDocument';
 import { MODELES_PAR_DEFAUT } from '@/lib/modelesDocumentsParDefaut';
 import { estUneErreurDeChargement } from '@/lib/rechargementApresDeploiement';
 
@@ -34,20 +38,18 @@ type Onglet = 'produire' | 'modeles';
 
 const ONGLETS: { id: Onglet; label: string; description: string; icon: typeof FileText }[] = [
   { id: 'produire', label: 'Produire', description: 'Certificats, attestations…', icon: Printer },
-  { id: 'modeles', label: 'Modèles', description: 'Fournis ou de votre école', icon: FileText },
+  { id: 'modeles', label: 'Modèles', description: 'Créer, importer, modifier', icon: FileText },
 ];
 
 /** Un modèle tel que l'écran le manipule, qu'il soit fourni par SenClass ou à l'école. */
-interface ModeleListe { id: string; nom: string; html: string; fourni: boolean }
+interface ModeleListe { id: string; nom: string; source: SourceModele; fourni: boolean }
 
-interface Edition {
-  id: string | null;
-  titre: string;
-  initial: { nom: string; html: string };
-  importer?: boolean;
-}
+type Edition =
+  | { genre: 'visuel'; id: string | null; initial: { nom: string; contenu: DocumentVisuel } }
+  | { genre: 'html'; id: string | null; titre: string; initial: { nom: string; html: string }; importer?: boolean }
+  | { genre: 'word'; id: string | null; titre: string; initial?: { nom: string; fichier: string } };
 
-const MODELE_VIERGE = `<!DOCTYPE html>
+const MODELE_HTML_VIERGE = `<!DOCTYPE html>
 <html lang="fr">
 <head>
 <meta charset="UTF-8">
@@ -60,13 +62,15 @@ const MODELE_VIERGE = `<!DOCTYPE html>
 </head>
 <body>
 <div class="page">
-  <h2>[NOM DE L'ÉTABLISSEMENT]</h2>
-  <p>[VILLE], le [DATE]</p>
-  <p>[NOM ET PRÉNOM DE L'ÉLÈVE] — classe de [CLASSE] — année scolaire [ANNÉE SCOLAIRE]</p>
+  <h2>{NOM DE L'ÉTABLISSEMENT}</h2>
+  <p>{VILLE}, le {DATE}</p>
+  <p>{NOM ET PRÉNOM DE L'ÉLÈVE} — classe de {CLASSE} — année scolaire {ANNÉE SCOLAIRE}</p>
 </div>
 </body>
 </html>
 `;
+
+const ICONES_GENRE = { visuel: FileText, html: Code2, word: FileType2 } as const;
 
 const messageErreur = (e: unknown) =>
   estUneErreurDeChargement(e)
@@ -74,9 +78,9 @@ const messageErreur = (e: unknown) =>
     : e instanceof Error ? e.message : String(e);
 
 /**
- * La rubrique Documents (écoles classiques) : produire des documents pour
- * des élèves à partir de modèles HTML — ceux fournis par SenClass, ou ceux de
- * l'école. Le directeur crée et modifie les modèles ; le personnel produit.
+ * La rubrique Documents (écoles classiques) : produire des documents pour des
+ * élèves à partir de modèles — pages créées dans l'éditeur, fichiers Word ou
+ * HTML. Le directeur crée et modifie les modèles ; le personnel produit.
  */
 const DocumentsEcole = () => {
   const { school, accountRole } = useAuth();
@@ -94,15 +98,22 @@ const DocumentsEcole = () => {
   const [aSupprimer, setASupprimer] = useState<ModeleListe | null>(null);
 
   const tousModeles: ModeleListe[] = useMemo(() => [
-    ...MODELES_PAR_DEFAUT.map(m => ({ ...m, fourni: true })),
-    ...modelesEcole.map(m => ({ id: m.id, nom: m.nom, html: m.html, fourni: false })),
+    ...modelesEcole.map(m => ({ id: m.id, nom: m.nom, source: m.source, fourni: false })),
+    ...MODELES_PAR_DEFAUT.map(m => ({ id: m.id, nom: m.nom, source: { genre: 'visuel' as const, contenu: m.contenu }, fourni: true })),
   ], [modelesEcole]);
 
-  const enregistrer = async (nom: string, html: string) => {
-    if (!edition) return;
-    if (edition.id) await modifier(edition.id, nom, html);
-    else await creer(nom, html);
+  const enregistrer = async (id: string | null, nom: string, source: SourceModele) => {
+    if (id) await modifier(id, nom, source);
+    else await creer(nom, source);
     toast({ title: 'Modèle enregistré', description: nom });
+  };
+
+  const ouvrirEdition = (m: ModeleListe, copie = false) => {
+    const id = copie ? null : m.id;
+    const nom = copie ? `${m.nom} (copie)` : m.nom;
+    if (m.source.genre === 'visuel') setEdition({ genre: 'visuel', id, initial: { nom, contenu: structuredClone(m.source.contenu) } });
+    else if (m.source.genre === 'html') setEdition({ genre: 'html', id, titre: 'Modifier le modèle HTML', initial: { nom, html: m.source.html } });
+    else setEdition({ genre: 'word', id, titre: 'Modifier le modèle Word', initial: { nom, fichier: m.source.fichier } });
   };
 
   const confirmerSuppression = async () => {
@@ -124,7 +135,7 @@ const DocumentsEcole = () => {
         </div>
         <div>
           <h1 className="text-2xl font-bold text-foreground">Documents</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">Certificats, attestations et autres documents de l'école, à partir de vos modèles</p>
+          <p className="text-sm text-muted-foreground mt-0.5">Certificats, attestations et autres documents de l'école</p>
         </div>
       </div>
 
@@ -163,15 +174,21 @@ const DocumentsEcole = () => {
             <div className="space-y-6 max-w-4xl">
               {estDirecteur ? (
                 <div className="flex flex-wrap gap-2">
-                  <Button onClick={() => setEdition({ id: null, titre: 'Nouveau modèle', initial: { nom: '', html: MODELE_VIERGE } })} disabled={!disponible}>
-                    <FilePlus2 className="h-4 w-4 mr-2" /> Nouveau modèle
+                  <Button onClick={() => setEdition({ genre: 'visuel', id: null, initial: { nom: '', contenu: documentVierge() } })} disabled={!disponible}>
+                    <FilePlus2 className="h-4 w-4 mr-2" /> Créer un document
                   </Button>
-                  <Button variant="outline" onClick={() => setEdition({ id: null, titre: 'Importer un modèle', initial: { nom: '', html: '' }, importer: true })} disabled={!disponible}>
-                    <FileUp className="h-4 w-4 mr-2" /> Importer un fichier HTML
+                  <Button variant="outline" onClick={() => setEdition({ genre: 'word', id: null, titre: 'Importer un modèle Word' })} disabled={!disponible}>
+                    <FileType2 className="h-4 w-4 mr-2" /> Importer un Word
+                  </Button>
+                  <Button variant="outline" onClick={() => setEdition({ genre: 'html', id: null, titre: 'Nouveau modèle HTML', initial: { nom: '', html: MODELE_HTML_VIERGE } })} disabled={!disponible}>
+                    <Code2 className="h-4 w-4 mr-2" /> Écrire du HTML
+                  </Button>
+                  <Button variant="outline" onClick={() => setEdition({ genre: 'html', id: null, titre: 'Importer un modèle HTML', initial: { nom: '', html: '' }, importer: true })} disabled={!disponible}>
+                    <FileUp className="h-4 w-4 mr-2" /> Importer du HTML
                   </Button>
                 </div>
               ) : (
-                <p className="text-sm text-muted-foreground">Seul le directeur peut créer ou modifier les modèles. Vous pouvez les utiliser dans « Produire ».</p>
+                <p className="text-sm text-muted-foreground">Seul le directeur peut créer ou modifier les modèles.</p>
               )}
 
               {!disponible && (
@@ -186,13 +203,18 @@ const DocumentsEcole = () => {
                 {loading ? (
                   <p className="text-sm text-muted-foreground flex items-center gap-2"><Loader2 className="h-4 w-4 animate-spin" /> Chargement…</p>
                 ) : modelesEcole.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">Aucun modèle pour l'instant. Partez d'un modèle fourni (« Copier pour le modifier ») ou importez votre propre fichier HTML.</p>
+                  <p className="text-sm text-muted-foreground">Aucun modèle pour l'instant.</p>
                 ) : (
                   tousModeles.filter(m => !m.fourni).map(m => (
                     <CarteModele key={m.id} modele={m} onApercu={() => setApercuModele(m)}>
+                      {m.source.genre === 'word' && (
+                        <Button size="sm" variant="ghost" onClick={() => m.source.genre === 'word' && telechargerWordOriginal(m.source.fichier, m.nom)} title="Télécharger le Word pour le retoucher">
+                          <Download className="h-3.5 w-3.5 mr-1.5" /> Word
+                        </Button>
+                      )}
                       {estDirecteur && (
                         <>
-                          <Button size="sm" variant="outline" onClick={() => setEdition({ id: m.id, titre: 'Modifier le modèle', initial: { nom: m.nom, html: m.html } })}>
+                          <Button size="sm" variant="outline" onClick={() => ouvrirEdition(m)}>
                             <Pencil className="h-3.5 w-3.5 mr-1.5" /> Modifier
                           </Button>
                           <Button size="sm" variant="ghost" className="text-destructive hover:text-destructive" onClick={() => setASupprimer(m)} aria-label={`Supprimer ${m.nom}`}>
@@ -210,7 +232,7 @@ const DocumentsEcole = () => {
                 {tousModeles.filter(m => m.fourni).map(m => (
                   <CarteModele key={m.id} modele={m} onApercu={() => setApercuModele(m)}>
                     {estDirecteur && disponible && (
-                      <Button size="sm" variant="outline" onClick={() => setEdition({ id: null, titre: 'Nouveau modèle (copie)', initial: { nom: m.nom, html: m.html } })}>
+                      <Button size="sm" variant="outline" onClick={() => ouvrirEdition(m, true)}>
                         <Copy className="h-3.5 w-3.5 mr-1.5" /> Copier pour le modifier
                       </Button>
                     )}
@@ -222,10 +244,23 @@ const DocumentsEcole = () => {
         </div>
       </div>
 
-      {edition && (
+      {edition?.genre === 'visuel' && (
+        <EditeurVisuel
+          ouvert onFermer={() => setEdition(null)} initial={edition.initial} logo={ecole.logo} exemple={exemple}
+          onEnregistrer={(nom, contenu) => enregistrer(edition.id, nom, { genre: 'visuel', contenu })}
+        />
+      )}
+      {edition?.genre === 'html' && (
         <EditeurModele
           ouvert onFermer={() => setEdition(null)} titre={edition.titre} initial={edition.initial}
-          importerAuDemarrage={edition.importer} exemple={exemple} onEnregistrer={enregistrer}
+          importerAuDemarrage={edition.importer} exemple={exemple}
+          onEnregistrer={(nom, html) => enregistrer(edition.id, nom, { genre: 'html', html })}
+        />
+      )}
+      {edition?.genre === 'word' && (
+        <ImportWord
+          ouvert onFermer={() => setEdition(null)} titre={edition.titre} initial={edition.initial}
+          onEnregistrer={(nom, fichier) => enregistrer(edition.id, nom, { genre: 'word', fichier })}
         />
       )}
 
@@ -233,9 +268,9 @@ const DocumentsEcole = () => {
         <DialogContent className="max-w-3xl max-h-[95vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{apercuModele?.nom}</DialogTitle>
-            <DialogDescription>Rempli avec un élève d'exemple ({exemple.eleve.prenom} {exemple.eleve.nom}) — ce n'est pas un vrai élève.</DialogDescription>
+            <DialogDescription>Rempli avec un élève d'exemple ({exemple.eleve.prenom} {exemple.eleve.nom}).</DialogDescription>
           </DialogHeader>
-          {apercuModele && <ApercuModele html={apercuModele.html} exemple={exemple} />}
+          {apercuModele && <ApercuModele source={apercuModele.source} exemple={exemple} />}
         </DialogContent>
       </Dialog>
 
@@ -243,7 +278,7 @@ const DocumentsEcole = () => {
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Supprimer « {aSupprimer?.nom} » ?</AlertDialogTitle>
-            <AlertDialogDescription>Le modèle disparaît pour toute l'école. Les documents déjà imprimés ne sont pas concernés.</AlertDialogDescription>
+            <AlertDialogDescription>Le modèle disparaît pour toute l'école.</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Annuler</AlertDialogCancel>
@@ -255,20 +290,40 @@ const DocumentsEcole = () => {
   );
 };
 
-const CarteModele = ({ modele, onApercu, children }: { modele: ModeleListe; onApercu: () => void; children?: React.ReactNode }) => (
-  <Card>
-    <CardContent className="p-3 flex flex-wrap items-center gap-2">
-      <FileText className="h-4 w-4 text-primary shrink-0" />
-      <span className="font-medium flex-1 min-w-0 truncate">{modele.nom}</span>
-      {modele.fourni && <Badge variant="secondary">SenClass</Badge>}
-      <Button size="sm" variant="ghost" onClick={onApercu}><Eye className="h-3.5 w-3.5 mr-1.5" /> Aperçu</Button>
-      {children}
-    </CardContent>
-  </Card>
-);
+const CarteModele = ({ modele, onApercu, children }: { modele: ModeleListe; onApercu: () => void; children?: React.ReactNode }) => {
+  const Icone = ICONES_GENRE[modele.source.genre];
+  return (
+    <Card>
+      <CardContent className="p-3 flex flex-wrap items-center gap-2">
+        <Icone className="h-4 w-4 text-primary shrink-0" />
+        <span className="font-medium flex-1 min-w-0 truncate">{modele.nom}</span>
+        {modele.fourni ? <Badge variant="secondary">SenClass</Badge> : <Badge variant="outline">{LIBELLES_GENRE[modele.source.genre]}</Badge>}
+        <Button size="sm" variant="ghost" onClick={onApercu}><Eye className="h-3.5 w-3.5 mr-1.5" /> Aperçu</Button>
+        {children}
+      </CardContent>
+    </Card>
+  );
+};
 
-const ApercuModele = ({ html, exemple }: { html: string; exemple: ContexteDocument }) => {
-  const p = useMemo(() => produireDocuments(html, [exemple]), [html, exemple]);
+/** Production asynchrone (un Word se redessine) avec son état de chargement. */
+const useProduction = (source: SourceModele | null, contextes: ContexteDocument[] | null) => {
+  const [p, setP] = useState<Production | null>(null);
+  const [erreur, setErreur] = useState<string | null>(null);
+  useEffect(() => {
+    let annule = false;
+    setP(null); setErreur(null);
+    if (!source || !contextes) return;
+    produire(source, contextes).then(r => { if (!annule) setP(r); }, e => { if (!annule) setErreur(messageErreur(e)); });
+    return () => { annule = true; };
+  }, [source, contextes]);
+  return { p, erreur };
+};
+
+const ApercuModele = ({ source, exemple }: { source: SourceModele; exemple: ContexteDocument }) => {
+  const contextes = useMemo(() => [exemple], [exemple]);
+  const { p, erreur } = useProduction(source, contextes);
+  if (erreur) return <p className="text-sm text-destructive">{erreur}</p>;
+  if (!p) return <p className="text-sm text-muted-foreground flex items-center gap-2"><Loader2 className="h-4 w-4 animate-spin" /> Préparation…</p>;
   if (p.refus) return <Refus production={p} estDirecteur={false} />;
   return <ApercuHtml html={p.html} />;
 };
@@ -278,7 +333,7 @@ const Refus = ({ production, estDirecteur, onAllerAuxModeles }: { production: Pr
     <p className="flex items-center gap-2 font-medium"><TriangleAlert className="h-4 w-4" /> Ce modèle ne peut pas être utilisé.</p>
     {production.refus?.erreur && <p>{production.refus.erreur}</p>}
     {production.refus && production.refus.inconnus.length > 0 && (
-      <p>Champs inconnus de SenClass : {production.refus.inconnus.map(c => `[${c}]`).join(', ')}.</p>
+      <p>Champs inconnus de SenClass : {production.refus.inconnus.map(c => `{${c}}`).join(', ')}.</p>
     )}
     {production.refus && production.refus.imagesMalPlacees.length > 0 && <p>Le logo doit être placé dans une image.</p>}
     <p className="text-xs">
@@ -295,20 +350,22 @@ type Classe = ReturnType<typeof useSchool>['classes'][number];
 
 const TOUTES = '__toutes__';
 
+interface Demande { source: SourceModele; contextes: ContexteDocument[]; nomFichier: string }
+
 const Produire = ({
   modeles, students, classes, ecole, anneeScolaire, estDirecteur, onAllerAuxModeles,
 }: {
   modeles: ModeleListe[]; students: Eleve[]; classes: Classe[]; ecole: ContexteDocument['ecole'];
   anneeScolaire?: string; estDirecteur: boolean; onAllerAuxModeles: () => void;
 }) => {
-  const [modeleId, setModeleId] = useState<string>(modeles[0]?.id ?? '');
+  const [modeleId, setModeleId] = useState<string>('');
   const [classeId, setClasseId] = useState<string>(TOUTES);
   const [recherche, setRecherche] = useState('');
   const [coches, setCoches] = useState<Set<string>>(new Set());
-  const [production, setProduction] = useState<{ p: Production; nomFichier: string; nb: number } | null>(null);
+  const [demande, setDemande] = useState<Demande | null>(null);
 
   const nomClasse = useMemo(() => new Map(classes.map(c => [c.id, c.name])), [classes]);
-  const modele = modeles.find(m => m.id === modeleId);
+  const modele = modeles.find(m => m.id === modeleId) ?? modeles[0];
 
   const eleves = useMemo(() => {
     const q = recherche.trim().toLowerCase();
@@ -333,7 +390,7 @@ const Produire = ({
   const choisis = students.filter(s => coches.has(s.id))
     .sort((a, b) => a.lastName.localeCompare(b.lastName, 'fr') || a.firstName.localeCompare(b.firstName, 'fr'));
 
-  const produire = () => {
+  const lancer = () => {
     if (!modele || choisis.length === 0) return;
     const date = new Date().toISOString();
     const contextes: ContexteDocument[] = choisis.map(s => ({
@@ -343,7 +400,7 @@ const Produire = ({
     const pour = choisis.length === 1
       ? `${choisis[0].lastName} ${choisis[0].firstName}`
       : classeId !== TOUTES ? nomClasse.get(classeId) ?? '' : `${choisis.length} élèves`;
-    setProduction({ p: produireDocuments(modele.html, contextes), nomFichier: `${modele.nom} ${pour}`, nb: choisis.length });
+    setDemande({ source: modele.source, contextes, nomFichier: `${modele.nom} ${pour}` });
   };
 
   return (
@@ -351,7 +408,7 @@ const Produire = ({
       <div className="grid gap-3 sm:grid-cols-2">
         <div className="space-y-1">
           <Label>Modèle</Label>
-          <Select value={modeleId} onValueChange={setModeleId}>
+          <Select value={modele?.id ?? ''} onValueChange={setModeleId}>
             <SelectTrigger><SelectValue placeholder="Choisir un modèle" /></SelectTrigger>
             <SelectContent>
               {modeles.some(m => !m.fourni) && (
@@ -405,59 +462,71 @@ const Produire = ({
       </Card>
 
       <div className="flex flex-wrap items-center gap-3">
-        <Button onClick={produire} disabled={!modele || choisis.length === 0}>
+        <Button onClick={lancer} disabled={!modele || choisis.length === 0}>
           <Wand2 className="h-4 w-4 mr-2" /> Produire {choisis.length > 0 ? `(${choisis.length})` : ''}
         </Button>
         {coches.size > 0 && <Button variant="ghost" size="sm" onClick={() => setCoches(new Set())}>Tout décocher</Button>}
       </div>
 
       <DialogProduction
-        production={production} onFermer={() => setProduction(null)}
-        estDirecteur={estDirecteur} onAllerAuxModeles={() => { setProduction(null); onAllerAuxModeles(); }}
+        demande={demande} onFermer={() => setDemande(null)}
+        estDirecteur={estDirecteur} onAllerAuxModeles={() => { setDemande(null); onAllerAuxModeles(); }}
       />
     </div>
   );
 };
 
 const DialogProduction = ({
-  production, onFermer, estDirecteur, onAllerAuxModeles,
+  demande, onFermer, estDirecteur, onAllerAuxModeles,
 }: {
-  production: { p: Production; nomFichier: string; nb: number } | null;
-  onFermer: () => void; estDirecteur: boolean; onAllerAuxModeles: () => void;
+  demande: Demande | null; onFermer: () => void; estDirecteur: boolean; onAllerAuxModeles: () => void;
 }) => {
-  const [action, setAction] = useState<'imprimer' | 'pdf' | null>(null);
-  const p = production?.p;
+  const [action, setAction] = useState<'imprimer' | 'pdf' | 'word' | null>(null);
+  const { p, erreur } = useProduction(demande?.source ?? null, demande?.contextes ?? null);
 
-  const lancer = async (quoi: 'imprimer' | 'pdf') => {
-    if (!production || !p?.html) return;
+  const lancer = async (quoi: 'imprimer' | 'pdf' | 'word') => {
+    if (!demande) return;
     setAction(quoi);
     try {
-      const sortie = await import('@/lib/modelesDocumentsPdf');
-      if (quoi === 'imprimer') await sortie.imprimerHtml(p.html);
-      else await sortie.telechargerPdfHtml(p.html, nomDeFichier(production.nomFichier));
+      if (quoi === 'word') {
+        if (demande.source.genre === 'word') telechargerWordRempli(demande.source.fichier, demande.contextes, demande.nomFichier);
+      } else if (p?.html) {
+        const sortie = await import('@/lib/modelesDocumentsPdf');
+        if (quoi === 'imprimer') await sortie.imprimerHtml(p.html);
+        else await sortie.telechargerPdfHtml(p.html, nomDeFichier(demande.nomFichier));
+      }
     } catch (e) {
-      toast({ title: quoi === 'imprimer' ? "L'impression n'a pas pu s'ouvrir" : "Le PDF n'a pas pu être fabriqué", description: messageErreur(e), variant: 'destructive' });
+      const titres = { imprimer: "L'impression n'a pas pu s'ouvrir", pdf: "Le PDF n'a pas pu être fabriqué", word: "Le Word n'a pas pu être fabriqué" };
+      toast({ title: titres[quoi], description: messageErreur(e), variant: 'destructive' });
     } finally {
       setAction(null);
     }
   };
 
+  const pret = p && !p.refus;
+
   return (
-    <Dialog open={production !== null} onOpenChange={o => { if (!o) onFermer(); }}>
+    <Dialog open={demande !== null} onOpenChange={o => { if (!o) onFermer(); }}>
       <DialogContent className="max-w-3xl max-h-[95vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>{production?.nomFichier}</DialogTitle>
+          <DialogTitle>{demande?.nomFichier}</DialogTitle>
           <DialogDescription className="sr-only">Aperçu avant impression</DialogDescription>
         </DialogHeader>
 
-        {p?.refus ? (
-          <Refus production={p} estDirecteur={estDirecteur} onAllerAuxModeles={onAllerAuxModeles} />
-        ) : p && <ApercuHtml html={p.html} />}
+        {erreur ? <p className="text-sm text-destructive">{erreur}</p>
+          : !p ? <p className="text-sm text-muted-foreground flex items-center gap-2"><Loader2 className="h-4 w-4 animate-spin" /> Préparation…</p>
+          : p.refus ? <Refus production={p} estDirecteur={estDirecteur} onAllerAuxModeles={onAllerAuxModeles} />
+          : <ApercuHtml html={p.html} />}
 
         <DialogFooter className="gap-2">
           <Button variant="outline" onClick={onFermer}>Fermer</Button>
-          {p && !p.refus && (
+          {pret && (
             <>
+              {demande?.source.genre === 'word' && (
+                <Button variant="outline" onClick={() => lancer('word')} disabled={action !== null}>
+                  {action === 'word' ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <FileType2 className="h-4 w-4 mr-2" />} Télécharger en Word
+                </Button>
+              )}
               <Button variant="outline" onClick={() => lancer('pdf')} disabled={action !== null}>
                 {action === 'pdf' ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Download className="h-4 w-4 mr-2" />} Télécharger le PDF
               </Button>
