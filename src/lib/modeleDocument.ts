@@ -1,6 +1,6 @@
 import { visuelVersHtml, lireDocumentVisuel, type DocumentVisuel } from '@/lib/documentVisuel';
 import {
-  assemblerDocuments, listerVides, nettoyer, produireDocuments, valeursChamps, verifierModele,
+  ERREUR_MIXTE, cibleDesChamps, nomPersonne, assemblerDocuments, listerVides, nettoyer, produireDocuments, valeursChamps, verifierModele,
   type ContexteDocument, type Production, type VerificationModele,
 } from '@/lib/modelesDocuments';
 import { archiverWords, depuisBase64, remplirWord, verifierWord, TYPE_DOCX } from '@/lib/modeleWord';
@@ -44,7 +44,11 @@ export const lireSource = (r: { genre?: string | null; html?: string | null; con
 export const verifierSource = (s: SourceModele): VerificationModele => {
   if (s.genre === 'word') {
     const v = verifierWord(depuisBase64(s.fichier));
-    return { ok: v.ok, inconnus: v.inconnus, imagesMalPlacees: v.images, utilises: v.utilises, retraits: [], erreur: v.erreur };
+    const cible = cibleDesChamps(v.utilises);
+    return {
+      ok: v.ok && cible !== 'mixte', inconnus: v.inconnus, imagesMalPlacees: v.images, utilises: v.utilises, retraits: [],
+      erreur: v.erreur ?? (cible === 'mixte' ? ERREUR_MIXTE : undefined), cible: cible === 'mixte' ? 'aucune' : cible,
+    };
   }
   if (s.genre === 'visuel' && s.contenu.elements.length === 0) {
     return { ok: false, inconnus: [], imagesMalPlacees: [], utilises: [], retraits: [], erreur: 'La page est vide : ajoutez du texte, une image ou une forme.' };
@@ -93,7 +97,7 @@ const enregistrerFichier = (contenu: Uint8Array, type: string, nom: string) => {
 export const telechargerWordRempli = (fichier: string, contextes: ContexteDocument[], nom: string): void => {
   const original = depuisBase64(fichier);
   const remplis = contextes.map(c => ({
-    nom: nomDeFichier(`${c.eleve.nom} ${c.eleve.prenom}`) || 'eleve',
+    nom: nomDeFichier(nomPersonne(c)) || 'document',
     contenu: remplirWord(original, valeursChamps(c)),
   }));
   if (remplis.length === 1) enregistrerFichier(remplis[0].contenu, TYPE_DOCX, `${nomDeFichier(nom) || 'document'}.docx`);

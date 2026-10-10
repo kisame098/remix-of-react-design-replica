@@ -346,7 +346,7 @@ export const EditeurVisuel = ({ ouvert, onFermer, initial, logo, exemple, onEnre
             {apercu ? (
               <div className="max-w-4xl mx-auto space-y-2">
                 <p className="text-xs rounded-md bg-amber-50 text-amber-900 border border-amber-200 px-2 py-1">
-                  Rempli avec un élève <strong>d'exemple</strong> ({exemple.eleve.prenom} {exemple.eleve.nom}) — ce n'est pas un vrai élève.
+                  Rempli avec des données <strong>d'exemple</strong> — pas un vrai élève ni un vrai professeur.
                 </p>
                 {htmlApercu ? <ApercuHtml html={htmlApercu} /> : <p className="text-sm text-destructive">Corrigez les champs inconnus pour voir l'aperçu.</p>}
               </div>

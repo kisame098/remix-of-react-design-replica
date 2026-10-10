@@ -5,6 +5,7 @@ import {
 import { useAuth } from '@/contexts/AuthContext';
 import { useSchool } from '@/contexts/SchoolContext';
 import { useSchoolYear } from '@/contexts/SchoolYearContext';
+import { useSchedule } from '@/contexts/ScheduleContext';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
@@ -26,10 +27,12 @@ import { EditeurVisuel } from '@/components/documents/EditeurVisuel';
 import { ImportWord } from '@/components/documents/ImportWord';
 import { useModelesDocuments } from '@/hooks/useModelesDocuments';
 import { infosEcole, nomDeFichier, type EcoleSource } from '@/lib/documentsEcole';
-import { contexteExemple, eleveDocument, type ContexteDocument, type Production } from '@/lib/modelesDocuments';
+import {
+  ELEVE_VIDE, contexteExemple, eleveDocument, professeurDocument, type Cible, type ContexteDocument, type Production,
+} from '@/lib/modelesDocuments';
 import { documentVierge, type DocumentVisuel } from '@/lib/documentVisuel';
 import {
-  LIBELLES_GENRE, produire, telechargerWordOriginal, telechargerWordRempli, type SourceModele,
+  LIBELLES_GENRE, produire, telechargerWordOriginal, telechargerWordRempli, verifierSource, type SourceModele,
 } from '@/lib/modeleDocument';
 import { MODELES_PAR_DEFAUT } from '@/lib/modelesDocumentsParDefaut';
 import { estUneErreurDeChargement } from '@/lib/rechargementApresDeploiement';
@@ -85,7 +88,7 @@ const messageErreur = (e: unknown) =>
 const DocumentsEcole = () => {
   const { school, accountRole } = useAuth();
   const estDirecteur = accountRole === 'admin';
-  const { students, classes } = useSchool();
+  const { students, teachers, classes } = useSchool();
   const { currentYear } = useSchoolYear();
   const ecole = useMemo(() => infosEcole(school as EcoleSource | null), [school]);
   const anneeScolaire = currentYear?.id;
@@ -183,7 +186,7 @@ const DocumentsEcole = () => {
         <div className="flex-1 min-w-0 min-h-0 overflow-y-auto p-4 md:p-6">
           {onglet === 'produire' && (
             <Produire
-              modeles={tousModeles} students={students} classes={classes}
+              modeles={tousModeles} students={students} teachers={teachers} classes={classes}
               ecole={ecole} anneeScolaire={anneeScolaire} estDirecteur={estDirecteur}
               onAllerAuxModeles={() => setOnglet('modeles')}
             />
@@ -290,7 +293,7 @@ const DocumentsEcole = () => {
         <DialogContent className="max-w-3xl max-h-[95vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{apercuModele?.nom}</DialogTitle>
-            <DialogDescription>Rempli avec un élève d'exemple ({exemple.eleve.prenom} {exemple.eleve.nom}).</DialogDescription>
+            <DialogDescription>Rempli avec des données d'exemple.</DialogDescription>
           </DialogHeader>
           {apercuModele && <ApercuModele source={apercuModele.source} exemple={exemple} />}
         </DialogContent>
@@ -381,17 +384,19 @@ const Refus = ({ production, estDirecteur, onAllerAuxModeles }: { production: Pr
 
 type Eleve = ReturnType<typeof useSchool>['students'][number];
 type Classe = ReturnType<typeof useSchool>['classes'][number];
+type Professeur = ReturnType<typeof useSchool>['teachers'][number];
 
 const TOUTES = '__toutes__';
 
 interface Demande { source: SourceModele; contextes: ContexteDocument[]; nomFichier: string }
 
 const Produire = ({
-  modeles, students, classes, ecole, anneeScolaire, estDirecteur, onAllerAuxModeles,
+  modeles, students, teachers, classes, ecole, anneeScolaire, estDirecteur, onAllerAuxModeles,
 }: {
-  modeles: ModeleListe[]; students: Eleve[]; classes: Classe[]; ecole: ContexteDocument['ecole'];
+  modeles: ModeleListe[]; students: Eleve[]; teachers: Professeur[]; classes: Classe[]; ecole: ContexteDocument['ecole'];
   anneeScolaire?: string; estDirecteur: boolean; onAllerAuxModeles: () => void;
 }) => {
+  const { events } = useSchedule();
   const [modeleId, setModeleId] = useState<string>('');
   const [classeId, setClasseId] = useState<string>(TOUTES);
   const [recherche, setRecherche] = useState('');
@@ -400,19 +405,28 @@ const Produire = ({
 
   const nomClasse = useMemo(() => new Map(classes.map(c => [c.id, c.name])), [classes]);
   const modele = modeles.find(m => m.id === modeleId) ?? modeles[0];
+  // Pour qui ce modèle se produit : des élèves, des professeurs, ou personne en particulier.
+  const cible: Cible = useMemo(() => (modele ? verifierSource(modele.source).cible ?? 'eleve' : 'eleve'), [modele]);
+  useEffect(() => { setCoches(new Set()); setRecherche(''); }, [cible]);
 
-  const eleves = useMemo(() => {
+  // Une seule liste, que ce soient des élèves ou des professeurs.
+  const personnes = useMemo(() => {
     const q = recherche.trim().toLowerCase();
-    return students
-      .filter(s => classeId === TOUTES || s.classId === classeId)
-      .filter(s => !q || `${s.lastName} ${s.firstName} ${s.studentId}`.toLowerCase().includes(q))
-      .sort((a, b) => a.lastName.localeCompare(b.lastName, 'fr') || a.firstName.localeCompare(b.firstName, 'fr'));
-  }, [students, classeId, recherche]);
+    const liste = cible === 'professeur'
+      ? teachers.map(t => ({ id: t.id, nom: t.lastName, prenom: t.firstName, matricule: t.teacherId, info: professeurDocument(t, events).matieres.join(', ') || '—' }))
+      : cible === 'eleve'
+        ? students.filter(s => classeId === TOUTES || s.classId === classeId)
+          .map(s => ({ id: s.id, nom: s.lastName, prenom: s.firstName, matricule: s.studentId, info: s.classId ? nomClasse.get(s.classId) ?? '—' : '—' }))
+        : [];
+    return liste
+      .filter(p => !q || `${p.nom} ${p.prenom} ${p.matricule}`.toLowerCase().includes(q))
+      .sort((x, y) => x.nom.localeCompare(y.nom, 'fr') || x.prenom.localeCompare(y.prenom, 'fr'));
+  }, [cible, teachers, students, events, classeId, recherche, nomClasse]);
 
-  const tousCoches = eleves.length > 0 && eleves.every(e => coches.has(e.id));
+  const tousCoches = personnes.length > 0 && personnes.every(p => coches.has(p.id));
   const basculerTous = () => setCoches(prev => {
     const s = new Set(prev);
-    for (const e of eleves) { if (tousCoches) s.delete(e.id); else s.add(e.id); }
+    for (const p of personnes) { if (tousCoches) s.delete(p.id); else s.add(p.id); }
     return s;
   });
   const basculer = (id: string) => setCoches(prev => {
@@ -421,20 +435,27 @@ const Produire = ({
     return s;
   });
 
-  const choisis = students.filter(s => coches.has(s.id))
-    .sort((a, b) => a.lastName.localeCompare(b.lastName, 'fr') || a.firstName.localeCompare(b.firstName, 'fr'));
+  const parNom = <T extends { lastName: string; firstName: string }>(x: T, y: T) =>
+    x.lastName.localeCompare(y.lastName, 'fr') || x.firstName.localeCompare(y.firstName, 'fr');
+  const elevesChoisis = cible === 'eleve' ? students.filter(s => coches.has(s.id)).sort(parNom) : [];
+  const profsChoisis = cible === 'professeur' ? teachers.filter(t => coches.has(t.id)).sort(parNom) : [];
+  const nombre = cible === 'aucune' ? 1 : elevesChoisis.length + profsChoisis.length;
 
   const lancer = () => {
-    if (!modele || choisis.length === 0) return;
+    if (!modele || nombre === 0) return;
     const date = new Date().toISOString();
-    const contextes: ContexteDocument[] = choisis.map(s => ({
-      ecole, anneeScolaire, date,
-      eleve: eleveDocument(s, s.classId ? nomClasse.get(s.classId) : undefined),
-    }));
-    const pour = choisis.length === 1
-      ? `${choisis[0].lastName} ${choisis[0].firstName}`
-      : classeId !== TOUTES ? nomClasse.get(classeId) ?? '' : `${choisis.length} élèves`;
-    setDemande({ source: modele.source, contextes, nomFichier: `${modele.nom} ${pour}` });
+    const base = { ecole, anneeScolaire, date };
+    const contextes: ContexteDocument[] = cible === 'professeur'
+      ? profsChoisis.map(t => ({ ...base, eleve: ELEVE_VIDE, professeur: professeurDocument(t, events) }))
+      : cible === 'eleve'
+        ? elevesChoisis.map(s => ({ ...base, eleve: eleveDocument(s, s.classId ? nomClasse.get(s.classId) : undefined) }))
+        : [{ ...base, eleve: ELEVE_VIDE }];
+    const seul = elevesChoisis[0] ?? profsChoisis[0];
+    const pour = cible === 'aucune' ? ''
+      : nombre === 1 && seul ? `${seul.lastName} ${seul.firstName}`
+      : cible === 'eleve' && classeId !== TOUTES ? nomClasse.get(classeId) ?? ''
+      : `${nombre} ${cible === 'eleve' ? 'élèves' : 'professeurs'}`;
+    setDemande({ source: modele.source, contextes, nomFichier: `${modele.nom} ${pour}`.trim() });
   };
 
   return (
@@ -458,46 +479,52 @@ const Produire = ({
             </SelectContent>
           </Select>
         </div>
-        <div className="space-y-1">
-          <Label>Classe</Label>
-          <Select value={classeId} onValueChange={setClasseId}>
-            <SelectTrigger><SelectValue /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value={TOUTES}>Toutes les classes</SelectItem>
-              {[...classes].sort((a, b) => a.name.localeCompare(b.name, 'fr', { numeric: true }))
-                .map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
-            </SelectContent>
-          </Select>
-        </div>
+        {cible === 'eleve' && (
+          <div className="space-y-1">
+            <Label>Classe</Label>
+            <Select value={classeId} onValueChange={setClasseId}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value={TOUTES}>Toutes les classes</SelectItem>
+                {[...classes].sort((a, b) => a.name.localeCompare(b.name, 'fr', { numeric: true }))
+                  .map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
       </div>
 
-      <Card>
-        <CardContent className="p-0">
-          <div className="flex flex-wrap items-center gap-2 p-3 border-b">
-            <Checkbox checked={tousCoches} onCheckedChange={basculerTous} aria-label="Tout cocher" disabled={eleves.length === 0} />
-            <span className="text-sm text-muted-foreground">{eleves.length} élève{eleves.length > 1 ? 's' : ''}</span>
-            <div className="relative ml-auto w-full sm:w-64">
-              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-              <Input value={recherche} onChange={e => setRecherche(e.target.value)} placeholder="Nom, prénom ou matricule" className="pl-8" />
+      {cible !== 'aucune' && (
+        <Card>
+          <CardContent className="p-0">
+            <div className="flex flex-wrap items-center gap-2 p-3 border-b">
+              <Checkbox checked={tousCoches} onCheckedChange={basculerTous} aria-label="Tout cocher" disabled={personnes.length === 0} />
+              <span className="text-sm text-muted-foreground">
+                {personnes.length} {cible === 'professeur' ? `professeur${personnes.length > 1 ? 's' : ''}` : `élève${personnes.length > 1 ? 's' : ''}`}
+              </span>
+              <div className="relative ml-auto w-full sm:w-64">
+                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input value={recherche} onChange={e => setRecherche(e.target.value)} placeholder="Nom, prénom ou matricule" className="pl-8" />
+              </div>
             </div>
-          </div>
-          <div className="max-h-[45vh] overflow-y-auto divide-y">
-            {eleves.length === 0 ? (
-              <p className="p-6 text-center text-sm text-muted-foreground">Aucun élève.</p>
-            ) : eleves.map(s => (
-              <label key={s.id} className="flex items-center gap-3 px-3 py-2 hover:bg-muted/40 cursor-pointer">
-                <Checkbox checked={coches.has(s.id)} onCheckedChange={() => basculer(s.id)} aria-label={`${s.lastName} ${s.firstName}`} />
-                <span className="flex-1 min-w-0 truncate text-sm"><span className="font-medium">{s.lastName}</span> {s.firstName}</span>
-                <span className="text-xs text-muted-foreground">{s.classId ? nomClasse.get(s.classId) : '—'}</span>
-              </label>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
+            <div className="max-h-[45vh] overflow-y-auto divide-y">
+              {personnes.length === 0 ? (
+                <p className="p-6 text-center text-sm text-muted-foreground">{cible === 'professeur' ? 'Aucun professeur.' : 'Aucun élève.'}</p>
+              ) : personnes.map(p => (
+                <label key={p.id} className="flex items-center gap-3 px-3 py-2 hover:bg-muted/40 cursor-pointer">
+                  <Checkbox checked={coches.has(p.id)} onCheckedChange={() => basculer(p.id)} aria-label={`${p.nom} ${p.prenom}`} />
+                  <span className="flex-1 min-w-0 truncate text-sm"><span className="font-medium">{p.nom}</span> {p.prenom}</span>
+                  <span className="text-xs text-muted-foreground truncate max-w-[45%]">{p.info}</span>
+                </label>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <div className="flex flex-wrap items-center gap-3">
-        <Button onClick={lancer} disabled={!modele || choisis.length === 0}>
-          <Wand2 className="h-4 w-4 mr-2" /> Produire {choisis.length > 0 ? `(${choisis.length})` : ''}
+        <Button onClick={lancer} disabled={!modele || nombre === 0}>
+          <Wand2 className="h-4 w-4 mr-2" /> Produire {cible !== 'aucune' && nombre > 0 ? `(${nombre})` : ''}
         </Button>
         {coches.size > 0 && <Button variant="ghost" size="sm" onClick={() => setCoches(new Set())}>Tout décocher</Button>}
       </div>

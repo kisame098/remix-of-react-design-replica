@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   CHAMPS, champConnu, normaliserNomChamp, verifierModele, nettoyer, remplirModele, valeursChamps,
   champsVides, assemblerDocuments, versionImprimee, contexteExemple, CLASSE_FEUILLE, TAILLE_MAX_MODELE,
-  produireDocuments, eleveDocument, lireReglagesPage,
+  produireDocuments, eleveDocument, lireReglagesPage, professeurDocument, ELEVE_VIDE,
   type ContexteDocument,
 } from './modelesDocuments';
 import { MODELES_PAR_DEFAUT } from './modelesDocumentsParDefaut';
@@ -243,5 +243,33 @@ describe('marges de la règle @page (appliquées à l\'impression seulement par 
     expect(html).toContain('@media only print');
     // Le PDF transforme « @media print » en « @media all » : la remise à zéro ne doit pas s'y appliquer.
     expect(versionImprimee(html)).toContain('@media only print');
+  });
+});
+
+describe('documents de professeur', () => {
+  it('un professeur : fiche + matières et classes tirées de l\'emploi du temps (sans doublon, triées)', () => {
+    const p = professeurDocument(
+      { id: 'e1', teacherId: 'PROF-1', firstName: 'Mamadou', lastName: 'SARR', sex: 'homme', contractType: 'vacataire' },
+      [
+        { teacherId: 'e1', subjectName: 'Physique', className: '5ème B' },
+        { teacherId: 'e1', subjectName: 'Mathématiques', className: '6ème A' },
+        { teacherId: 'e1', subjectName: 'Mathématiques', className: '5ème B' },
+        { teacherId: 'autre', subjectName: 'Anglais', className: '4ème' },
+      ],
+    );
+    expect(p).toMatchObject({ matieres: ['Mathématiques', 'Physique'], classes: ['5ème B', '6ème A'] });
+    const v = valeursChamps({ ...contexteExemple(ecole), eleve: ELEVE_VIDE, professeur: p });
+    expect(v.get(normaliserNomChamp('CIVILITÉ DU PROFESSEUR'))).toBe('Monsieur');
+    expect(v.get(normaliserNomChamp('MATIÈRES ENSEIGNÉES'))).toBe('Mathématiques, Physique');
+    expect(v.get(normaliserNomChamp('CONTRAT DU PROFESSEUR'))).toBe('Vacataire');
+  });
+
+  it('la cible du modèle se déduit de ses champs ; mélanger élève et professeur est refusé', () => {
+    expect(verifierModele(page('<p>{CLASSE}</p>')).cible).toBe('eleve');
+    expect(verifierModele(page('<p>{NOM DU PROFESSEUR}</p>')).cible).toBe('professeur');
+    expect(verifierModele(page('<p>{NOM DE L\'ÉTABLISSEMENT}</p>')).cible).toBe('aucune');
+    const mixte = verifierModele(page('<p>{NOM DU PROFESSEUR} {CLASSE}</p>'));
+    expect(mixte.ok).toBe(false);
+    expect(mixte.erreur).toMatch(/soit un élève, soit un professeur/);
   });
 });
