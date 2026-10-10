@@ -64,7 +64,7 @@ const entete = (avecNumero = false): ElementVisuel[] => [
     + "{ADRESSE DE L'ÉTABLISSEMENT}<br>Tél. : {TÉLÉPHONE DE L'ÉTABLISSEMENT} — {E-MAIL DE L'ÉTABLISSEMENT}",
     { taille: 10, interligne: 1.4 }),
   texte(130, 16, 62, 6, '{VILLE}, le {DATE EN LETTRES}', { taille: 10, alignement: 'right', interligne: 1.3 }),
-  ...(avecNumero ? [texte(130, 24, 62, 6, `N° ${blanc(30)}`, { taille: 10, alignement: 'right', interligne: 1.3 })] : []),
+  ...(avecNumero ? [texte(130, 24, 62, 6, 'N° {NUMÉRO DU DOCUMENT}', { taille: 10, alignement: 'right', interligne: 1.3 })] : []),
   trait(18, 40, 174),
 ];
 
