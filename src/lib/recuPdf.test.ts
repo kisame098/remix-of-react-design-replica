@@ -362,16 +362,17 @@ describe.runIf(process.env.SORTIE_PDF)('exemplaires pour relecture visuelle', ()
   });
 });
 
-describe('reçu PDF — deux exemplaires par feuille', () => {
-  it('« 2 par feuille » : une seule feuille A4 horizontale, le reçu entier deux fois, pointillé de coupe', async () => {
+describe('reçu PDF — demi-feuille', () => {
+  it('« 2 par feuille » : feuille A4 horizontale, le reçu UNE seule fois sur une moitié, pointillé de coupe', async () => {
     const doc = await genererRecuPdf({ ...base(), deuxParFeuille: true });
     expect(doc.getNumberOfPages()).toBe(1);
     expect(Math.round(doc.internal.pageSize.getWidth())).toBe(297);
     expect(Math.round(doc.internal.pageSize.getHeight())).toBe(210);
     const pdf = Buffer.from(doc.output('arraybuffer')).toString('latin1');
-    expect(textePdf(pdf).split('REC-2026-00042').length - 1).toBe(2 * (textePdf(Buffer.from((await genererRecuPdf(base())).output('arraybuffer')).toString('latin1')).split('REC-2026-00042').length - 1));
-    // Le second exemplaire est décalé d'une demi-feuille (148,5 mm = 420,94 pt).
-    expect(pdf).toMatch(/1\. 0\. 0\. 1\. 420\.94\d* 0\. cm/);
+    const seul = Buffer.from((await genererRecuPdf(base())).output('arraybuffer')).toString('latin1');
+    const compte = (t: string) => textePdf(t).split('REC-2026-00042').length - 1;
+    expect(compte(pdf)).toBe(compte(seul));
+    expect(pdf).not.toMatch(/1\. 0\. 0\. 1\. 420\.94\d* 0\. cm/);
     expect(pdf).toMatch(/\[4\.25\d* 4\.25\d*\] 0\. d/);
   });
 
