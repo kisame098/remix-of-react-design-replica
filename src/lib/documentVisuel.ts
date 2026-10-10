@@ -88,19 +88,29 @@ export interface ElementBloc extends Base {
 export type ElementVisuel = ElementTexte | ElementImage | ElementForme | ElementLigne | ElementBloc;
 export type TypeElement = ElementVisuel['type'];
 
+export type FormatPage = 'A4' | 'A5';
+
 export interface DocumentVisuel {
   version: 1;
   orientation: Orientation;
+  /** A4 par défaut ; A5 (demi-feuille) pour un reçu. Absent = A4 (documents d'avant). */
+  format?: FormatPage;
   /** Couleur de la feuille. */
   fond: string;
   /** Du fond vers le dessus : le dernier élément est au premier plan. */
   elements: ElementVisuel[];
 }
 
-export const FORMAT_A4 = { largeur: 210, hauteur: 297 } as const;
+export const FORMATS: Record<FormatPage, { largeur: number; hauteur: number }> = {
+  A4: { largeur: 210, hauteur: 297 },
+  A5: { largeur: 148, hauteur: 210 },
+};
+export const FORMAT_A4 = FORMATS.A4;
 
-export const dimensionsPage = (o: Orientation) =>
-  o === 'portrait' ? { largeur: FORMAT_A4.largeur, hauteur: FORMAT_A4.hauteur } : { largeur: FORMAT_A4.hauteur, hauteur: FORMAT_A4.largeur };
+export const dimensionsPage = (o: Orientation, format: FormatPage = 'A4') => {
+  const f = FORMATS[format] ?? FORMATS.A4;
+  return o === 'portrait' ? { largeur: f.largeur, hauteur: f.hauteur } : { largeur: f.hauteur, hauteur: f.largeur };
+};
 
 /** Polices présentes sur tous les ordinateurs (Windows, Mac, téléphones) : rien à télécharger. */
 export const POLICES: { nom: string; css: string }[] = [
@@ -121,8 +131,8 @@ export const STYLE_TEXTE_PAR_DEFAUT: StyleTexte = {
   alignement: 'left', interligne: 1.3,
 };
 
-export const documentVierge = (orientation: Orientation = 'portrait'): DocumentVisuel =>
-  ({ version: 1, orientation, fond: '#ffffff', elements: [] });
+export const documentVierge = (orientation: Orientation = 'portrait', format: FormatPage = 'A4'): DocumentVisuel =>
+  ({ version: 1, orientation, format, fond: '#ffffff', elements: [] });
 
 // ─── Création d'éléments ───────────────────────────────────────────────────
 
@@ -130,8 +140,10 @@ export const nouvelId = (): string =>
   (typeof crypto !== 'undefined' && 'randomUUID' in crypto) ? crypto.randomUUID() : `e${Date.now()}${Math.random().toString(36).slice(2, 8)}`;
 
 /** Un nouvel élément, posé au centre de la feuille (ou là où on le demande). */
-export const nouvelElement = (type: TypeElement, o: Orientation, extra: { source?: string; forme?: 'rectangle' | 'ellipse' } = {}): ElementVisuel => {
-  const { largeur, hauteur } = dimensionsPage(o);
+export const nouvelElement = (
+  type: TypeElement, o: Orientation, extra: { source?: string; forme?: 'rectangle' | 'ellipse' } = {}, format: FormatPage = 'A4',
+): ElementVisuel => {
+  const { largeur, hauteur } = dimensionsPage(o, format);
   const centrer = (l: number, h: number) => ({ x: Math.round((largeur - l) / 2), y: Math.round((hauteur - h) / 2), l, h, rotation: 0 });
   const id = nouvelId();
   switch (type) {
@@ -237,14 +249,15 @@ const elementVersHtml = (el: ElementVisuel): string => {
 
 /** Le HTML complet d'une feuille, prêt pour la vérification, l'aperçu et l'impression. */
 export const visuelVersHtml = (doc: DocumentVisuel, titre = 'Document'): string => {
-  const { largeur, hauteur } = dimensionsPage(doc.orientation);
+  const format = doc.format ?? 'A4';
+  const { largeur, hauteur } = dimensionsPage(doc.orientation, format);
   return `<!DOCTYPE html>
 <html lang="fr">
 <head>
 <meta charset="UTF-8">
 <title>${echapper(titre)}</title>
 <style>
-@page { size: A4 ${doc.orientation === 'portrait' ? 'portrait' : 'landscape'}; margin: 0; }
+@page { size: ${format} ${doc.orientation === 'portrait' ? 'portrait' : 'landscape'}; margin: 0; }
 * { box-sizing: border-box; }
 body { margin: 0; background: #e5e5e5; }
 .page { position: relative; width: ${largeur}mm; height: ${hauteur}mm; margin: 20px auto; overflow: hidden; }
@@ -271,6 +284,7 @@ export const lireDocumentVisuel = (brut: unknown): DocumentVisuel | null => {
   return {
     version: 1,
     orientation: d.orientation === 'paysage' ? 'paysage' : 'portrait',
+    format: d.format === 'A5' ? 'A5' : 'A4',
     fond: typeof d.fond === 'string' ? d.fond : '#ffffff',
     elements: d.elements.filter(e => e && typeof e === 'object' && ['texte', 'image', 'forme', 'ligne', 'bloc'].includes((e as ElementVisuel).type)),
   };

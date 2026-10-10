@@ -6,19 +6,22 @@ import { lireSource, verifierSource, type SourceModele } from '@/lib/modeleDocum
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const sb = supabase as any;
 
+export type CategorieModele = 'document' | 'recu';
+
 export interface ModeleEcole {
   id: string;
   nom: string;
+  categorie: CategorieModele;
   source: SourceModele;
   updatedAt: string;
 }
 
-const COLONNES = 'id, nom, genre, contenu, html, fichier, updated_at';
+const COLONNES = 'id, nom, categorie, genre, contenu, html, fichier, updated_at';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const versModele = (r: any): ModeleEcole | null => {
   const source = lireSource(r);
-  return source ? { id: r.id, nom: r.nom, source, updatedAt: r.updated_at } : null;
+  return source ? { id: r.id, nom: r.nom, categorie: r.categorie === 'recu' ? 'recu' : 'document', source, updatedAt: r.updated_at } : null;
 };
 
 /** La ligne à écrire : chaque genre remplit SA colonne, les autres restent vides (contrainte SQL). */
@@ -60,18 +63,20 @@ export const useModelesDocuments = () => {
     return () => { annule = true; };
   }, [schoolId]);
 
-  const controler = (nom: string, source: SourceModele) => {
+  const controler = (nom: string, source: SourceModele, categorie: CategorieModele) => {
     if (!nom.trim()) throw new Error('Donnez un nom au modèle.');
     const v = verifierSource(source);
     if (v.erreur) throw new Error(v.erreur);
     if (v.imagesMalPlacees.length > 0 && source.genre === 'word') throw new Error("Le logo ne peut pas être un champ dans un Word : placez-le directement dans votre fichier.");
     if (!v.ok) throw new Error(`Champs inconnus de SenClass : ${v.inconnus.map(c => `{${c}}`).join(', ')}.`);
+    if (categorie === 'recu' && v.cible !== 'recu') throw new Error('Un modèle de reçu doit contenir au moins un champ du reçu, par exemple {MONTANT TOTAL}.');
+    if (categorie === 'document' && v.cible === 'recu') throw new Error("Ce modèle utilise des champs de reçu : créez-le dans l'onglet Reçus.");
   };
 
-  const creer = useCallback(async (nom: string, source: SourceModele): Promise<ModeleEcole> => {
-    controler(nom, source);
+  const creer = useCallback(async (nom: string, source: SourceModele, categorie: CategorieModele = 'document'): Promise<ModeleEcole> => {
+    controler(nom, source, categorie);
     const { data, error } = await sb.from('modeles_documents')
-      .insert({ school_id: schoolId, ...versLigne(nom, source) }).select(COLONNES).single();
+      .insert({ school_id: schoolId, categorie, ...versLigne(nom, source) }).select(COLONNES).single();
     if (error) throw error;
     const m = versModele(data);
     if (!m) throw new Error('Modèle illisible après enregistrement.');
@@ -79,8 +84,8 @@ export const useModelesDocuments = () => {
     return m;
   }, [schoolId]);
 
-  const modifier = useCallback(async (id: string, nom: string, source: SourceModele): Promise<ModeleEcole> => {
-    controler(nom, source);
+  const modifier = useCallback(async (id: string, nom: string, source: SourceModele, categorie: CategorieModele = 'document'): Promise<ModeleEcole> => {
+    controler(nom, source, categorie);
     const { data, error } = await sb.from('modeles_documents')
       .update(versLigne(nom, source)).eq('id', id).select(COLONNES).single();
     if (error) throw error;

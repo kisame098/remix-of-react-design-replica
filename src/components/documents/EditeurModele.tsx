@@ -34,6 +34,8 @@ interface EditeurModeleProps {
   onEnregistrer: (nom: string, html: string) => Promise<void>;
   /** Ouvrir ce HTML dans l'éditeur des pages pour le modifier à la souris. */
   onOuvrirEditeur: (nom: string, html: string) => void;
+  /** Champs à ne pas proposer dans la liste. */
+  groupesExclus?: GroupeChamp[];
 }
 
 /**
@@ -41,7 +43,7 @@ interface EditeurModeleProps {
  * inconnu de SenClass empêche d'enregistrer, et l'école voit lequel.
  */
 export const EditeurModele = ({
-  ouvert, onFermer, titre, initial, importerAuDemarrage, exemple, onEnregistrer, onOuvrirEditeur,
+  ouvert, onFermer, titre, initial, importerAuDemarrage, exemple, onEnregistrer, onOuvrirEditeur, groupesExclus,
 }: EditeurModeleProps) => {
   const [nom, setNom] = useState(initial.nom);
   const [html, setHtml] = useState(initial.html);
@@ -144,7 +146,7 @@ export const EditeurModele = ({
             <div className="rounded-lg border p-3 space-y-2">
               <p className="text-sm font-medium">Champs disponibles <span className="font-normal text-muted-foreground">— cliquez pour l'insérer à l'endroit du curseur</span></p>
               <div className="max-h-48 overflow-y-auto space-y-2 pr-1">
-                {GROUPES.map(g => (
+                {GROUPES.filter(g => !groupesExclus?.includes(g)).map(g => (
                   <div key={g}>
                     <p className="text-xs font-semibold text-muted-foreground mb-1">{LIBELLES_GROUPE_CHAMP[g]}</p>
                     <div className="flex flex-wrap gap-1">

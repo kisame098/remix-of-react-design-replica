@@ -257,3 +257,54 @@ export const MODELES_PAR_DEFAUT: readonly ModeleParDefaut[] = [
 ];
 
 export const estModeleParDefaut = (idModele: string): boolean => idModele.startsWith('senclass:');
+
+// ─── Modèle de REÇU (A5) ───────────────────────────────────────────────────
+// Notre reçu, refait en page de l'éditeur : l'école en fait une copie et la
+// modifie à son goût (onglet Documents → Reçus). Même contenu que le reçu
+// SenClass : numéro, élève, tableau des paiements, total, somme en lettres,
+// mode de paiement, signatures.
+
+export const MODELES_RECUS_PAR_DEFAUT: readonly ModeleParDefaut[] = [
+  {
+    id: 'senclass:recu',
+    nom: 'Reçu de paiement',
+    contenu: {
+      version: 1,
+      orientation: 'portrait',
+      format: 'A5',
+      fond: '#ffffff',
+      elements: [
+        { id: id(), type: 'image', x: 10, y: 9, l: 18, h: 18, rotation: 0, source: 'logo' },
+        texte(31, 9, 66, 18,
+          `<span style="font-size:11pt;font-weight:bold;text-transform:uppercase">{NOM DE L'ÉTABLISSEMENT}</span><br>`
+          + "{ADRESSE DE L'ÉTABLISSEMENT}<br>Tél. : {TÉLÉPHONE DE L'ÉTABLISSEMENT}",
+          { taille: 8, interligne: 1.35 }),
+        cadre(99, 9, 39, 14),
+        texte(99, 10.5, 39, 5, 'REÇU N°', { taille: 7.5, alignement: 'center', interligne: 1.2 }),
+        texte(99, 15, 39, 6, '<b>{NUMÉRO DU REÇU}</b>', { taille: 10, alignement: 'center', interligne: 1.2 }),
+        trait(10, 30, 128, 0.4),
+        texte(10, 34, 128, 8, 'REÇU DE PAIEMENT', { taille: 15, gras: true, souligne: true, alignement: 'center', interligne: 1.2 }),
+        texte(10, 43, 128, 6, '{MENTION DU REÇU}', { taille: 12, gras: true, alignement: 'center', interligne: 1.2 }),
+        cadre(10, 50, 128, 22),
+        texte(14, 52, 120, 18,
+          "Reçu de :&nbsp;&nbsp;<b>{NOM ET PRÉNOM DE L'ÉLÈVE}</b><br>"
+          + 'Matricule :&nbsp;&nbsp;{MATRICULE}&nbsp;&nbsp;&nbsp;&nbsp;Classe :&nbsp;&nbsp;<b>{CLASSE}</b><br>'
+          + 'Année scolaire :&nbsp;&nbsp;{ANNÉE SCOLAIRE}',
+          { taille: 9.5, interligne: 1.7 }),
+        texte(10, 76, 128, 48, '{TABLEAU DES PAIEMENTS}', { taille: 9.5, interligne: 1.3 }),
+        cadre(74, 127, 64, 10),
+        texte(76, 129, 60, 7, 'TOTAL PAYÉ :&nbsp;&nbsp;<b>{MONTANT TOTAL}</b>', { taille: 11, alignement: 'right', interligne: 1.2 }),
+        texte(10, 141, 128, 11, 'Arrêté le présent reçu à la somme de :<br><b><i>{MONTANT EN LETTRES}</i></b>', { taille: 9.5, interligne: 1.45 }),
+        texte(10, 155, 128, 11,
+          'Mode de paiement :&nbsp;&nbsp;{MODE DE PAIEMENT}<br>Payé le {DATE DU PAIEMENT} — encaissé par {ENCAISSÉ PAR}',
+          { taille: 8.5, interligne: 1.5 }),
+        texte(10, 172, 55, 5, '<b>Le parent / tuteur</b>', { taille: 9, alignement: 'center', interligne: 1.2 }),
+        texte(83, 172, 55, 5, '<b>Le caissier</b>', { taille: 9, alignement: 'center', interligne: 1.2 }),
+        texte(83, 177, 55, 5, 'Cachet et signature', { taille: 7.5, italique: true, alignement: 'center', interligne: 1.2 }),
+        trait(10, 197, 128, 0.3),
+        texte(10, 198.5, 128, 5, "{NOM DE L'ÉTABLISSEMENT} — Ce reçu fait foi de paiement : conservez-le précieusement.",
+          { taille: 7, alignement: 'center', interligne: 1.2 }),
+      ],
+    },
+  },
+];

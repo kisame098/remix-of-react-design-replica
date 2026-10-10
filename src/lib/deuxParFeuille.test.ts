@@ -36,3 +36,19 @@ describe('deux documents par feuille', () => {
     expect(html).toContain(`scale(${ECHELLE_DEMI_PAGE})`);
   });
 });
+
+describe('reçu seul sur une demi-feuille', () => {
+  it('un modèle de reçu A5 : moitié gauche de la feuille, sans réduction, l\'autre moitié libre', async () => {
+    const { recuSurDemiFeuille } = await import('./deuxParFeuille');
+    const { MODELES_RECUS_PAR_DEFAUT } = await import('./modelesDocumentsParDefaut');
+    const { produireDocuments, contexteExemple } = await import('./modelesDocuments');
+    const p = produireDocuments(visuelVersHtml(MODELES_RECUS_PAR_DEFAUT[0].contenu), [contexteExemple({ nom: 'Les Roses' })]);
+    const doc = lire(recuSurDemiFeuille(p.html));
+    const demis = Array.from(doc.querySelectorAll('.senclass-demi'));
+    expect(demis).toHaveLength(2);
+    expect(demis[0].textContent).toContain('REC-2026-00042');
+    expect(demis[1].textContent?.trim()).toBe('');
+    expect(doc.querySelectorAll('.senclass-a4')).toHaveLength(0);
+    expect(doc.querySelectorAll(`.${CLASSE_PAGE}`)).toHaveLength(1);
+  });
+});

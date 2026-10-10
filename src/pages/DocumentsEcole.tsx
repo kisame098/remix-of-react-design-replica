@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
-  Archive, Code2, Columns2, Copy, Download, Eye, FilePlus2, FileText, FileType2, FileUp, Loader2, Pencil, PenSquare, Printer, Search, Trash2, TriangleAlert, Wand2,
+  Archive, CheckCircle2, Code2, Columns2, Copy, ReceiptText, Download, Eye, FilePlus2, FileText, FileType2, FileUp, Loader2, Pencil, PenSquare, Printer, Search, Trash2, TriangleAlert, Wand2,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useSchool } from '@/contexts/SchoolContext';
@@ -25,11 +25,11 @@ import { ApercuHtml } from '@/components/documents/ApercuHtml';
 import { EditeurModele } from '@/components/documents/EditeurModele';
 import { EditeurVisuel } from '@/components/documents/EditeurVisuel';
 import { ImportWord } from '@/components/documents/ImportWord';
-import { useModelesDocuments } from '@/hooks/useModelesDocuments';
+import { useModelesDocuments, type CategorieModele } from '@/hooks/useModelesDocuments';
 import { dateHeureDakar, infosEcole, nomDeFichier, type EcoleSource } from '@/lib/documentsEcole';
 import {
   ELEVE_VIDE, contexteExemple, eleveDocument, professeurDocument, separerFeuilles,
-  type Cible, type ContexteDocument, type Production,
+  type Cible, type ContexteDocument, type GroupeChamp, type Production,
 } from '@/lib/modelesDocuments';
 import { numeroProvisoire, prefixeDuModele, utiliseNumero } from '@/lib/numerotationDocuments';
 import { enDeuxParFeuille, lireDeuxParFeuille, retenirDeuxParFeuille } from '@/lib/deuxParFeuille';
@@ -38,19 +38,20 @@ import { documentVierge, type DocumentVisuel } from '@/lib/documentVisuel';
 import {
   LIBELLES_GENRE, produire, telechargerWordOriginal, telechargerWordRempli, verifierSource, type SourceModele,
 } from '@/lib/modeleDocument';
-import { MODELES_PAR_DEFAUT } from '@/lib/modelesDocumentsParDefaut';
+import { MODELES_PAR_DEFAUT, MODELES_RECUS_PAR_DEFAUT } from '@/lib/modelesDocumentsParDefaut';
 import { estUneErreurDeChargement } from '@/lib/rechargementApresDeploiement';
 
-type Onglet = 'produire' | 'modeles' | 'delivres';
+type Onglet = 'produire' | 'modeles' | 'recus' | 'delivres';
 
 const ONGLETS: { id: Onglet; label: string; description: string; icon: typeof FileText }[] = [
   { id: 'produire', label: 'Produire', description: 'Certificats, attestations…', icon: Printer },
   { id: 'modeles', label: 'Modèles', description: 'Créer, importer, modifier', icon: FileText },
+  { id: 'recus', label: 'Reçus', description: 'Le modèle de reçu de la caisse', icon: ReceiptText },
   { id: 'delivres', label: 'Délivrés', description: 'Registre des documents numérotés', icon: Archive },
 ];
 
 /** Un modèle tel que l'écran le manipule, qu'il soit fourni par SenClass ou à l'école. */
-interface ModeleListe { id: string; nom: string; source: SourceModele; fourni: boolean }
+interface ModeleListe { id: string; nom: string; source: SourceModele; fourni: boolean; categorie: CategorieModele }
 
 type Edition =
   | { genre: 'visuel'; id: string | null; initial: { nom: string; contenu: DocumentVisuel } }
@@ -78,6 +79,29 @@ const MODELE_HTML_VIERGE = `<!DOCTYPE html>
 </html>
 `;
 
+const MODELE_HTML_RECU = `<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<title>Reçu</title>
+<style>
+  @page { size: A5; margin: 0; }
+  body { margin: 0; font-family: "Times New Roman", Times, serif; font-size: 10pt; }
+  .page { width: 148mm; min-height: 210mm; padding: 10mm; background: white; box-sizing: border-box; }
+</style>
+</head>
+<body>
+<div class="page">
+  <h3>{NOM DE L'ÉTABLISSEMENT}</h3>
+  <p>REÇU N° {NUMÉRO DU REÇU} — {DATE DU PAIEMENT}</p>
+  <p>Élève : {NOM ET PRÉNOM DE L'ÉLÈVE} — {CLASSE}</p>
+  {TABLEAU DES PAIEMENTS}
+  <p><b>Total : {MONTANT TOTAL}</b><br>{MONTANT EN LETTRES}</p>
+</div>
+</body>
+</html>
+`;
+
 const ICONES_GENRE = { visuel: FileText, html: Code2, word: FileType2 } as const;
 
 const messageErreur = (e: unknown) =>
@@ -91,7 +115,7 @@ const messageErreur = (e: unknown) =>
  * HTML. Le directeur crée et modifie les modèles ; le personnel produit.
  */
 const DocumentsEcole = () => {
-  const { school, accountRole } = useAuth();
+  const { school, accountRole, updateSchoolSettings } = useAuth();
   const estDirecteur = accountRole === 'admin';
   const { students, teachers, classes } = useSchool();
   const { currentYear } = useSchoolYear();
@@ -106,17 +130,39 @@ const DocumentsEcole = () => {
   const [aSupprimer, setASupprimer] = useState<ModeleListe | null>(null);
 
   const tousModeles: ModeleListe[] = useMemo(() => [
-    ...modelesEcole.map(m => ({ id: m.id, nom: m.nom, source: m.source, fourni: false })),
-    ...MODELES_PAR_DEFAUT.map(m => ({ id: m.id, nom: m.nom, source: { genre: 'visuel' as const, contenu: m.contenu }, fourni: true })),
+    ...modelesEcole.filter(m => m.categorie === 'document').map(m => ({ id: m.id, nom: m.nom, source: m.source, fourni: false, categorie: m.categorie })),
+    ...MODELES_PAR_DEFAUT.map(m => ({ id: m.id, nom: m.nom, source: { genre: 'visuel' as const, contenu: m.contenu }, fourni: true, categorie: 'document' as const })),
   ], [modelesEcole]);
 
+  // Onglet Reçus : les modèles de reçu de l'école, et le nôtre en page modifiable.
+  const recusEcole: ModeleListe[] = useMemo(
+    () => modelesEcole.filter(m => m.categorie === 'recu').map(m => ({ id: m.id, nom: m.nom, source: m.source, fourni: false, categorie: m.categorie })),
+    [modelesEcole],
+  );
+  const recusFournis: ModeleListe[] = MODELES_RECUS_PAR_DEFAUT.map(m => ({ id: m.id, nom: m.nom, source: { genre: 'visuel' as const, contenu: m.contenu }, fourni: true, categorie: 'recu' as const }));
+  /** Le modèle de reçu utilisé à la caisse (réglage de l'école) ; null = le reçu SenClass. */
+  const modeleRecuActif = typeof school?.settings?.modeleRecu === 'string' ? school.settings.modeleRecu as string : null;
+  const utiliserPourRecus = async (id: string | null) => {
+    try {
+      await updateSchoolSettings({ modeleRecu: id });
+      toast({ title: id ? 'Ce modèle sera utilisé pour les reçus' : 'Le reçu SenClass sera utilisé' });
+    } catch (e) {
+      toast({ title: 'Réglage non enregistré', description: messageErreur(e), variant: 'destructive' });
+    }
+  };
+
+  // La catégorie du modèle en cours d'édition : document ou reçu.
+  const [categorieEdition, setCategorieEdition] = useState<CategorieModele>('document');
+  const groupesExclus: GroupeChamp[] = categorieEdition === 'recu' ? ['professeur'] : ['recu'];
+
   const enregistrer = async (id: string | null, nom: string, source: SourceModele) => {
-    if (id) await modifier(id, nom, source);
-    else await creer(nom, source);
+    if (id) await modifier(id, nom, source, categorieEdition);
+    else await creer(nom, source, categorieEdition);
     toast({ title: 'Modèle enregistré', description: nom });
   };
 
   const ouvrirEdition = (m: ModeleListe, copie = false) => {
+    setCategorieEdition(m.categorie);
     const id = copie ? null : m.id;
     const nom = copie ? `${m.nom} (copie)` : m.nom;
     if (m.source.genre === 'visuel') setEdition({ genre: 'visuel', id, initial: { nom, contenu: structuredClone(m.source.contenu) } });
@@ -129,8 +175,9 @@ const DocumentsEcole = () => {
    * modèle devient une page de l'éditeur (même nom, même place dans la liste).
    */
   const [conversion, setConversion] = useState(false);
-  const ouvrirDansEditeur = async (id: string | null, nom: string, source: SourceModele) => {
+  const ouvrirDansEditeur = async (id: string | null, nom: string, source: SourceModele, categorie?: CategorieModele) => {
     if (source.genre === 'visuel') return;
+    if (categorie) setCategorieEdition(categorie);
     setConversion(true);
     try {
       const { htmlVersDocumentVisuel, wordVersDocumentVisuel } = await import('@/lib/conversionEditeur');
@@ -147,6 +194,8 @@ const DocumentsEcole = () => {
     if (!aSupprimer) return;
     try {
       await supprimer(aSupprimer.id);
+      // Le modèle de reçu de la caisse disparaît : la caisse revient au reçu SenClass.
+      if (aSupprimer.id === modeleRecuActif) await updateSchoolSettings({ modeleRecu: null });
       toast({ title: 'Modèle supprimé', description: aSupprimer.nom });
     } catch (e) {
       toast({ title: 'Suppression impossible', description: messageErreur(e), variant: 'destructive' });
@@ -199,20 +248,83 @@ const DocumentsEcole = () => {
 
           {onglet === 'delivres' && <RegistreDelivres />}
 
+          {onglet === 'recus' && (
+            <div className="space-y-6 max-w-4xl">
+              {estDirecteur && (
+                <div className="flex flex-wrap gap-2">
+                  <Button onClick={() => { setCategorieEdition('recu'); setEdition({ genre: 'visuel', id: null, initial: { nom: '', contenu: structuredClone(MODELES_RECUS_PAR_DEFAUT[0].contenu) } }); }}>
+                    <FilePlus2 className="h-4 w-4 mr-2" /> Créer un reçu
+                  </Button>
+                  <Button variant="outline" onClick={() => { setCategorieEdition('recu'); setEdition({ genre: 'html', id: null, titre: 'Nouveau reçu HTML', initial: { nom: '', html: MODELE_HTML_RECU } }); }}>
+                    <Code2 className="h-4 w-4 mr-2" /> Écrire du HTML
+                  </Button>
+                  <Button variant="outline" onClick={() => { setCategorieEdition('recu'); setEdition({ genre: 'html', id: null, titre: 'Importer un reçu HTML', initial: { nom: '', html: '' }, importer: true }); }}>
+                    <FileUp className="h-4 w-4 mr-2" /> Importer du HTML
+                  </Button>
+                </div>
+              )}
+
+              <section className="space-y-2">
+                <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Reçu de la caisse</h2>
+                <Card>
+                  <CardContent className="p-3 flex flex-wrap items-center gap-2">
+                    <ReceiptText className="h-4 w-4 text-primary shrink-0" />
+                    <span className="font-medium flex-1 min-w-0 truncate">Reçu SenClass</span>
+                    <Badge variant="secondary">Par défaut</Badge>
+                    {modeleRecuActif === null
+                      ? <Badge className="gap-1"><CheckCircle2 className="h-3.5 w-3.5" /> Utilisé</Badge>
+                      : estDirecteur && <BoutonIcone titre="Utiliser pour les reçus" onClick={() => void utiliserPourRecus(null)}><CheckCircle2 className="h-4 w-4" /></BoutonIcone>}
+                  </CardContent>
+                </Card>
+                {recusEcole.map(m => (
+                  <CarteModele key={m.id} modele={m} onApercu={() => setApercuModele(m)}>
+                    {modeleRecuActif === m.id
+                      ? <Badge className="gap-1"><CheckCircle2 className="h-3.5 w-3.5" /> Utilisé</Badge>
+                      : estDirecteur && <BoutonIcone titre="Utiliser pour les reçus" onClick={() => void utiliserPourRecus(m.id)}><CheckCircle2 className="h-4 w-4" /></BoutonIcone>}
+                    {estDirecteur && (
+                      <>
+                        {m.source.genre !== 'visuel' && (
+                          <BoutonIcone titre="Modifier dans l'éditeur" onClick={() => ouvrirDansEditeur(m.id, m.nom, m.source, 'recu')} disabled={conversion}>
+                            {conversion ? <Loader2 className="h-4 w-4 animate-spin" /> : <PenSquare className="h-4 w-4" />}
+                          </BoutonIcone>
+                        )}
+                        <BoutonIcone titre={m.source.genre === 'visuel' ? 'Modifier' : 'Modifier le HTML'} onClick={() => ouvrirEdition(m)}>
+                          {m.source.genre === 'visuel' ? <Pencil className="h-4 w-4" /> : <Code2 className="h-4 w-4" />}
+                        </BoutonIcone>
+                        <BoutonIcone titre="Supprimer" onClick={() => setASupprimer(m)} danger><Trash2 className="h-4 w-4" /></BoutonIcone>
+                      </>
+                    )}
+                  </CarteModele>
+                ))}
+              </section>
+
+              <section className="space-y-2">
+                <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Fournis par SenClass</h2>
+                {recusFournis.map(m => (
+                  <CarteModele key={m.id} modele={m} onApercu={() => setApercuModele(m)}>
+                    {estDirecteur && (
+                      <BoutonIcone titre="Copier pour le modifier" onClick={() => ouvrirEdition(m, true)}><Copy className="h-4 w-4" /></BoutonIcone>
+                    )}
+                  </CarteModele>
+                ))}
+              </section>
+            </div>
+          )}
+
           {onglet === 'modeles' && (
             <div className="space-y-6 max-w-4xl">
               {estDirecteur ? (
                 <div className="flex flex-wrap gap-2">
-                  <Button onClick={() => setEdition({ genre: 'visuel', id: null, initial: { nom: '', contenu: documentVierge() } })}>
+                  <Button onClick={() => { setCategorieEdition('document'); setEdition({ genre: 'visuel', id: null, initial: { nom: '', contenu: documentVierge() } }); }}>
                     <FilePlus2 className="h-4 w-4 mr-2" /> Créer un document
                   </Button>
-                  <Button variant="outline" onClick={() => setEdition({ genre: 'word', id: null, titre: 'Importer un modèle Word' })}>
+                  <Button variant="outline" onClick={() => { setCategorieEdition('document'); setEdition({ genre: 'word', id: null, titre: 'Importer un modèle Word' }); }}>
                     <FileType2 className="h-4 w-4 mr-2" /> Importer un Word
                   </Button>
-                  <Button variant="outline" onClick={() => setEdition({ genre: 'html', id: null, titre: 'Nouveau modèle HTML', initial: { nom: '', html: MODELE_HTML_VIERGE } })}>
+                  <Button variant="outline" onClick={() => { setCategorieEdition('document'); setEdition({ genre: 'html', id: null, titre: 'Nouveau modèle HTML', initial: { nom: '', html: MODELE_HTML_VIERGE } }); }}>
                     <Code2 className="h-4 w-4 mr-2" /> Écrire du HTML
                   </Button>
-                  <Button variant="outline" onClick={() => setEdition({ genre: 'html', id: null, titre: 'Importer un modèle HTML', initial: { nom: '', html: '' }, importer: true })}>
+                  <Button variant="outline" onClick={() => { setCategorieEdition('document'); setEdition({ genre: 'html', id: null, titre: 'Importer un modèle HTML', initial: { nom: '', html: '' }, importer: true }); }}>
                     <FileUp className="h-4 w-4 mr-2" /> Importer du HTML
                   </Button>
                 </div>
@@ -278,6 +390,7 @@ const DocumentsEcole = () => {
         <EditeurVisuel
           ouvert onFermer={() => setEdition(null)} initial={edition.initial} logo={ecole.logo} exemple={exemple}
           onEnregistrer={(nom, contenu) => enregistrer(edition.id, nom, { genre: 'visuel', contenu })}
+          groupesExclus={groupesExclus}
         />
       )}
       {edition?.genre === 'html' && (
@@ -286,6 +399,7 @@ const DocumentsEcole = () => {
           importerAuDemarrage={edition.importer} exemple={exemple}
           onEnregistrer={(nom, html) => enregistrer(edition.id, nom, { genre: 'html', html })}
           onOuvrirEditeur={(nom, html) => { void ouvrirDansEditeur(edition.id, nom || 'Document', { genre: 'html', html }); }}
+          groupesExclus={groupesExclus}
         />
       )}
       {edition?.genre === 'word' && (

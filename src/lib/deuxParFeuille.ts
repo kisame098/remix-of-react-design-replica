@@ -85,3 +85,31 @@ export const enDeuxParFeuille = (html: string): string => {
 };
 
 export { lireDeuxParFeuille, retenirDeuxParFeuille } from '@/lib/choixDeuxParFeuille';
+
+/**
+ * Un reçu seul sur une demi-feuille : la feuille A4 passe à l'horizontale, le
+ * reçu occupe la moitié gauche (l'autre reste libre), pointillé de coupe.
+ * Un modèle A5 est posé tel quel ; un modèle A4 est réduit à la demi-page.
+ */
+export const recuSurDemiFeuille = (html: string): string => {
+  if (!/@page[^{]*\{[^}]*size\s*:\s*A5/i.test(html)) return enDeuxParFeuille(html);
+  const doc = lireDocument(html);
+  const page = doc.querySelector<HTMLElement>(`.${CLASSE_PAGE}`)
+    ?? doc.querySelector<HTMLElement>(`body > .${CLASSE_FEUILLE}`)
+    ?? doc.body.firstElementChild as HTMLElement | null;
+  if (!page) return html;
+  page.classList.remove(CLASSE_PAGE);
+  const double = doc.createElement('div');
+  double.className = `${CLASSE_DOUBLE} ${CLASSE_PAGE}`;
+  const demi = doc.createElement('div');
+  demi.className = CLASSE_DEMI;
+  demi.appendChild(page);
+  const vide = doc.createElement('div');
+  vide.className = CLASSE_DEMI;
+  double.append(demi, vide);
+  doc.body.replaceChildren(double);
+  const style = doc.createElement('style');
+  style.textContent = `${STYLE}\n.${CLASSE_DEMI} > * { margin: 0 !important; box-shadow: none !important; }`;
+  doc.head.appendChild(style);
+  return `<!DOCTYPE html>\n${doc.documentElement.outerHTML}`;
+};

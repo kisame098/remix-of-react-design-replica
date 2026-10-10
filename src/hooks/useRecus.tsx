@@ -112,8 +112,7 @@ export function useRecus(): { montrerRecu: (paiements: Payment[], options?: Opti
         typeDocument="recu"
         deuxParFeuille="recu"
         generer={async ({ economique, deuxParFeuille }) => {
-          const [{ genererRecuPdf }] = await Promise.all([import('@/lib/recuPdf')]);
-          return genererRecuPdf({ economique, deuxParFeuille, ...construireRecu({
+          const donnees = construireRecu({
             ecole: infosEcole(school),
             recu: ouvert.recu,
             paiements: ouvert.paiements,
@@ -125,7 +124,19 @@ export function useRecus(): { montrerRecu: (paiements: Payment[], options?: Opti
             services: annexServices,
             libelleMois,
             duplicata: ouvert.duplicata,
-          }) });
+          });
+          // Le modèle de reçu choisi par l'école (Documents → Reçus), sinon le reçu SenClass.
+          const modeleRecu = typeof school?.settings?.modeleRecu === 'string' ? school.settings.modeleRecu as string : null;
+          if (modeleRecu) {
+            try {
+              const { genererRecuModele } = await import('@/lib/recuModele');
+              return await genererRecuModele(modeleRecu, donnees, eleve ?? null, { deuxParFeuille });
+            } catch (e) {
+              toast({ title: 'Modèle de reçu indisponible', description: `Le reçu SenClass est utilisé à la place. ${e instanceof Error ? e.message : ''}`.trim() });
+            }
+          }
+          const [{ genererRecuPdf }] = await Promise.all([import('@/lib/recuPdf')]);
+          return genererRecuPdf({ economique, deuxParFeuille, ...donnees });
         }}
       />
     );
