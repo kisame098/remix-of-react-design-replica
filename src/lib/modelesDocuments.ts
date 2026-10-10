@@ -274,6 +274,16 @@ export const nettoyer = (html: string): { html: string; retraits: string[] } => 
   return { html: `<!DOCTYPE html>\n${propre}`, retraits: [...retraits] };
 };
 
+/**
+ * Un morceau de HTML (le contenu d'une zone de texte, d'un bloc importé)
+ * nettoyé de la même façon, pour l'afficher DANS l'application : jamais de
+ * HTML venu de la base posé tel quel dans la page.
+ */
+export const nettoyerFragment = (html: string): string => {
+  const propre = nettoyer(`<!DOCTYPE html><html><head></head><body>${html}</body></html>`).html;
+  return new DOMParser().parseFromString(propre, 'text/html').body.innerHTML;
+};
+
 // ─── Remplissage ───────────────────────────────────────────────────────────
 
 /** La valeur de chaque champ connu pour ce contexte, par nom normalisé. */
