@@ -25,7 +25,7 @@ interface PanneauProps {
   onRemplacerImage: (id: string) => void;
 }
 
-const LIBELLES_TYPE: Record<ElementVisuel['type'], string> = { texte: 'Texte', image: 'Image', forme: 'Forme', ligne: 'Trait' };
+const LIBELLES_TYPE: Record<ElementVisuel['type'], string> = { texte: 'Texte', image: 'Image', forme: 'Forme', ligne: 'Trait', bloc: 'Document importé' };
 const STYLES_TRAIT: { v: StyleTrait; l: string }[] = [
   { v: 'solid', l: 'Plein' }, { v: 'dashed', l: 'Tirets' }, { v: 'dotted', l: 'Pointillés' }, { v: 'double', l: 'Double' },
 ];
@@ -94,6 +94,28 @@ const EditeurBordure = ({ bordure, onChange, obligatoire = false }: {
   );
 };
 
+/** La liste cliquable des informations de l'élève. */
+const ChampsEleve = ({ enEdition, onInserer }: { enEdition: boolean; onInserer: (champ: string) => void }) => (
+  <Section titre="Informations de l'élève">
+    <p className="text-[11px] text-muted-foreground">
+      {enEdition ? 'Cliquez : le champ s\'insère à l\'endroit du curseur.' : 'Cliquez d\'abord dans le texte pour choisir l\'endroit.'}
+    </p>
+    {GROUPES.map(g => (
+      <div key={g}>
+        <p className="text-[11px] font-semibold text-muted-foreground mt-1 mb-0.5">{LIBELLES_GROUPE_CHAMP[g]}</p>
+        <div className="flex flex-wrap gap-1">
+          {CHAMPS.filter(c => c.groupe === g && !c.image).map(c => (
+            <button key={c.nom} type="button" title={c.source} onMouseDown={garderFocus} onClick={() => onInserer(c.nom)}
+              className="rounded border bg-muted/40 px-1.5 py-0.5 text-[11px] hover:bg-primary/10 hover:border-primary/40">
+              {c.nom.toLowerCase().replace(/^./, m => m.toUpperCase())}
+            </button>
+          ))}
+        </div>
+      </div>
+    ))}
+  </Section>
+);
+
 /** Le panneau de droite : réglages de l'élément choisi, ou de la feuille. */
 export const PanneauProprietes = ({
   doc, element: el, enEdition, onDocument, onElement, onSupprimer, onDupliquer, onPlan, onInsererChamp, onFormat, onRemplacerImage,
@@ -110,7 +132,7 @@ export const PanneauProprietes = ({
         </Section>
         <div className="p-3 text-xs text-muted-foreground space-y-1.5">
           <p>Ajoutez des éléments avec la barre du haut, puis déplacez-les à la souris.</p>
-          <p><strong>Double-cliquez</strong> un texte pour l'écrire. Les informations de l'élève s'insèrent depuis ce panneau quand un texte est choisi.</p>
+          <p><strong>Cliquez</strong> un texte pour l'écrire ; faites-le glisser pour le déplacer. Les informations de l'élève s'insèrent depuis ce panneau.</p>
           <p>Flèches : déplacer (Maj : 5 mm). Suppr : effacer. Ctrl+D : dupliquer. Ctrl+Z : annuler.</p>
         </div>
       </>
@@ -170,24 +192,21 @@ export const PanneauProprietes = ({
             <p className="text-[11px] font-medium pt-1">Cadre</p>
             <EditeurBordure bordure={el.bordure} onChange={b => maj({ bordure: b })} />
           </Section>
-          <Section titre="Informations de l'élève">
-            <p className="text-[11px] text-muted-foreground">
-              {enEdition ? 'Cliquez : le champ s\'insère à l\'endroit du curseur.' : 'Cliquez : le champ s\'ajoute à la fin du texte (double-cliquez le texte pour choisir l\'endroit).'}
-            </p>
-            {GROUPES.map(g => (
-              <div key={g}>
-                <p className="text-[11px] font-semibold text-muted-foreground mt-1 mb-0.5">{LIBELLES_GROUPE_CHAMP[g]}</p>
-                <div className="flex flex-wrap gap-1">
-                  {CHAMPS.filter(c => c.groupe === g && !c.image).map(c => (
-                    <button key={c.nom} type="button" title={c.source} onMouseDown={garderFocus} onClick={() => onInsererChamp(c.nom)}
-                      className="rounded border bg-muted/40 px-1.5 py-0.5 text-[11px] hover:bg-primary/10 hover:border-primary/40">
-                      {c.nom.toLowerCase().replace(/^./, m => m.toUpperCase())}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            ))}
+          <ChampsEleve enEdition={enEdition} onInserer={onInsererChamp} />
+        </>
+      )}
+
+      {el.type === 'bloc' && (
+        <>
+          <Section titre="Texte">
+            <p className="text-[11px] text-muted-foreground">Cliquez dans le document pour écrire. Sélectionnez du texte pour le mettre en forme.</p>
+            <div className="flex items-center gap-1">
+              <Button size="icon" variant="ghost" className="h-8 w-8" onMouseDown={garderFocus} onClick={() => onFormat('bold', 'gras')} aria-label="Gras"><Bold className="h-4 w-4" /></Button>
+              <Button size="icon" variant="ghost" className="h-8 w-8" onMouseDown={garderFocus} onClick={() => onFormat('italic', 'italique')} aria-label="Italique"><Italic className="h-4 w-4" /></Button>
+              <Button size="icon" variant="ghost" className="h-8 w-8" onMouseDown={garderFocus} onClick={() => onFormat('underline', 'souligne')} aria-label="Souligné"><Underline className="h-4 w-4" /></Button>
+            </div>
           </Section>
+          <ChampsEleve enEdition={enEdition} onInserer={onInsererChamp} />
         </>
       )}
 

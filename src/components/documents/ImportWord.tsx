@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { CheckCircle2, Copy, FileUp, Loader2, TriangleAlert } from 'lucide-react';
+import { CheckCircle2, Copy, FileUp, Loader2, PenSquare, TriangleAlert } from 'lucide-react';
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog';
@@ -19,13 +19,15 @@ interface ImportWordProps {
   /** Modèle existant : on peut le renommer ou remplacer son fichier. */
   initial?: { nom: string; fichier: string };
   onEnregistrer: (nom: string, fichierBase64: string) => Promise<void>;
+  /** Ouvrir ce Word dans l'éditeur des pages pour le modifier (logo, texte…). */
+  onOuvrirEditeur: (nom: string, fichierBase64: string) => void;
 }
 
 /**
  * Importer un modèle Word : l'école écrit ses champs entre accolades dans
  * Word, envoie le .docx, et voit tout de suite si un champ est inconnu.
  */
-export const ImportWord = ({ ouvert, onFermer, titre, initial, onEnregistrer }: ImportWordProps) => {
+export const ImportWord = ({ ouvert, onFermer, titre, initial, onEnregistrer, onOuvrirEditeur }: ImportWordProps) => {
   const [nom, setNom] = useState(initial?.nom ?? '');
   const [fichier, setFichier] = useState<string | null>(initial?.fichier ?? null);
   const [nomFichier, setNomFichier] = useState<string | null>(null);
@@ -135,8 +137,11 @@ export const ImportWord = ({ ouvert, onFermer, titre, initial, onEnregistrer }: 
           </div>
         </div>
 
-        <DialogFooter>
+        <DialogFooter className="gap-2">
           <Button variant="outline" onClick={onFermer}>Annuler</Button>
+          <Button variant="outline" onClick={() => fichier && onOuvrirEditeur(nom, fichier)} disabled={!fichier || !!verification?.erreur || enCours}>
+            <PenSquare className="h-4 w-4 mr-2" />Modifier dans l'éditeur
+          </Button>
           <Button onClick={enregistrer} disabled={!fichier || !verification?.ok || !nom.trim() || enCours}>
             {enCours && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}Enregistrer le modèle
           </Button>

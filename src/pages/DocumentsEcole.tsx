@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
-  Code2, Copy, Download, Eye, FilePlus2, FileText, FileType2, FileUp, Loader2, Pencil, Printer, Search, Trash2, TriangleAlert, Wand2,
+  Code2, Copy, Download, Eye, FilePlus2, FileText, FileType2, FileUp, Loader2, Pencil, PenSquare, Printer, Search, Trash2, TriangleAlert, Wand2,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useSchool } from '@/contexts/SchoolContext';
@@ -116,6 +116,25 @@ const DocumentsEcole = () => {
     else setEdition({ genre: 'word', id, titre: 'Modifier le modèle Word', initial: { nom, fichier: m.source.fichier } });
   };
 
+  /**
+   * Ouvrir un Word ou un HTML dans l'éditeur des pages. En enregistrant, le
+   * modèle devient une page de l'éditeur (même nom, même place dans la liste).
+   */
+  const [conversion, setConversion] = useState(false);
+  const ouvrirDansEditeur = async (id: string | null, nom: string, source: SourceModele) => {
+    if (source.genre === 'visuel') return;
+    setConversion(true);
+    try {
+      const { htmlVersDocumentVisuel, wordVersDocumentVisuel } = await import('@/lib/conversionEditeur');
+      const contenu = source.genre === 'word' ? await wordVersDocumentVisuel(source.fichier) : await htmlVersDocumentVisuel(source.html);
+      setEdition({ genre: 'visuel', id, initial: { nom, contenu } });
+    } catch (e) {
+      toast({ title: "Le document n'a pas pu être ouvert dans l'éditeur", description: messageErreur(e), variant: 'destructive' });
+    } finally {
+      setConversion(false);
+    }
+  };
+
   const confirmerSuppression = async () => {
     if (!aSupprimer) return;
     try {
@@ -207,8 +226,13 @@ const DocumentsEcole = () => {
                       )}
                       {estDirecteur && (
                         <>
+                          {m.source.genre !== 'visuel' && (
+                            <Button size="sm" variant="outline" onClick={() => ouvrirDansEditeur(m.id, m.nom, m.source)} disabled={conversion}>
+                              {conversion ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <PenSquare className="h-3.5 w-3.5 mr-1.5" />} Modifier dans l'éditeur
+                            </Button>
+                          )}
                           <Button size="sm" variant="outline" onClick={() => ouvrirEdition(m)}>
-                            <Pencil className="h-3.5 w-3.5 mr-1.5" /> Modifier
+                            <Pencil className="h-3.5 w-3.5 mr-1.5" /> {m.source.genre === 'visuel' ? 'Modifier' : m.source.genre === 'word' ? 'Remplacer le Word' : 'Modifier le HTML'}
                           </Button>
                           <Button size="sm" variant="ghost" className="text-destructive hover:text-destructive" onClick={() => setASupprimer(m)} aria-label={`Supprimer ${m.nom}`}>
                             <Trash2 className="h-3.5 w-3.5" />
@@ -248,12 +272,14 @@ const DocumentsEcole = () => {
           ouvert onFermer={() => setEdition(null)} titre={edition.titre} initial={edition.initial}
           importerAuDemarrage={edition.importer} exemple={exemple}
           onEnregistrer={(nom, html) => enregistrer(edition.id, nom, { genre: 'html', html })}
+          onOuvrirEditeur={(nom, html) => { void ouvrirDansEditeur(edition.id, nom || 'Document', { genre: 'html', html }); }}
         />
       )}
       {edition?.genre === 'word' && (
         <ImportWord
           ouvert onFermer={() => setEdition(null)} titre={edition.titre} initial={edition.initial}
           onEnregistrer={(nom, fichier) => enregistrer(edition.id, nom, { genre: 'word', fichier })}
+          onOuvrirEditeur={(nom, fichier) => { void ouvrirDansEditeur(edition.id, nom || 'Document', { genre: 'word', fichier }); }}
         />
       )}
 

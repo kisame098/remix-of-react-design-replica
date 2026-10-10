@@ -76,7 +76,16 @@ export interface ElementLigne extends Base {
   bordure: Bordure;
 }
 
-export type ElementVisuel = ElementTexte | ElementImage | ElementForme | ElementLigne;
+/**
+ * Le contenu d'un Word ou d'un HTML ouvert dans l'éditeur : sa mise en page
+ * d'origine (styles recopiés sur chaque élément), modifiable comme un texte.
+ */
+export interface ElementBloc extends Base {
+  type: 'bloc';
+  html: string;
+}
+
+export type ElementVisuel = ElementTexte | ElementImage | ElementForme | ElementLigne | ElementBloc;
 export type TypeElement = ElementVisuel['type'];
 
 export interface DocumentVisuel {
@@ -137,6 +146,8 @@ export const nouvelElement = (type: TypeElement, o: Orientation, extra: { source
       };
     case 'ligne':
       return { id, type, ...centrer(120, 2), bordure: { couleur: '#222222', epaisseur: 0.4, style: 'solid' } };
+    case 'bloc':
+      return { id, type, x: 0, y: 0, l: largeur, h: hauteur, rotation: 0, html: '' };
   }
 };
 
@@ -180,6 +191,8 @@ export const cssContenu = (el: ElementVisuel): Record<string, string> => {
       };
     case 'ligne':
       return { 'border-top': cssBordure(el.bordure), height: '0', 'margin-top': mm(el.h / 2) };
+    case 'bloc':
+      return { overflow: 'hidden' };
   }
 };
 
@@ -217,6 +230,8 @@ const elementVersHtml = (el: ElementVisuel): string => {
       return `<div class="el" style="${position};${versAttributStyle(cssContenu(el))}"></div>`;
     case 'ligne':
       return `<div class="el" style="${position}"><div style="${versAttributStyle(cssContenu(el))}"></div></div>`;
+    case 'bloc':
+      return `<div class="el bloc" style="${position};${versAttributStyle(cssContenu(el))}">${el.html}</div>`;
   }
 };
 
@@ -257,7 +272,7 @@ export const lireDocumentVisuel = (brut: unknown): DocumentVisuel | null => {
     version: 1,
     orientation: d.orientation === 'paysage' ? 'paysage' : 'portrait',
     fond: typeof d.fond === 'string' ? d.fond : '#ffffff',
-    elements: d.elements.filter(e => e && typeof e === 'object' && ['texte', 'image', 'forme', 'ligne'].includes((e as ElementVisuel).type)),
+    elements: d.elements.filter(e => e && typeof e === 'object' && ['texte', 'image', 'forme', 'ligne', 'bloc'].includes((e as ElementVisuel).type)),
   };
 };
 

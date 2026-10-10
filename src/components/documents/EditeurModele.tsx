@@ -1,5 +1,5 @@
 import { useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
-import { CheckCircle2, FileUp, Loader2, ShieldAlert, TriangleAlert } from 'lucide-react';
+import { CheckCircle2, FileUp, Loader2, PenSquare, ShieldAlert, TriangleAlert } from 'lucide-react';
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog';
@@ -32,6 +32,8 @@ interface EditeurModeleProps {
   /** Données d'EXEMPLE pour l'aperçu (jamais un vrai élève). */
   exemple: ContexteDocument;
   onEnregistrer: (nom: string, html: string) => Promise<void>;
+  /** Ouvrir ce HTML dans l'éditeur des pages pour le modifier à la souris. */
+  onOuvrirEditeur: (nom: string, html: string) => void;
 }
 
 /**
@@ -39,7 +41,7 @@ interface EditeurModeleProps {
  * inconnu de SenClass empêche d'enregistrer, et l'école voit lequel.
  */
 export const EditeurModele = ({
-  ouvert, onFermer, titre, initial, importerAuDemarrage, exemple, onEnregistrer,
+  ouvert, onFermer, titre, initial, importerAuDemarrage, exemple, onEnregistrer, onOuvrirEditeur,
 }: EditeurModeleProps) => {
   const [nom, setNom] = useState(initial.nom);
   const [html, setHtml] = useState(initial.html);
@@ -173,8 +175,11 @@ export const EditeurModele = ({
           </div>
         </div>
 
-        <DialogFooter>
+        <DialogFooter className="gap-2">
           <Button variant="outline" onClick={onFermer}>Annuler</Button>
+          <Button variant="outline" onClick={() => onOuvrirEditeur(nom, html)} disabled={!!verification.erreur || enCours}>
+            <PenSquare className="h-4 w-4 mr-2" />Modifier dans l'éditeur
+          </Button>
           <Button onClick={enregistrer} disabled={!peutEnregistrer}>
             {enCours && <Loader2 className="h-4 w-4 mr-2 animate-spin" />} Enregistrer le modèle
           </Button>

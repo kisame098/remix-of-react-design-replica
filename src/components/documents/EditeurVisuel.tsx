@@ -10,13 +10,13 @@ import { ApercuHtml } from '@/components/documents/ApercuHtml';
 import { PanneauProprietes } from '@/components/documents/PanneauProprietes';
 import {
   cssContenu, cssPosition, dimensionsPage, nouvelElement, versStyleReact, visuelVersHtml,
-  type DocumentVisuel, type ElementTexte, type ElementVisuel, type TypeElement,
+  type DocumentVisuel, type ElementBloc, type ElementTexte, type ElementVisuel, type TypeElement,
 } from '@/lib/documentVisuel';
 import {
   PX_PAR_MM, POIGNEES, changerPlan, deplacer, dupliquerElement, historiqueInitial, redimensionner,
   reduireHistorique, remplacerElement, supprimerElement, type Guides, type Plan, type Poignee,
 } from '@/lib/editeurVisuel';
-import { produireDocuments, type ContexteDocument } from '@/lib/modelesDocuments';
+import { nettoyerFragment, produireDocuments, type ContexteDocument } from '@/lib/modelesDocuments';
 import { verifierSource } from '@/lib/modeleDocument';
 import { compressImage } from '@/lib/imageCompress';
 
@@ -115,7 +115,7 @@ export const EditeurVisuel = ({ ouvert, onFermer, initial, logo, exemple, onEnre
     if (!edition) return;
     const el = doc.elements.find(e => e.id === edition);
     const html = zoneTexte.current?.innerHTML;
-    if (el && el.type === 'texte' && html !== undefined) {
+    if (el && (el.type === 'texte' || el.type === 'bloc') && html !== undefined) {
       const final = remplacerElement(doc, { ...el, html });
       dispatch({ type: 'valider', doc: final, avant: avantEdition.current ?? undefined });
     }
@@ -124,7 +124,7 @@ export const EditeurVisuel = ({ ouvert, onFermer, initial, logo, exemple, onEnre
   }, [edition, doc]);
 
   const commencerEdition = (id: string) => {
-    avantEdition.current = doc;
+    avantEdition.current = docRef.current;
     setSelection(id);
     setEdition(id);
   };
@@ -173,7 +173,13 @@ export const EditeurVisuel = ({ ouvert, onFermer, initial, logo, exemple, onEnre
       arreterGeste.current = null;
       geste.current = null;
       setGuides({ vertical: false, horizontal: false });
-      if (bouge) dispatch({ type: 'valider', doc: dernier, avant: g.avant });
+      if (bouge) { dispatch({ type: 'valider', doc: dernier, avant: g.avant }); return; }
+      // Un simple clic (sans glisser) sur un texte : on écrit tout de suite,
+      // le curseur à l'endroit cliqué. Glisser, lui, déplace le texte.
+      if (g.type === 'deplacer' && (el.type === 'texte' || el.type === 'bloc')) {
+        pointDeClic = { x: g.x0, y: g.y0 };
+        commencerEdition(el.id);
+      }
     };
     window.addEventListener('pointermove', surMouvement);
     window.addEventListener('pointerup', fin);
@@ -228,7 +234,7 @@ export const EditeurVisuel = ({ ouvert, onFermer, initial, logo, exemple, onEnre
       document.execCommand('insertText', false, morceau);
       return;
     }
-    if (element?.type === 'texte') majElement({ ...element, html: `${element.html}${element.html ? ' ' : ''}${morceau}` });
+    if (element?.type === 'texte' || element?.type === 'bloc') majElement({ ...element, html: `${element.html}${element.html ? ' ' : ''}${morceau}` });
   };
 
   /** Gras / italique / souligné : sur la partie sélectionnée en écrivant, sinon sur toute la zone. */
@@ -352,7 +358,7 @@ export const EditeurVisuel = ({ ouvert, onFermer, initial, logo, exemple, onEnre
                       key={el.id} el={el} logo={logo} choisi={el.id === selection} enEdition={el.id === edition}
                       zoom={zoom} zoneTexte={zoneTexte}
                       onPointerDown={(e, p) => debutGeste(e, el, p)}
-                      onDoubleClick={() => { if (el.type === 'texte') commencerEdition(el.id); }}
+                      onDoubleClick={() => { if (el.type === 'texte' || el.type === 'bloc') commencerEdition(el.id); }}
                     />
                   ))}
                   {guides.vertical && <div className="absolute top-0 bottom-0 w-px bg-pink-500 pointer-events-none" style={{ left: `${largeur / 2}mm` }} />}
@@ -424,12 +430,12 @@ const ElementSurFeuille = ({
     <div
       style={{ ...position, cursor: enEdition ? 'text' : 'move', outline: choisi ? `${1.5 / zoom}px solid #2563eb` : undefined, outlineOffset: 0 }}
       onPointerDown={e => onPointerDown(e)}
-      onDoubleClick={onDoubleClick}
+      onDoubleClick={e => { pointDeClic = { x: e.clientX, y: e.clientY }; onDoubleClick(); }}
       data-element={el.type}
     >
-      {el.type === 'texte' && (enEdition
+      {(el.type === 'texte' || el.type === 'bloc') && (enEdition
         ? <TexteEnEdition el={el} zoneTexte={zoneTexte} />
-        : <div style={{ width: '100%', height: '100%', ...versStyleReact(cssContenu(el)) }} dangerouslySetInnerHTML={{ __html: el.html }} />)}
+        : <ContenuTexte el={el} />)}
       {el.type === 'image' && (
         el.source === 'logo' && !logo
           ? <div className="w-full h-full border border-dashed border-slate-400 flex items-center justify-center text-[10px] text-slate-500 text-center leading-tight">Logo de<br />l'école</div>
@@ -453,19 +459,54 @@ const ElementSurFeuille = ({
   );
 };
 
+/** Là où l'on vient de cliquer pour écrire : le curseur s'y pose. */
+let pointDeClic: { x: number; y: number } | null = null;
+
+/** La position du texte sous ce point (Chrome, Safari, Edge, puis Firefox). */
+const plageAuPoint = (x: number, y: number): Range | null => {
+  const d = document as Document & {
+    caretRangeFromPoint?: (x: number, y: number) => Range | null;
+    caretPositionFromPoint?: (x: number, y: number) => { offsetNode: Node; offset: number } | null;
+  };
+  if (typeof d.caretRangeFromPoint === 'function') return d.caretRangeFromPoint(x, y);
+  const pos = d.caretPositionFromPoint?.(x, y);
+  if (!pos) return null;
+  const r = document.createRange();
+  r.setStart(pos.offsetNode, pos.offset);
+  r.collapse(true);
+  return r;
+};
+
+/** Le contenu d'une zone de texte ou d'un bloc, nettoyé avant affichage. */
+const ContenuTexte = ({ el }: { el: ElementTexte | ElementBloc }) => {
+  const html = useMemo(() => nettoyerFragment(el.html), [el.html]);
+  return <div style={{ width: '100%', height: '100%', ...versStyleReact(cssContenu(el)) }} dangerouslySetInnerHTML={{ __html: html }} />;
+};
+
 /** La zone de texte qu'on est en train d'écrire. Son contenu n'est posé qu'une fois : le navigateur gère la frappe. */
-const TexteEnEdition = ({ el, zoneTexte }: { el: ElementTexte; zoneTexte: React.MutableRefObject<HTMLDivElement | null> }) => {
+const TexteEnEdition = ({ el, zoneTexte }: { el: ElementTexte | ElementBloc; zoneTexte: React.MutableRefObject<HTMLDivElement | null> }) => {
   const ref = useRef<HTMLDivElement>(null);
   useLayoutEffect(() => {
     const div = ref.current;
     if (!div) return;
     zoneTexte.current = div;
-    div.innerHTML = el.html;
+    div.innerHTML = nettoyerFragment(el.html);
     div.focus();
-    // Tout le texte sélectionné : on peut le remplacer directement.
-    const plage = document.createRange();
-    plage.selectNodeContents(div);
     const sel = window.getSelection();
+    // Ouvert par un clic : le curseur se pose là où l'on a cliqué. Texte
+    // tout juste ajouté : tout est sélectionné, on tape directement par-dessus.
+    let plage: Range | null = null;
+    const point = pointDeClic;
+    pointDeClic = null;
+    if (point) {
+      plage = plageAuPoint(point.x, point.y);
+      if (plage && !div.contains(plage.startContainer)) plage = null;
+    }
+    if (!plage) {
+      plage = document.createRange();
+      plage.selectNodeContents(div);
+      if (point || el.type === 'bloc') plage.collapse(false);
+    }
     sel?.removeAllRanges();
     sel?.addRange(plage);
     return () => { zoneTexte.current = null; };

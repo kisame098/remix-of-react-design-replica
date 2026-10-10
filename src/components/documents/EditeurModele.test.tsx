@@ -9,10 +9,11 @@ const page = (corps: string) => `<!DOCTYPE html><html><head><title>Certificat</t
 const ouvrir = (html = '', nom = '') => {
   const onEnregistrer = vi.fn().mockResolvedValue(undefined);
   const onFermer = vi.fn();
+  const onOuvrirEditeur = vi.fn();
   render(
-    <EditeurModele ouvert onFermer={onFermer} titre="Nouveau modèle" initial={{ nom, html }} exemple={exemple} onEnregistrer={onEnregistrer} />,
+    <EditeurModele ouvert onFermer={onFermer} titre="Nouveau modèle" initial={{ nom, html }} exemple={exemple} onEnregistrer={onEnregistrer} onOuvrirEditeur={onOuvrirEditeur} />,
   );
-  return { onEnregistrer, onFermer };
+  return { onEnregistrer, onFermer, onOuvrirEditeur };
 };
 
 const bouton = () => screen.getByRole('button', { name: /Enregistrer le modèle/ });
@@ -53,5 +54,12 @@ describe('éditeur de modèle', () => {
     ouvrir(page('<p></p>'), 'X');
     fireEvent.click(screen.getByRole('button', { name: '{MATRICULE}' }));
     expect((screen.getByLabelText('HTML') as HTMLTextAreaElement).value).toContain('{MATRICULE}');
+  });
+
+  it('« Modifier dans l\'éditeur » transmet le HTML, même avec un champ inconnu (à corriger dans l\'éditeur)', async () => {
+    const { onOuvrirEditeur } = ouvrir(page('<p>{TÉLÉPHONE 2}</p>'), 'Certificat');
+    await screen.findByText(/Champs inconnus/);
+    fireEvent.click(screen.getByRole('button', { name: /Modifier dans l'éditeur/ }));
+    expect(onOuvrirEditeur).toHaveBeenCalledWith('Certificat', page('<p>{TÉLÉPHONE 2}</p>'));
   });
 });
