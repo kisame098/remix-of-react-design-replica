@@ -27,15 +27,31 @@ export const ApercuHtml = ({ html, titre = 'Aperçu du document' }: { html: stri
     return () => observer.disconnect();
   }, []);
 
-  // Nouveau document : on repart de la largeur A4, puis on mesure (sinon une
-  // feuille horizontale laisserait le cadre trop large pour le document suivant).
+  // Nouveau document : on repart d'un cadre A4 avant de mesurer (sinon une
+  // feuille horizontale laisserait le cadre trop large pour le suivant).
   useEffect(() => { setLargeur(LARGEUR_A4_PX); }, [html]);
 
+  /**
+   * Taille du CONTENU, mesurée élément par élément : la hauteur de défilement
+   * du document vaut au moins celle du cadre, qui garderait la taille du
+   * document précédent (une feuille horizontale laissait un grand vide gris).
+   */
   const mesurer = () => {
     const doc = cadre.current?.contentDocument;
-    if (!doc?.documentElement) return;
-    setLargeur(Math.max(LARGEUR_A4_PX, doc.documentElement.scrollWidth));
-    setHauteur(Math.max(200, doc.documentElement.scrollHeight));
+    const vue = doc?.defaultView;
+    if (!doc?.body || !vue) return;
+    let bas = 0;
+    let droite = 0;
+    for (const el of Array.from(doc.body.children)) {
+      const r = el.getBoundingClientRect();
+      const cs = vue.getComputedStyle(el);
+      // Une feuille plus large que le cadre a une marge droite négative : on l'ignore.
+      bas = Math.max(bas, r.bottom + Math.max(0, parseFloat(cs.marginBottom) || 0));
+      droite = Math.max(droite, r.right + Math.max(0, parseFloat(cs.marginRight) || 0));
+    }
+    setLargeur(Math.max(LARGEUR_A4_PX, Math.ceil(droite)));
+    // + 20 px : la marge grise sous la dernière feuille (elle « traverse » son parent et échappe à la mesure).
+    setHauteur(Math.max(200, Math.ceil(bas + 20 + (parseFloat(vue.getComputedStyle(doc.body).paddingBottom) || 0))));
   };
 
   return (
