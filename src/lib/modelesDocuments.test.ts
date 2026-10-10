@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   CHAMPS, champConnu, normaliserNomChamp, verifierModele, nettoyer, remplirModele, valeursChamps,
   champsVides, assemblerDocuments, versionImprimee, contexteExemple, CLASSE_FEUILLE, TAILLE_MAX_MODELE,
-  produireDocuments, eleveDocument,
+  produireDocuments, eleveDocument, lireReglagesPage,
   type ContexteDocument,
 } from './modelesDocuments';
 import { MODELES_PAR_DEFAUT } from './modelesDocumentsParDefaut';
@@ -218,5 +218,30 @@ describe('produire les documents d\'une classe', () => {
   it('une information de l\'école manquante (logo) est signalée UNE fois, avec où la remplir', () => {
     const p = produireDocuments(page('<img src="{LOGO DE L\'ÉTABLISSEMENT}"><p>{CLASSE}</p>'), [c1, c2]);
     expect(p.vides).toEqual([{ champ: "LOGO DE L'ÉTABLISSEMENT", eleves: [], source: expect.stringContaining('Paramètres') }]);
+  });
+});
+
+describe('marges de la règle @page (appliquées à l\'impression seulement par le navigateur)', () => {
+  const avecPage = (regle: string) => page('<p>{CLASSE}</p>', `<style>@page { ${regle} } body{margin:0}</style>`);
+
+  it('lit les marges et l\'orientation', () => {
+    expect(lireReglagesPage(avecPage('size: A4; margin: 2.2cm 2.5cm;'))).toEqual({ marges: '2.2cm 2.5cm', paysage: false });
+    expect(lireReglagesPage(avecPage('size: A4 landscape; margin: 1cm'))).toEqual({ marges: '1cm', paysage: true });
+    expect(lireReglagesPage(avecPage('margin: 1cm; margin-left: 3cm'))).toEqual({ marges: '1cm 1cm 1cm 3cm', paysage: false });
+  });
+
+  it('sans marge (ou marge à 0, cas des modèles qui font eux-mêmes leur page), rien n\'est ajouté', () => {
+    expect(lireReglagesPage(avecPage('size: A4; margin: 0;')).marges).toBeNull();
+    expect(lireReglagesPage(page('<p>x</p>')).marges).toBeNull();
+    expect(assemblerDocuments([avecPage('size: A4; margin: 0')])).not.toContain('padding:');
+  });
+
+  it('à l\'écran et dans le PDF, chaque feuille reprend ces marges ; à l\'impression, la feuille redevient neutre', () => {
+    const html = assemblerDocuments([avecPage('size: A4; margin: 2.2cm 2.5cm;')]);
+    expect(html).toContain('padding:2.2cm 2.5cm');
+    expect(html).toContain('width:210mm');
+    expect(html).toContain('@media only print');
+    // Le PDF transforme « @media print » en « @media all » : la remise à zéro ne doit pas s'y appliquer.
+    expect(versionImprimee(html)).toContain('@media only print');
   });
 });

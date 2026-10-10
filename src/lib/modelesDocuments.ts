@@ -326,25 +326,87 @@ export const CLASSE_FEUILLE = 'senclass-feuille';
  */
 export const CLASSE_PAGE = 'senclass-page';
 
+/** La partie d'une feuille entre les marges @page du modèle. */
+export const CLASSE_ZONE = 'senclass-zone';
+
 /**
  * Plusieurs documents remplis (un par élève) → un seul document : les styles
  * du premier, puis le contenu de chacun sur sa propre page.
  */
+/** Ce que la règle `@page` du modèle dit de la feuille : marges et orientation. */
+export interface ReglagesPage {
+  /** Marges de la feuille (CSS), null si le modèle n'en met pas. */
+  marges: string | null;
+  paysage: boolean;
+}
+
+const ZERO = /^(0|0(px|mm|cm|in|pt|em|%))$/;
+
+/**
+ * Lit la règle `@page { size: …; margin: … }` du modèle. Le navigateur ne
+ * l'applique qu'À L'IMPRESSION : à l'écran (aperçu, éditeur) et dans le PDF
+ * fabriqué par capture, il faut reproduire ces marges nous-mêmes — sinon le
+ * texte colle aux bords alors que l'impression est juste.
+ */
+export const lireReglagesPage = (html: string): ReglagesPage => {
+  const doc = lireDocument(html);
+  const css = Array.from(doc.querySelectorAll('style')).map(st => st.textContent ?? '').join('\n');
+  let marges: string | null = null;
+  let paysage = false;
+  for (const bloc of css.matchAll(/@page\s*(?::[a-z-]+\s*)?\{([^}]*)\}/gi)) {
+    const regles = bloc[1];
+    const taille = /(?:^|;)\s*size\s*:\s*([^;]+)/i.exec(regles)?.[1] ?? '';
+    if (/landscape/i.test(taille)) paysage = true;
+    const tout = /(?:^|;)\s*margin\s*:\s*([^;]+)/i.exec(regles)?.[1]?.trim();
+    const cote = (c: string) => /(?:^|;)\s*margin-COTE\s*:\s*([^;]+)/i.source.replace('COTE', c);
+    const cotes = ['top', 'right', 'bottom', 'left'].map(c => new RegExp(cote(c), 'i').exec(regles)?.[1]?.trim());
+    if (tout) marges = tout;
+    if (cotes.some(Boolean)) {
+      const base = (marges ?? '0').split(/\s+/);
+      const [h, d = h, b = h, g = d] = base;
+      marges = [cotes[0] ?? h, cotes[1] ?? d, cotes[2] ?? b, cotes[3] ?? g].join(' ');
+    }
+  }
+  if (marges && marges.split(/\s+/).every(m => ZERO.test(m))) marges = null;
+  return { marges, paysage };
+};
+
 export const assemblerDocuments = (documents: string[]): string => {
   if (documents.length === 0) return '';
   const premier = lireDocument(documents[0]);
   const corps = premier.body;
+  const { marges, paysage } = lireReglagesPage(documents[0]);
   const feuilles = documents.map((html, i) => {
     const d = i === 0 ? premier : lireDocument(html);
     const feuille = premier.createElement('div');
     feuille.className = CLASSE_FEUILLE;
-    feuille.innerHTML = d.body.innerHTML;
+    // Avec des marges @page, le contenu va dans une « zone » : la partie de
+    // la page entre les marges, comme à l'impression.
+    feuille.innerHTML = marges ? `<div class="${CLASSE_ZONE}">${d.body.innerHTML}</div>` : d.body.innerHTML;
     return feuille;
   });
   corps.replaceChildren(...feuilles);
   const saut = premier.createElement('style');
-  saut.textContent = `.${CLASSE_FEUILLE}{break-after:page;page-break-after:always}.${CLASSE_FEUILLE}:last-child{break-after:auto;page-break-after:auto}`;
+  // À l'écran, la feuille « contient » les éléments fixés (pied de page en
+  // position: fixed) : ils restent en bas de SA page au lieu de flotter sur
+  // l'écran. À l'impression, le navigateur les place lui-même sur chaque page.
+  saut.textContent = `.${CLASSE_FEUILLE}{break-after:page;page-break-after:always}.${CLASSE_FEUILLE}:last-child{break-after:auto;page-break-after:auto}`
+    + `@media screen{.${CLASSE_FEUILLE}{position:relative;transform:translateZ(0)}}`;
   premier.head.appendChild(saut);
+  // Marges de la règle @page : à l'écran (et pour le PDF par capture), chaque
+  // feuille devient une page A4 avec ces marges. À l'impression, le navigateur
+  // applique déjà @page : la feuille redevient neutre. (« only print » échappe
+  // exprès à versionImprimee, qui ne touche que « @media print ».)
+  if (marges) {
+    const feuille = premier.createElement('style');
+    // La zone remplit la page entre les marges ; c'est elle qui « contient »
+    // un pied de page fixé, qui se pose donc au-dessus de la marge du bas.
+    feuille.textContent = `@media screen{html,body{background:#e5e5e5}body{margin:0}`
+      + `.${CLASSE_FEUILLE}{box-sizing:border-box;width:${paysage ? '297mm' : '210mm'};min-height:${paysage ? '210mm' : '297mm'};padding:${marges};margin:20px auto;background:#fff;display:flex;flex-direction:column;transform:none}`
+      + `.${CLASSE_ZONE}{flex:1 1 auto;position:relative;transform:translateZ(0)}}`
+      + `@media only print{.${CLASSE_FEUILLE}{padding:0;width:auto;min-height:0;margin:0}}`;
+    premier.head.appendChild(feuille);
+  }
   return serialiser(premier);
 };
 

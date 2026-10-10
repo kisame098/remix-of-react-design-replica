@@ -1,4 +1,4 @@
-import { CLASSE_PAGE, nettoyer, versionImprimee } from '@/lib/modelesDocuments';
+import { CLASSE_FEUILLE, CLASSE_PAGE, assemblerDocuments, nettoyer, versionImprimee } from '@/lib/modelesDocuments';
 import { depuisBase64 } from '@/lib/modeleWord';
 import { documentVierge, nouvelElement, type DocumentVisuel } from '@/lib/documentVisuel';
 
@@ -144,7 +144,9 @@ const ouvrirCadre = (html: string): Promise<HTMLIFrameElement> => new Promise((r
  * son contenu, à la taille de la feuille. Seule la PREMIÈRE page est reprise.
  */
 export const htmlVersDocumentVisuel = async (html: string): Promise<DocumentVisuel> => {
-  const cadre = await ouvrirCadre(versionImprimee(nettoyer(html).html));
+  // Passé par l'assemblage : les marges de la règle @page deviennent celles
+  // de la feuille, comme dans l'aperçu (sinon le texte collerait aux bords).
+  const cadre = await ouvrirCadre(assemblerDocuments([versionImprimee(nettoyer(html).html)]));
   try {
     const doc = cadre.contentDocument;
     const vue = cadre.contentWindow;
@@ -153,6 +155,7 @@ export const htmlVersDocumentVisuel = async (html: string): Promise<DocumentVisu
     // La feuille : une page de Word, la « .page » d'un modèle HTML, sinon le corps entier.
     const feuille = doc.querySelector<HTMLElement>(`.${CLASSE_PAGE}`)
       ?? doc.querySelector<HTMLElement>('section.docx, .page')
+      ?? doc.querySelector<HTMLElement>(`.${CLASSE_FEUILLE}`)
       ?? doc.body;
     const rect = feuille.getBoundingClientRect();
     const paysage = rect.width > rect.height && rect.width > 900;
@@ -163,7 +166,15 @@ export const htmlVersDocumentVisuel = async (html: string): Promise<DocumentVisu
     // La feuille de l'éditeur fait déjà la page : pas de marge ni d'ombre autour.
     feuille.style.margin = '0';
     feuille.style.boxShadow = 'none';
-    const contenu = feuille === doc.body ? `<div style="${feuille.getAttribute('style')}">${feuille.innerHTML}</div>` : feuille.outerHTML;
+    // Le corps lui-même ne se recopie pas : on reprend ses styles dans un div
+    // (par le DOM : un nom de police entre guillemets casserait un attribut écrit à la main).
+    let contenu = feuille.outerHTML;
+    if (feuille === doc.body) {
+      const div = doc.createElement('div');
+      div.setAttribute('style', feuille.getAttribute('style') ?? '');
+      div.innerHTML = feuille.innerHTML;
+      contenu = div.outerHTML;
+    }
 
     const resultat = documentVierge(paysage ? 'paysage' : 'portrait');
     if (fond && fond !== 'rgba(0, 0, 0, 0)' && fond !== 'transparent') resultat.fond = fond;
