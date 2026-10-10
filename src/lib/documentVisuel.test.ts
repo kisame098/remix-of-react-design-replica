@@ -107,6 +107,15 @@ describe('modèles fournis par SenClass', () => {
     expect(verifierSource({ genre: 'visuel', contenu: prof.contenu }).cible).toBe('professeur');
   });
 
+  it('noir et blanc uniquement (documents administratifs) : aucune autre couleur, aucun fond gris', () => {
+    for (const m of MODELES_PAR_DEFAUT) {
+      const html = visuelVersHtml(m.contenu);
+      const couleurs = (html.match(/#[0-9a-f]{3,8}\b|rgba?\([^)]*\)/gi) ?? []).map(c => c.toLowerCase());
+      expect(couleurs.filter(c => !['#000', '#000000', '#fff', '#ffffff', '#e5e5e5'].includes(c)), m.nom).toEqual([]);
+      for (const el of m.contenu.elements) if ('fond' in el) expect(el.fond, m.nom).toBeNull();
+    }
+  });
+
   it('chaque élément a un identifiant unique (les copier n\'en mélange jamais deux)', () => {
     const ids = MODELES_PAR_DEFAUT.flatMap(m => m.contenu.elements.map(e => e.id));
     expect(new Set(ids).size).toBe(ids.length);

@@ -9,10 +9,10 @@ import {
 // des pages de l'éditeur visuel : une école qui veut les retoucher en fait une
 // COPIE, qu'elle modifie à la souris comme n'importe quel document.
 //
-// Style commun, sobre : logo et identité de l'école en tête, un titre bleu
-// nuit, les informations de l'élève (ou du professeur) dans un cadre gris
-// clair, des pointillés pour ce qui s'écrit à la main (date, heure, motif…),
-// signature et pied de page discrets.
+// Style administratif sénégalais : NOIR ET BLANC uniquement, Times New Roman.
+// Logo et identité de l'école en tête, titre en capitales, les informations
+// de l'élève (ou du professeur) dans un cadre à filet noir, des pointillés pour
+// ce qui s'écrit à la main (date, heure, motif…), signature, pied de page.
 //
 // Ils n'utilisent que des champs du catalogue (un test le vérifie).
 // ═══════════════════════════════════════════════════════════════════════════
@@ -24,57 +24,53 @@ export interface ModeleParDefaut {
   contenu: DocumentVisuel;
 }
 
-const ACCENT = '#1F3A5F';
-const GRIS = '#5B6472';
-const ENCRE = '#1D1D1D';
-const FOND_CADRE = '#F3F5F8';
+const NOIR = '#000000';
+const POLICE = 'Times New Roman';
 
 let compteur = 0;
 const id = () => `senclass-el-${++compteur}`;
 
 const texte = (x: number, y: number, l: number, h: number, html: string, style: Partial<StyleTexte> = {}): ElementVisuel => ({
   id: id(), type: 'texte', x, y, l, h, rotation: 0, html,
-  style: { ...STYLE_TEXTE_PAR_DEFAUT, police: 'Georgia', taille: 12, couleur: ENCRE, interligne: 1.7, ...style },
+  style: { ...STYLE_TEXTE_PAR_DEFAUT, police: POLICE, taille: 12, couleur: NOIR, interligne: 1.7, ...style },
   fond: null, bordure: null,
 });
 
-const trait = (x: number, y: number, l: number, couleur = ACCENT, epaisseur = 0.5): ElementVisuel =>
-  ({ id: id(), type: 'ligne', x, y, l, h: 1, rotation: 0, bordure: { couleur, epaisseur, style: 'solid' } });
+const trait = (x: number, y: number, l: number, epaisseur = 0.5): ElementVisuel =>
+  ({ id: id(), type: 'ligne', x, y, l, h: 1, rotation: 0, bordure: { couleur: NOIR, epaisseur, style: 'solid' } });
 
-const cadre = (x: number, y: number, l: number, h: number, bordure: string | null = null): ElementVisuel => ({
+/** Un cadre à filet noir, sans fond : rien de gris à l'impression. */
+const cadre = (x: number, y: number, l: number, h: number): ElementVisuel => ({
   id: id(), type: 'forme', forme: 'rectangle', x, y, l, h, rotation: 0,
-  fond: bordure ? null : FOND_CADRE, bordure: bordure ? { couleur: bordure, epaisseur: 0.35, style: 'solid' } : null, arrondi: 2,
+  fond: null, bordure: { couleur: NOIR, epaisseur: 0.3, style: 'solid' }, arrondi: 0,
 });
 
 /** Des pointillés à remplir à la main. */
 const blanc = (mm: number) =>
-  `<span style="display:inline-block;width:${mm}mm;border-bottom:1px dotted #8A909A">&nbsp;</span>`;
+  `<span style="display:inline-block;width:${mm}mm;border-bottom:1px dotted #000">&nbsp;</span>`;
 
 /** Une case à cocher à la main. */
-const caseACocher = '<span style="display:inline-block;width:3.4mm;height:3.4mm;border:1px solid #1D1D1D;vertical-align:-0.5mm;margin-right:2.5mm"></span>';
+const caseACocher = '<span style="display:inline-block;width:3.4mm;height:3.4mm;border:1px solid #000;vertical-align:-0.5mm;margin-right:2.5mm"></span>';
 
-/** « Libellé : valeur » dans un cadre : libellé gris, valeur en gras. */
-const ligne = (libelle: string, valeur: string) =>
-  `<span style="color:${GRIS}">${libelle}</span>&nbsp;&nbsp;${valeur}`;
+/** « Libellé : valeur » dans un cadre. */
+const ligne = (libelle: string, valeur: string) => `${libelle} :&nbsp;&nbsp;${valeur}`;
 
 // ─── Les briques communes ─────────────────────────────────────────────────
 
 const entete = (avecNumero = false): ElementVisuel[] => [
   { id: id(), type: 'image', x: 18, y: 14, l: 22, h: 22, rotation: 0, source: 'logo' },
   texte(44, 15, 84, 22,
-    `<span style="font-size:12.5pt;color:${ACCENT};font-weight:bold">{NOM DE L'ÉTABLISSEMENT}</span><br>`
-    + "{ADRESSE DE L'ÉTABLISSEMENT}<br>Tél. {TÉLÉPHONE DE L'ÉTABLISSEMENT} · {E-MAIL DE L'ÉTABLISSEMENT}",
-    { police: 'Arial', taille: 9, couleur: GRIS, interligne: 1.45 }),
+    `<span style="font-size:13pt;font-weight:bold;text-transform:uppercase">{NOM DE L'ÉTABLISSEMENT}</span><br>`
+    + "{ADRESSE DE L'ÉTABLISSEMENT}<br>Tél. : {TÉLÉPHONE DE L'ÉTABLISSEMENT} — {E-MAIL DE L'ÉTABLISSEMENT}",
+    { taille: 10, interligne: 1.4 }),
   texte(130, 16, 62, 6, '{VILLE}, le {DATE EN LETTRES}', { taille: 10, alignement: 'right', interligne: 1.3 }),
-  ...(avecNumero ? [texte(130, 24, 62, 6, `N° ${blanc(30)}`, { police: 'Arial', taille: 9, couleur: GRIS, alignement: 'right', interligne: 1.3 })] : []),
+  ...(avecNumero ? [texte(130, 24, 62, 6, `N° ${blanc(30)}`, { taille: 10, alignement: 'right', interligne: 1.3 })] : []),
   trait(18, 40, 174),
 ];
 
 const titre = (y: number, intitule: string, sousTitre: string): ElementVisuel[] => [
-  texte(18, y, 174, 10, `<span style="letter-spacing:2.5px">${intitule.toUpperCase()}</span>`,
-    { police: 'Arial', taille: 17, gras: true, couleur: ACCENT, alignement: 'center', interligne: 1.2 }),
-  trait(97, y + 12, 16, ACCENT, 0.8),
-  texte(18, y + 15, 174, 7, sousTitre, { police: 'Arial', taille: 9.5, couleur: GRIS, alignement: 'center', interligne: 1.3 }),
+  texte(18, y, 174, 10, intitule.toUpperCase(), { taille: 17, gras: true, souligne: true, alignement: 'center', interligne: 1.2 }),
+  texte(18, y + 13, 174, 7, sousTitre, { taille: 11, italique: true, alignement: 'center', interligne: 1.3 }),
 ];
 
 const corps = (y: number, h: number, html: string, style: Partial<StyleTexte> = {}): ElementVisuel =>
@@ -91,24 +87,24 @@ const destinataire = (y: number, html: string): ElementVisuel =>
 
 const signature = (x: number, y: number, qui: string, mention: string, nom: string): ElementVisuel[] => [
   texte(x, y, 72, 7, `<b>${qui}</b>`, { taille: 11.5, alignement: 'center', interligne: 1.3 }),
-  texte(x, y + 6, 72, 6, mention, { police: 'Arial', taille: 8.5, couleur: GRIS, alignement: 'center', interligne: 1.3 }),
+  texte(x, y + 6, 72, 6, mention, { taille: 9.5, italique: true, alignement: 'center', interligne: 1.3 }),
   texte(x, y + 30, 72, 7, nom, { taille: 11.5, alignement: 'center', interligne: 1.3 }),
 ];
 
 /** Cadre « Décision de la direction », pour les demandes. */
 const decision = (x: number, y: number): ElementVisuel[] => [
-  cadre(x, y, 74, 44, '#C9CFD8'),
+  cadre(x, y, 74, 44),
   texte(x + 4, y + 3, 66, 38,
-    `<span style="font-family:Arial;font-size:8.5pt;color:${GRIS};letter-spacing:1px">DÉCISION DE LA DIRECTION</span><br>`
+    '<b>DÉCISION DE LA DIRECTION</b><br>'
     + `${caseACocher}Accordée&nbsp;&nbsp;&nbsp;&nbsp;${caseACocher}Refusée<br>`
-    + `<span style="font-size:10pt;color:${GRIS}">Date et signature :</span>`,
+    + 'Date et signature :',
     { taille: 11, interligne: 2.1 }),
 ];
 
 const pied = (): ElementVisuel[] => [
-  trait(18, 281, 174, '#D3D8DF', 0.3),
-  texte(18, 283, 174, 6, "{NOM DE L'ÉTABLISSEMENT} · {ADRESSE DE L'ÉTABLISSEMENT} · Tél. {TÉLÉPHONE DE L'ÉTABLISSEMENT}",
-    { police: 'Arial', taille: 7.5, couleur: GRIS, alignement: 'center', interligne: 1.2 }),
+  trait(18, 281, 174, 0.3),
+  texte(18, 283, 174, 6, "{NOM DE L'ÉTABLISSEMENT} — {ADRESSE DE L'ÉTABLISSEMENT} — Tél. : {TÉLÉPHONE DE L'ÉTABLISSEMENT}",
+    { taille: 8, alignement: 'center', interligne: 1.2 }),
 ];
 
 const page = (elements: ElementVisuel[]): DocumentVisuel => ({ version: 1, orientation: 'portrait', fond: '#ffffff', elements });
