@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useReducer, useRef, useState } from 'react';
 import {
-  Circle, Eye, Image as ImageIcon, Loader2, Minus, Plus, Redo2, School, Square, TriangleAlert, Type, Undo2, CheckCircle2, PenLine,
+  Circle, Eye, Image as ImageIcon, PenSquare, Loader2, Minus, Plus, Redo2, School, Square, TriangleAlert, Type, Undo2, CheckCircle2, PenLine,
 } from 'lucide-react';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -308,12 +308,12 @@ export const EditeurVisuel = ({ ouvert, onFermer, initial, logo, exemple, onEnre
         <div className="flex flex-wrap items-center gap-2 border-b px-3 py-2 pr-12">
           <Input value={nom} onChange={e => setNom(e.target.value)} placeholder="Nom du document" maxLength={120} className="w-56 h-9" aria-label="Nom du document" />
           <div className="h-6 w-px bg-border mx-1" />
-          <Button size="sm" variant="ghost" onClick={() => ajouter('texte')} disabled={apercu}><Type className="h-4 w-4 mr-1.5" />Texte</Button>
-          <Button size="sm" variant="ghost" onClick={() => ajouter('image', { source: 'logo' })} disabled={apercu}><School className="h-4 w-4 mr-1.5" />Logo</Button>
-          <Button size="sm" variant="ghost" onClick={() => { imageARemplacer.current = null; fichierImage.current?.click(); }} disabled={apercu}><ImageIcon className="h-4 w-4 mr-1.5" />Image</Button>
-          <Button size="sm" variant="ghost" onClick={() => ajouter('forme', { forme: 'rectangle' })} disabled={apercu}><Square className="h-4 w-4 mr-1.5" />Rectangle</Button>
-          <Button size="sm" variant="ghost" onClick={() => ajouter('forme', { forme: 'ellipse' })} disabled={apercu}><Circle className="h-4 w-4 mr-1.5" />Cercle</Button>
-          <Button size="sm" variant="ghost" onClick={() => ajouter('ligne')} disabled={apercu}><PenLine className="h-4 w-4 mr-1.5" />Trait</Button>
+          <Button size="icon" variant="ghost" className="h-9 w-9" title="Texte" aria-label="Texte" onClick={() => ajouter('texte')} disabled={apercu}><Type className="h-4 w-4" /></Button>
+          <Button size="icon" variant="ghost" className="h-9 w-9" title="Logo" aria-label="Logo" onClick={() => ajouter('image', { source: 'logo' })} disabled={apercu}><School className="h-4 w-4" /></Button>
+          <Button size="icon" variant="ghost" className="h-9 w-9" title="Image" aria-label="Image" onClick={() => { imageARemplacer.current = null; fichierImage.current?.click(); }} disabled={apercu}><ImageIcon className="h-4 w-4" /></Button>
+          <Button size="icon" variant="ghost" className="h-9 w-9" title="Rectangle" aria-label="Rectangle" onClick={() => ajouter('forme', { forme: 'rectangle' })} disabled={apercu}><Square className="h-4 w-4" /></Button>
+          <Button size="icon" variant="ghost" className="h-9 w-9" title="Cercle" aria-label="Cercle" onClick={() => ajouter('forme', { forme: 'ellipse' })} disabled={apercu}><Circle className="h-4 w-4" /></Button>
+          <Button size="icon" variant="ghost" className="h-9 w-9" title="Trait" aria-label="Trait" onClick={() => ajouter('ligne')} disabled={apercu}><PenLine className="h-4 w-4" /></Button>
           <input ref={fichierImage} type="file" accept="image/*" className="hidden" onChange={e => { void choisirImage(e.target.files?.[0]); e.target.value = ''; }} />
           <div className="h-6 w-px bg-border mx-1" />
           <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => dispatch({ type: 'annuler' })} disabled={h.passe.length === 0} title="Annuler (Ctrl+Z)" aria-label="Annuler"><Undo2 className="h-4 w-4" /></Button>
@@ -323,8 +323,12 @@ export const EditeurVisuel = ({ ouvert, onFermer, initial, logo, exemple, onEnre
           <button className="text-xs w-12 text-center tabular-nums hover:underline" onClick={ajusterZoom} title="Ajuster à l'écran">{Math.round(zoom * 100)} %</button>
           <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => setZoom(z => Math.min(3, z + 0.1))} aria-label="Zoomer"><Plus className="h-4 w-4" /></Button>
           <div className="ml-auto flex items-center gap-2">
-            <Button size="sm" variant={apercu ? 'secondary' : 'outline'} onClick={() => { if (edition) terminerEdition(); setSelection(null); setApercu(a => !a); }}>
-              <Eye className="h-4 w-4 mr-1.5" />{apercu ? 'Revenir à l\'édition' : 'Aperçu'}
+            <Button
+              size="icon" variant={apercu ? 'secondary' : 'outline'} className="h-9 w-9"
+              title={apercu ? 'Revenir à l\'édition' : 'Aperçu'} aria-label={apercu ? 'Revenir à l\'édition' : 'Aperçu'}
+              onClick={() => { if (edition) terminerEdition(); setSelection(null); setApercu(a => !a); }}
+            >
+              {apercu ? <PenSquare className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
             </Button>
             <Button size="sm" onClick={enregistrer} disabled={enCours || !verification.ok || !nom.trim()}>
               {enCours && <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />}Enregistrer

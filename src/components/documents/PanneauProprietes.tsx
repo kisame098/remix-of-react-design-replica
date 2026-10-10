@@ -152,10 +152,10 @@ export const PanneauProprietes = ({
           <Nombre label="Rotation" unite="°" pas={1} valeur={el.rotation} onChange={v => maj({ rotation: ((Math.round(v) % 360) + 360) % 360 })} />
         </div>
         <div className="flex flex-wrap gap-1 pt-1">
-          <Button size="sm" variant="outline" className="h-7 px-2 text-xs" onClick={onDupliquer}><Copy className="h-3.5 w-3.5 mr-1" />Dupliquer</Button>
-          <Button size="sm" variant="outline" className="h-7 px-2 text-xs" onClick={() => onPlan('premier')} title="Premier plan"><ArrowUpToLine className="h-3.5 w-3.5 mr-1" />Devant</Button>
-          <Button size="sm" variant="outline" className="h-7 px-2 text-xs" onClick={() => onPlan('arriere')} title="Arrière-plan"><ArrowDownToLine className="h-3.5 w-3.5 mr-1" />Derrière</Button>
-          <Button size="sm" variant="ghost" className="h-7 px-2 text-xs text-destructive hover:text-destructive" onClick={onSupprimer}><Trash2 className="h-3.5 w-3.5 mr-1" />Supprimer</Button>
+          <Button size="icon" variant="outline" className="h-8 w-8" onClick={onDupliquer} title="Dupliquer" aria-label="Dupliquer"><Copy className="h-4 w-4" /></Button>
+          <Button size="icon" variant="outline" className="h-8 w-8" onClick={() => onPlan('premier')} title="Premier plan" aria-label="Premier plan"><ArrowUpToLine className="h-4 w-4" /></Button>
+          <Button size="icon" variant="outline" className="h-8 w-8" onClick={() => onPlan('arriere')} title="Arrière-plan" aria-label="Arrière-plan"><ArrowDownToLine className="h-4 w-4" /></Button>
+          <Button size="icon" variant="ghost" className="h-8 w-8 text-destructive hover:text-destructive" onClick={onSupprimer} title="Supprimer" aria-label="Supprimer"><Trash2 className="h-4 w-4" /></Button>
         </div>
       </Section>
 
@@ -216,8 +216,8 @@ export const PanneauProprietes = ({
             {el.source === 'logo' ? "Le logo de l'école (Paramètres → École) : il change tout seul si l'école change de logo." : 'Une image de votre ordinateur (cachet, signature, décor…).'}
           </p>
           <div className="flex flex-wrap gap-1">
-            <Button size="sm" variant="outline" className="h-7 px-2 text-xs" onClick={() => onRemplacerImage(el.id)}><ImageIcon className="h-3.5 w-3.5 mr-1" />Choisir une image</Button>
-            {el.source !== 'logo' && <Button size="sm" variant="outline" className="h-7 px-2 text-xs" onClick={() => maj({ source: 'logo' })}><School className="h-3.5 w-3.5 mr-1" />Logo de l'école</Button>}
+            <Button size="icon" variant="outline" className="h-8 w-8" onClick={() => onRemplacerImage(el.id)} title="Choisir une image" aria-label="Choisir une image"><ImageIcon className="h-4 w-4" /></Button>
+            {el.source !== 'logo' && <Button size="icon" variant="outline" className="h-8 w-8" onClick={() => maj({ source: 'logo' })} title="Utiliser le logo de l'école" aria-label="Utiliser le logo de l'école"><School className="h-4 w-4" /></Button>}
           </div>
           <p className="text-[11px] text-muted-foreground">Par un coin, l'image garde ses proportions.</p>
         </Section>
