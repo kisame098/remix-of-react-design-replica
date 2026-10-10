@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
-  Code2, Copy, Download, Eye, FilePlus2, FileText, FileType2, FileUp, Loader2, Pencil, PenSquare, Printer, Search, Trash2, TriangleAlert, Wand2,
+  Archive, Code2, Copy, Download, Eye, FilePlus2, FileText, FileType2, FileUp, Loader2, Pencil, PenSquare, Printer, Search, Trash2, TriangleAlert, Wand2,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useSchool } from '@/contexts/SchoolContext';
@@ -26,10 +26,13 @@ import { EditeurModele } from '@/components/documents/EditeurModele';
 import { EditeurVisuel } from '@/components/documents/EditeurVisuel';
 import { ImportWord } from '@/components/documents/ImportWord';
 import { useModelesDocuments } from '@/hooks/useModelesDocuments';
-import { infosEcole, nomDeFichier, type EcoleSource } from '@/lib/documentsEcole';
+import { dateHeureDakar, infosEcole, nomDeFichier, type EcoleSource } from '@/lib/documentsEcole';
 import {
-  ELEVE_VIDE, contexteExemple, eleveDocument, professeurDocument, type Cible, type ContexteDocument, type Production,
+  ELEVE_VIDE, contexteExemple, eleveDocument, professeurDocument, separerFeuilles,
+  type Cible, type ContexteDocument, type Production,
 } from '@/lib/modelesDocuments';
+import { numeroProvisoire, prefixeDuModele, utiliseNumero } from '@/lib/numerotationDocuments';
+import { useDocumentsDelivres, type DemandeDelivrance } from '@/hooks/useDocumentsDelivres';
 import { documentVierge, type DocumentVisuel } from '@/lib/documentVisuel';
 import {
   LIBELLES_GENRE, produire, telechargerWordOriginal, telechargerWordRempli, verifierSource, type SourceModele,
@@ -37,11 +40,12 @@ import {
 import { MODELES_PAR_DEFAUT } from '@/lib/modelesDocumentsParDefaut';
 import { estUneErreurDeChargement } from '@/lib/rechargementApresDeploiement';
 
-type Onglet = 'produire' | 'modeles';
+type Onglet = 'produire' | 'modeles' | 'delivres';
 
 const ONGLETS: { id: Onglet; label: string; description: string; icon: typeof FileText }[] = [
   { id: 'produire', label: 'Produire', description: 'Certificats, attestations…', icon: Printer },
   { id: 'modeles', label: 'Modèles', description: 'Créer, importer, modifier', icon: FileText },
+  { id: 'delivres', label: 'Délivrés', description: 'Registre des documents numérotés', icon: Archive },
 ];
 
 /** Un modèle tel que l'écran le manipule, qu'il soit fourni par SenClass ou à l'école. */
@@ -191,6 +195,8 @@ const DocumentsEcole = () => {
               onAllerAuxModeles={() => setOnglet('modeles')}
             />
           )}
+
+          {onglet === 'delivres' && <RegistreDelivres />}
 
           {onglet === 'modeles' && (
             <div className="space-y-6 max-w-4xl">
@@ -380,6 +386,92 @@ const Refus = ({ production, estDirecteur, onAllerAuxModeles }: { production: Pr
   </div>
 );
 
+// ─── Registre des documents délivrés ────────────────────────────────────────
+
+/** Les documents numérotés déjà délivrés : vérifier un numéro, réimprimer à l'identique. */
+const RegistreDelivres = () => {
+  const { documents, loading, lireContenu } = useDocumentsDelivres(true);
+  const [recherche, setRecherche] = useState('');
+  const [ouvert, setOuvert] = useState<{ numero: string; html: string | null } | null>(null);
+  const [action, setAction] = useState<'imprimer' | 'pdf' | null>(null);
+
+  const trouves = useMemo(() => {
+    const q = recherche.trim().toLowerCase();
+    return q ? documents.filter(d => `${d.numero} ${d.personneNom} ${d.modeleNom}`.toLowerCase().includes(q)) : documents;
+  }, [documents, recherche]);
+
+  const reimprimer = async (id: string, numero: string) => {
+    try {
+      setOuvert({ numero, html: await lireContenu(id) });
+    } catch (e) {
+      toast({ title: 'Document illisible', description: messageErreur(e), variant: 'destructive' });
+    }
+  };
+
+  const sortir = async (quoi: 'imprimer' | 'pdf') => {
+    if (!ouvert?.html) return;
+    setAction(quoi);
+    try {
+      const sortie = await import('@/lib/modelesDocumentsPdf');
+      if (quoi === 'imprimer') await sortie.imprimerHtml(ouvert.html);
+      else await sortie.telechargerPdfHtml(ouvert.html, nomDeFichier(ouvert.numero));
+    } catch (e) {
+      toast({ title: quoi === 'imprimer' ? "L'impression n'a pas pu s'ouvrir" : "Le PDF n'a pas pu être fabriqué", description: messageErreur(e), variant: 'destructive' });
+    } finally {
+      setAction(null);
+    }
+  };
+
+  return (
+    <div className="space-y-3 max-w-4xl">
+      <div className="relative w-full sm:w-80">
+        <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+        <Input value={recherche} onChange={e => setRecherche(e.target.value)} placeholder="Numéro, nom ou document" className="pl-8" />
+      </div>
+      <Card>
+        <CardContent className="p-0 divide-y">
+          {loading ? (
+            <p className="p-6 text-sm text-muted-foreground flex items-center gap-2"><Loader2 className="h-4 w-4 animate-spin" /> Chargement…</p>
+          ) : trouves.length === 0 ? (
+            <p className="p-6 text-center text-sm text-muted-foreground">{documents.length === 0 ? 'Aucun document numéroté délivré.' : 'Aucun résultat.'}</p>
+          ) : trouves.map(d => (
+            <div key={d.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2">
+              <span className="font-mono text-sm font-medium w-36 shrink-0">{d.numero}</span>
+              <span className="flex-1 min-w-0 truncate text-sm">{d.personneNom || '—'}</span>
+              <span className="text-xs text-muted-foreground truncate max-w-[35%]">{d.modeleNom}</span>
+              <span className="text-xs text-muted-foreground w-36 text-right">{dateHeureDakar(d.creeLe)}</span>
+              <BoutonIcone titre="Réimprimer" onClick={() => reimprimer(d.id, d.numero)}><Printer className="h-4 w-4" /></BoutonIcone>
+            </div>
+          ))}
+        </CardContent>
+      </Card>
+
+      <Dialog open={ouvert !== null} onOpenChange={o => { if (!o) setOuvert(null); }}>
+        <DialogContent className="max-w-3xl max-h-[95vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="font-mono">{ouvert?.numero}</DialogTitle>
+            <DialogDescription className="sr-only">Réimpression à l'identique</DialogDescription>
+          </DialogHeader>
+          {ouvert?.html ? <ApercuHtml html={ouvert.html} /> : <p className="text-sm text-muted-foreground">Le contenu de ce document n'a pas été conservé.</p>}
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setOuvert(null)}>Fermer</Button>
+            {ouvert?.html && (
+              <>
+                <Button variant="outline" onClick={() => sortir('pdf')} disabled={action !== null}>
+                  {action === 'pdf' ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Download className="h-4 w-4 mr-2" />} Télécharger le PDF
+                </Button>
+                <Button onClick={() => sortir('imprimer')} disabled={action !== null}>
+                  {action === 'imprimer' ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Printer className="h-4 w-4 mr-2" />} Imprimer
+                </Button>
+              </>
+            )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+};
+
 // ─── Produire ───────────────────────────────────────────────────────────────
 
 type Eleve = ReturnType<typeof useSchool>['students'][number];
@@ -388,7 +480,13 @@ type Professeur = ReturnType<typeof useSchool>['teachers'][number];
 
 const TOUTES = '__toutes__';
 
-interface Demande { source: SourceModele; contextes: ContexteDocument[]; nomFichier: string }
+interface Demande {
+  source: SourceModele;
+  contextes: ContexteDocument[];
+  nomFichier: string;
+  /** Présent si le modèle contient {NUMÉRO DU DOCUMENT} : de quoi délivrer les numéros. */
+  delivrance: DemandeDelivrance | null;
+}
 
 const Produire = ({
   modeles, students, teachers, classes, ecole, anneeScolaire, estDirecteur, onAllerAuxModeles,
@@ -455,7 +553,21 @@ const Produire = ({
       : nombre === 1 && seul ? `${seul.lastName} ${seul.firstName}`
       : cible === 'eleve' && classeId !== TOUTES ? nomClasse.get(classeId) ?? ''
       : `${nombre} ${cible === 'eleve' ? 'élèves' : 'professeurs'}`;
-    setDemande({ source: modele.source, contextes, nomFichier: `${modele.nom} ${pour}`.trim() });
+    // Numéroté : l'aperçu montre un numéro provisoire ; le vrai est délivré à l'impression.
+    const numerote = utiliseNumero(verifierSource(modele.source)) && !!anneeScolaire;
+    const prefixe = prefixeDuModele(modele.id, modele.nom);
+    const delivrance: DemandeDelivrance | null = numerote && anneeScolaire ? {
+      anneeScolaire, prefixe, modeleNom: modele.nom, modeleRef: modele.id, cible,
+      personnes: cible === 'professeur' ? profsChoisis.map(t => ({ id: t.id, nom: `${t.lastName} ${t.firstName}` }))
+        : cible === 'eleve' ? elevesChoisis.map(st => ({ id: st.id, nom: `${st.lastName} ${st.firstName}` }))
+        : [{ id: null, nom: '' }],
+    } : null;
+    setDemande({
+      source: modele.source,
+      contextes: delivrance ? contextes.map(c => ({ ...c, numero: numeroProvisoire(prefixe, delivrance.anneeScolaire) })) : contextes,
+      nomFichier: `${modele.nom} ${pour}`.trim(),
+      delivrance,
+    });
   };
 
   return (
@@ -544,17 +656,42 @@ const DialogProduction = ({
 }) => {
   const [action, setAction] = useState<'imprimer' | 'pdf' | 'word' | null>(null);
   const { p, erreur } = useProduction(demande?.source ?? null, demande?.contextes ?? null);
+  const { delivrer, conserverContenu } = useDocumentsDelivres(false);
+  // Les numéros délivrés pour cette fenêtre : imprimer puis télécharger ne consomme pas deux numéros.
+  const [delivre, setDelivre] = useState<{ html: string; contextes: ContexteDocument[]; numeros: string[] } | null>(null);
+  useEffect(() => { setDelivre(null); }, [demande]);
+
+  /** Le document définitif : numéroté si le modèle le demande (une seule fois). */
+  const definitif = async (): Promise<{ html: string; contextes: ContexteDocument[] }> => {
+    if (!demande || !p?.html) throw new Error('Document pas prêt.');
+    if (!demande.delivrance) return { html: p.html, contextes: demande.contextes };
+    if (delivre) return delivre;
+    const lignes = await delivrer(demande.delivrance);
+    const contextes = demande.contextes.map((c, i) => ({ ...c, numero: lignes[i]?.numero ?? '' }));
+    const resultat = await produire(demande.source, contextes);
+    if (resultat.refus) throw new Error('Le modèle ne peut pas être utilisé.');
+    // Le contenu exact de chaque document va au registre, pour la réimpression.
+    const feuilles = separerFeuilles(resultat.html);
+    const conserves = await Promise.allSettled(lignes.map((l, i) => conserverContenu(l.id, feuilles[i] ?? resultat.html)));
+    if (conserves.some(c => c.status === 'rejected')) {
+      toast({ title: 'Numéros délivrés', description: "Le contenu n'a pas pu être gardé au registre pour certains documents.", variant: 'destructive' });
+    }
+    const fait = { html: resultat.html, contextes, numeros: lignes.map(l => l.numero) };
+    setDelivre(fait);
+    return fait;
+  };
 
   const lancer = async (quoi: 'imprimer' | 'pdf' | 'word') => {
     if (!demande) return;
     setAction(quoi);
     try {
+      const doc = await definitif();
       if (quoi === 'word') {
-        if (demande.source.genre === 'word') telechargerWordRempli(demande.source.fichier, demande.contextes, demande.nomFichier);
-      } else if (p?.html) {
+        if (demande.source.genre === 'word') telechargerWordRempli(demande.source.fichier, doc.contextes, demande.nomFichier);
+      } else {
         const sortie = await import('@/lib/modelesDocumentsPdf');
-        if (quoi === 'imprimer') await sortie.imprimerHtml(p.html);
-        else await sortie.telechargerPdfHtml(p.html, nomDeFichier(demande.nomFichier));
+        if (quoi === 'imprimer') await sortie.imprimerHtml(doc.html);
+        else await sortie.telechargerPdfHtml(doc.html, nomDeFichier(demande.nomFichier));
       }
     } catch (e) {
       const titres = { imprimer: "L'impression n'a pas pu s'ouvrir", pdf: "Le PDF n'a pas pu être fabriqué", word: "Le Word n'a pas pu être fabriqué" };
@@ -571,13 +708,17 @@ const DialogProduction = ({
       <DialogContent className="max-w-3xl max-h-[95vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{demande?.nomFichier}</DialogTitle>
-          <DialogDescription className="sr-only">Aperçu avant impression</DialogDescription>
+          <DialogDescription className={delivre ? 'font-mono' : 'sr-only'}>
+            {delivre
+              ? (delivre.numeros.length === 1 ? `N° ${delivre.numeros[0]}` : `N° ${delivre.numeros[0]} → ${delivre.numeros[delivre.numeros.length - 1]}`)
+              : 'Aperçu avant impression'}
+          </DialogDescription>
         </DialogHeader>
 
         {erreur ? <p className="text-sm text-destructive">{erreur}</p>
           : !p ? <p className="text-sm text-muted-foreground flex items-center gap-2"><Loader2 className="h-4 w-4 animate-spin" /> Préparation…</p>
           : p.refus ? <Refus production={p} estDirecteur={estDirecteur} onAllerAuxModeles={onAllerAuxModeles} />
-          : <ApercuHtml html={p.html} />}
+          : <ApercuHtml html={delivre?.html ?? p.html} />}
 
         <DialogFooter className="gap-2">
           <Button variant="outline" onClick={onFermer}>Fermer</Button>
