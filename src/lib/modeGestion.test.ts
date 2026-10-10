@@ -21,10 +21,10 @@ describe('menu par mode', () => {
   const classique = menuPourMode('classique');
   const formation = menuPourMode('formation_pro');
 
-  it('le menu classique est INCHANGÉ (13 rubriques, même ordre)', () => {
+  it('le menu classique : 13 rubriques d\'origine dans le même ordre, puis Documents', () => {
     expect(classique.map(i => i.url)).toEqual([
       '/dashboard', '/inscription', '/eleves', '/inscription-prof', '/professeurs', '/classes', '/notes',
-      '/filieres', '/emplois-du-temps', '/presences', '/paiements', '/salaires', '/identifiants',
+      '/filieres', '/emplois-du-temps', '/presences', '/paiements', '/salaires', '/identifiants', '/documents',
     ]);
     expect(classique.some(i => i.bientot || i.groupe)).toBe(false);
   });

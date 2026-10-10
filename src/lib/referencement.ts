@@ -45,6 +45,7 @@ const PAGES_PRIVEES: [prefixe: string, titre: string][] = [
   ['/paiements',          'Paiements'],
   ['/salaires',           'Salaires'],
   ['/identifiants',       'Identifiants'],
+  ['/documents',          'Documents'],
   ['/parametres',         'Paramètres'],
   ['/abonnement',         'Abonnement'],
   ['/abonnement-requis',  'Abonnement'],
