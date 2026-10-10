@@ -19,6 +19,7 @@ Disallow: /presences
 Disallow: /paiements
 Disallow: /salaires
 Disallow: /identifiants
+Disallow: /documents
 Disallow: /parametres
 Disallow: /abonnement
 Disallow: /caisse

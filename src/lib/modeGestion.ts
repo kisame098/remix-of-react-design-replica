@@ -54,6 +54,8 @@ const PRESENCES: ItemMenu = { title: 'Gestion Présences', url: '/presences', ic
 const PAIEMENTS: ItemMenu = { title: 'Gestion Paiements', url: '/paiements', icon: 'paiements', permission: 'payments' };
 const SALAIRES: ItemMenu = { title: 'Gestion Salaires', url: '/salaires', icon: 'salaires', permission: 'payroll' };
 const IDENTIFIANTS: ItemMenu = { title: 'Gestion Identifiants', url: '/identifiants', icon: 'identifiants', permission: 'credentials' };
+/** Modèles HTML de l'école (certificats, attestations…) — mode classique seulement : la formation pro a sa propre rubrique Documents. */
+const DOCUMENTS_ECOLE: ItemMenu = { title: 'Documents', url: '/documents', icon: 'documents', permission: 'students' };
 
 /**
  * Rubriques propres au mode formation professionnelle. Pour l'instant, chacune
@@ -78,7 +80,7 @@ export const RUBRIQUES_FORMATION_PRO: (ItemMenu & { description: string })[] = [
 ];
 
 /** Pages du mode classique qui n'existent plus dans le mode formation professionnelle. */
-export const URLS_CLASSIQUES_MASQUEES = ['/classes', '/notes', '/filieres'] as const;
+export const URLS_CLASSIQUES_MASQUEES = ['/classes', '/notes', '/filieres', '/documents'] as const;
 
 export const menuPourMode = (mode: ModeGestion): ItemMenu[] => {
   if (mode === 'formation_pro') {
@@ -90,7 +92,7 @@ export const menuPourMode = (mode: ModeGestion): ItemMenu[] => {
   }
   return [
     DASHBOARD, INSCRIPTION_ELEVES, GESTION_ELEVES, INSCRIPTION_PROFS, GESTION_PROFS,
-    GESTION_CLASSE, GESTION_NOTES, CURSUS, EMPLOIS, PRESENCES, PAIEMENTS, SALAIRES, IDENTIFIANTS,
+    GESTION_CLASSE, GESTION_NOTES, CURSUS, EMPLOIS, PRESENCES, PAIEMENTS, SALAIRES, IDENTIFIANTS, DOCUMENTS_ECOLE,
   ];
 };
 

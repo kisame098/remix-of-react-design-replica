@@ -74,6 +74,7 @@ const ExamensPromotion = lazy(() => import("./pages/formation/ExamensPromotion")
 const Stages = lazy(() => import("./pages/formation/Stages"));
 const StagesPromotion = lazy(() => import("./pages/formation/StagesPromotion"));
 const Documents = lazy(() => import("./pages/formation/Documents"));
+const DocumentsEcole = lazy(() => import("./pages/DocumentsEcole"));
 const FormationDetail = lazy(() => import("./pages/formation/FormationDetail"));
 const NiveauProgramme = lazy(() => import("./pages/formation/NiveauProgramme"));
 const PlatformStats         = lazy(() => import("./pages/platform/PlatformStats"));
@@ -181,6 +182,7 @@ const App = () => (
                     <Route path="/notes/:periodId/:classId/:subjectId/settings" element={<ModeRoute mode="classique"><RequirePermission permission="grades"><SubjectSettings /></RequirePermission></ModeRoute>} />
                     <Route path="/filieres" element={<ModeRoute mode="classique"><RequirePermission permission="grades"><Filieres /></RequirePermission></ModeRoute>} />
                     <Route path="/filieres/:filiereId" element={<ModeRoute mode="classique"><RequirePermission permission="grades"><FiliereEditor /></RequirePermission></ModeRoute>} />
+                    <Route path="/documents" element={<ModeRoute mode="classique"><RequirePermission permission="students"><DocumentsEcole /></RequirePermission></ModeRoute>} />
                     <Route path="/formation/formations" element={
                       <ModeRoute mode="formation_pro"><RequirePermission permission="grades"><Formations /></RequirePermission></ModeRoute>
                     } />
