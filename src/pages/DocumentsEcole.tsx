@@ -90,7 +90,7 @@ const DocumentsEcole = () => {
   const ecole = useMemo(() => infosEcole(school as EcoleSource | null), [school]);
   const anneeScolaire = currentYear?.id;
   const exemple = useMemo(() => contexteExemple(ecole, anneeScolaire), [ecole, anneeScolaire]);
-  const { modeles: modelesEcole, loading, disponible, creer, modifier, supprimer } = useModelesDocuments();
+  const { modeles: modelesEcole, loading, creer, modifier, supprimer } = useModelesDocuments();
 
   const [onglet, setOnglet] = useState<Onglet>('produire');
   const [edition, setEdition] = useState<Edition | null>(null);
@@ -174,28 +174,21 @@ const DocumentsEcole = () => {
             <div className="space-y-6 max-w-4xl">
               {estDirecteur ? (
                 <div className="flex flex-wrap gap-2">
-                  <Button onClick={() => setEdition({ genre: 'visuel', id: null, initial: { nom: '', contenu: documentVierge() } })} disabled={!disponible}>
+                  <Button onClick={() => setEdition({ genre: 'visuel', id: null, initial: { nom: '', contenu: documentVierge() } })}>
                     <FilePlus2 className="h-4 w-4 mr-2" /> Créer un document
                   </Button>
-                  <Button variant="outline" onClick={() => setEdition({ genre: 'word', id: null, titre: 'Importer un modèle Word' })} disabled={!disponible}>
+                  <Button variant="outline" onClick={() => setEdition({ genre: 'word', id: null, titre: 'Importer un modèle Word' })}>
                     <FileType2 className="h-4 w-4 mr-2" /> Importer un Word
                   </Button>
-                  <Button variant="outline" onClick={() => setEdition({ genre: 'html', id: null, titre: 'Nouveau modèle HTML', initial: { nom: '', html: MODELE_HTML_VIERGE } })} disabled={!disponible}>
+                  <Button variant="outline" onClick={() => setEdition({ genre: 'html', id: null, titre: 'Nouveau modèle HTML', initial: { nom: '', html: MODELE_HTML_VIERGE } })}>
                     <Code2 className="h-4 w-4 mr-2" /> Écrire du HTML
                   </Button>
-                  <Button variant="outline" onClick={() => setEdition({ genre: 'html', id: null, titre: 'Importer un modèle HTML', initial: { nom: '', html: '' }, importer: true })} disabled={!disponible}>
+                  <Button variant="outline" onClick={() => setEdition({ genre: 'html', id: null, titre: 'Importer un modèle HTML', initial: { nom: '', html: '' }, importer: true })}>
                     <FileUp className="h-4 w-4 mr-2" /> Importer du HTML
                   </Button>
                 </div>
               ) : (
                 <p className="text-sm text-muted-foreground">Seul le directeur peut créer ou modifier les modèles.</p>
-              )}
-
-              {!disponible && (
-                <p className="flex items-start gap-2 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
-                  <TriangleAlert className="h-4 w-4 mt-0.5 shrink-0" />
-                  Les modèles de l'école ne sont pas encore disponibles (mise à jour de la base en attente). Les modèles fournis par SenClass restent utilisables.
-                </p>
               )}
 
               <section className="space-y-2">
@@ -231,7 +224,7 @@ const DocumentsEcole = () => {
                 <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Fournis par SenClass</h2>
                 {tousModeles.filter(m => m.fourni).map(m => (
                   <CarteModele key={m.id} modele={m} onApercu={() => setApercuModele(m)}>
-                    {estDirecteur && disponible && (
+                    {estDirecteur && (
                       <Button size="sm" variant="outline" onClick={() => ouvrirEdition(m, true)}>
                         <Copy className="h-3.5 w-3.5 mr-1.5" /> Copier pour le modifier
                       </Button>
