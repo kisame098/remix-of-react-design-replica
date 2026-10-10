@@ -1,12 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
 import type jsPDF from 'jspdf';
-import { Download, Loader2, Palette, Printer, RefreshCw, TriangleAlert } from 'lucide-react';
+import { Columns2, Download, Loader2, Palette, Printer, RefreshCw, TriangleAlert } from 'lucide-react';
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { toast } from '@/hooks/use-toast';
 import { imprimerPdf, telechargerPdf } from '@/lib/documentsEcole';
+import { lireDeuxParFeuille, retenirDeuxParFeuille } from '@/lib/choixDeuxParFeuille';
 import { estUneErreurDeChargement } from '@/lib/rechargementApresDeploiement';
 import {
   LIBELLES_TYPE_DOCUMENT, lireModeImpression, retenirModeImpression, type ModeImpression, type TypeDocument,
@@ -20,7 +21,12 @@ interface DocumentDialogProps {
   /** Nom du fichier téléchargé, sans extension. */
   nomFichier: string;
   /** Fabrique le PDF. Rappelée à chaque ouverture (et à chaque changement de mode) ; jamais avant. */
-  generer: (o: { economique: boolean }) => Promise<jsPDF>;
+  generer: (o: { economique: boolean; deuxParFeuille: boolean }) => Promise<jsPDF>;
+  /**
+   * Propose « 2 par feuille » (document A5 : deux exemplaires sur une feuille
+   * A4 horizontale). La valeur nomme le choix retenu sur l'ordinateur (« recu »…).
+   */
+  deuxParFeuille?: string;
   /**
    * Type de document : affiche le choix Couleur / Noir et blanc, retenu pour
    * ce type (src/lib/modeImpression.ts). Absent = toujours en couleur.
@@ -37,7 +43,7 @@ interface DocumentDialogProps {
  * cadre — ils proposent alors seulement Imprimer et Télécharger, qui suffisent.
  */
 export const DocumentDialog = ({
-  ouvert, onFermer, titre, description, nomFichier, generer, typeDocument,
+  ouvert, onFermer, titre, description, nomFichier, generer, typeDocument, deuxParFeuille,
 }: DocumentDialogProps) => {
   // null = jamais choisi pour ce type : on le demande (une seule fois).
   const [retenu, setRetenu] = useState<ModeImpression | null>(() => (typeDocument ? lireModeImpression(typeDocument) : 'couleur'));
@@ -48,6 +54,7 @@ export const DocumentDialog = ({
   };
   /** Imprimer ou télécharger sans avoir choisi vaut choix : on ne redemande plus. */
   const confirmerChoix = () => { if (typeDocument && retenu === null) choisir(mode); };
+  const [demiPage, setDemiPage] = useState(() => (deuxParFeuille ? lireDeuxParFeuille(deuxParFeuille) : false));
   const [doc, setDoc] = useState<jsPDF | null>(null);
   const [apercu, setApercu] = useState<string | null>(null);
   const [erreur, setErreur] = useState(false);
@@ -62,7 +69,7 @@ export const DocumentDialog = ({
     let url: string | null = null;
     setDoc(null); setApercu(null); setErreur(false); setNouvelleVersion(false);
 
-    genererRef.current({ economique: mode === 'economique' })
+    genererRef.current({ economique: mode === 'economique', deuxParFeuille: demiPage })
       .then(pdf => {
         if (annule) return;
         url = String(pdf.output('bloburl'));
@@ -79,7 +86,7 @@ export const DocumentDialog = ({
       annule = true;
       if (url) URL.revokeObjectURL(url);
     };
-  }, [ouvert, mode]);
+  }, [ouvert, mode, demiPage]);
 
   const imprimer = () => {
     if (!doc) return;
@@ -158,6 +165,15 @@ export const DocumentDialog = ({
         )}
 
         <DialogFooter className="gap-2 sm:gap-2">
+          {deuxParFeuille && (
+            <Button
+              variant={demiPage ? 'secondary' : 'outline'} aria-pressed={demiPage} className={`gap-2 mr-auto ${demiPage ? 'ring-2 ring-primary/40' : ''}`}
+              title="Deux exemplaires sur une feuille A4 horizontale (famille et école), à couper au pointillé"
+              onClick={() => { const v = !demiPage; setDemiPage(v); retenirDeuxParFeuille(v, deuxParFeuille); }}
+            >
+              <Columns2 className="h-4 w-4" /> 2 par feuille
+            </Button>
+          )}
           <Button variant="outline" onClick={onFermer}>Fermer</Button>
           <Button variant="outline" className="gap-2" disabled={!doc} onClick={() => { if (!doc) return; confirmerChoix(); telechargerPdf(doc, nomFichier); }}>
             <Download className="h-4 w-4" /> Télécharger

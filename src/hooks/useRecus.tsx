@@ -110,9 +110,10 @@ export function useRecus(): { montrerRecu: (paiements: Payment[], options?: Opti
           : ouvert.duplicata ? 'Duplicata d\'un reçu déjà remis.' : 'Le paiement est enregistré : remettez ce reçu à la famille.'}
         nomFichier={`Recu_${numero}_${nomDeFichier(eleve ? `${eleve.lastName}_${eleve.firstName}` : premier.studentUniqueId)}`}
         typeDocument="recu"
-        generer={async ({ economique }) => {
+        deuxParFeuille="recu"
+        generer={async ({ economique, deuxParFeuille }) => {
           const [{ genererRecuPdf }] = await Promise.all([import('@/lib/recuPdf')]);
-          return genererRecuPdf({ economique, ...construireRecu({
+          return genererRecuPdf({ economique, deuxParFeuille, ...construireRecu({
             ecole: infosEcole(school),
             recu: ouvert.recu,
             paiements: ouvert.paiements,

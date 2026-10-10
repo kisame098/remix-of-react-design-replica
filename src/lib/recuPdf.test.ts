@@ -361,3 +361,29 @@ describe.runIf(process.env.SORTIE_PDF)('exemplaires pour relecture visuelle', ()
     }
   });
 });
+
+describe('reçu PDF — deux exemplaires par feuille', () => {
+  it('« 2 par feuille » : une seule feuille A4 horizontale, le reçu entier deux fois, pointillé de coupe', async () => {
+    const doc = await genererRecuPdf({ ...base(), deuxParFeuille: true });
+    expect(doc.getNumberOfPages()).toBe(1);
+    expect(Math.round(doc.internal.pageSize.getWidth())).toBe(297);
+    expect(Math.round(doc.internal.pageSize.getHeight())).toBe(210);
+    const pdf = Buffer.from(doc.output('arraybuffer')).toString('latin1');
+    expect(textePdf(pdf).split('REC-2026-00042').length - 1).toBe(2 * (textePdf(Buffer.from((await genererRecuPdf(base())).output('arraybuffer')).toString('latin1')).split('REC-2026-00042').length - 1));
+    // Le second exemplaire est décalé d'une demi-feuille (148,5 mm = 420,94 pt).
+    expect(pdf).toMatch(/1\. 0\. 0\. 1\. 420\.94\d* 0\. cm/);
+    expect(pdf).toMatch(/\[4\.25\d* 4\.25\d*\] 0\. d/);
+  });
+
+  it('sans le choix, rien ne change : A5 vertical', async () => {
+    const doc = await genererRecuPdf(base());
+    expect(Math.round(doc.internal.pageSize.getWidth())).toBe(148);
+  });
+
+  it('un reçu trop long pour une page reste en A5 (on ne coupe jamais un reçu en deux)', async () => {
+    const lignes = Array.from({ length: 60 }, (_, i) => ({ designation: `Ligne ${i + 1}`, montant: 1000, annulee: false }));
+    const doc = await genererRecuPdf({ ...base({ lignes, total: 60000 }), deuxParFeuille: true });
+    expect(Math.round(doc.internal.pageSize.getWidth())).toBe(148);
+    expect(doc.getNumberOfPages()).toBeGreaterThan(1);
+  });
+});
