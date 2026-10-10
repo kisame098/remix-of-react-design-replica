@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
-  Archive, Code2, Copy, Download, Eye, FilePlus2, FileText, FileType2, FileUp, Loader2, Pencil, PenSquare, Printer, Search, Trash2, TriangleAlert, Wand2,
+  Archive, Code2, Columns2, Copy, Download, Eye, FilePlus2, FileText, FileType2, FileUp, Loader2, Pencil, PenSquare, Printer, Search, Trash2, TriangleAlert, Wand2,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useSchool } from '@/contexts/SchoolContext';
@@ -32,6 +32,7 @@ import {
   type Cible, type ContexteDocument, type Production,
 } from '@/lib/modelesDocuments';
 import { numeroProvisoire, prefixeDuModele, utiliseNumero } from '@/lib/numerotationDocuments';
+import { enDeuxParFeuille, lireDeuxParFeuille, retenirDeuxParFeuille } from '@/lib/deuxParFeuille';
 import { useDocumentsDelivres, type DemandeDelivrance } from '@/hooks/useDocumentsDelivres';
 import { documentVierge, type DocumentVisuel } from '@/lib/documentVisuel';
 import {
@@ -386,6 +387,25 @@ const Refus = ({ production, estDirecteur, onAllerAuxModeles }: { production: Pr
   </div>
 );
 
+// ─── Demi-page : deux documents par feuille ─────────────────────────────────
+
+/** Le choix « deux par feuille », retenu sur cet ordinateur. */
+const useDemiPage = (): [boolean, (v: boolean) => void] => {
+  const [actif, setActif] = useState(lireDeuxParFeuille);
+  const changer = (v: boolean) => { setActif(v); retenirDeuxParFeuille(v); };
+  return [actif, changer];
+};
+
+const BoutonDemiPage = ({ actif, onChange }: { actif: boolean; onChange: (v: boolean) => void }) => (
+  <Button
+    variant={actif ? 'secondary' : 'outline'} aria-pressed={actif} onClick={() => onChange(!actif)}
+    title="Deux documents par feuille : chacun sur une demi-page (A5), à couper au pointillé"
+    className={`mr-auto ${actif ? 'ring-2 ring-primary/40' : ''}`}
+  >
+    <Columns2 className="h-4 w-4 mr-2" /> 2 par feuille
+  </Button>
+);
+
 // ─── Registre des documents délivrés ────────────────────────────────────────
 
 /** Les documents numérotés déjà délivrés : vérifier un numéro, réimprimer à l'identique. */
@@ -394,6 +414,7 @@ const RegistreDelivres = () => {
   const [recherche, setRecherche] = useState('');
   const [ouvert, setOuvert] = useState<{ numero: string; html: string | null } | null>(null);
   const [action, setAction] = useState<'imprimer' | 'pdf' | null>(null);
+  const [demiPage, setDemiPage] = useDemiPage();
 
   const trouves = useMemo(() => {
     const q = recherche.trim().toLowerCase();
@@ -413,8 +434,9 @@ const RegistreDelivres = () => {
     setAction(quoi);
     try {
       const sortie = await import('@/lib/modelesDocumentsPdf');
-      if (quoi === 'imprimer') await sortie.imprimerHtml(ouvert.html);
-      else await sortie.telechargerPdfHtml(ouvert.html, nomDeFichier(ouvert.numero));
+      const html = demiPage ? enDeuxParFeuille(ouvert.html) : ouvert.html;
+      if (quoi === 'imprimer') await sortie.imprimerHtml(html);
+      else await sortie.telechargerPdfHtml(html, nomDeFichier(ouvert.numero));
     } catch (e) {
       toast({ title: quoi === 'imprimer' ? "L'impression n'a pas pu s'ouvrir" : "Le PDF n'a pas pu être fabriqué", description: messageErreur(e), variant: 'destructive' });
     } finally {
@@ -452,8 +474,9 @@ const RegistreDelivres = () => {
             <DialogTitle className="font-mono">{ouvert?.numero}</DialogTitle>
             <DialogDescription className="sr-only">Réimpression à l'identique</DialogDescription>
           </DialogHeader>
-          {ouvert?.html ? <ApercuHtml html={ouvert.html} /> : <p className="text-sm text-muted-foreground">Le contenu de ce document n'a pas été conservé.</p>}
-          <DialogFooter className="gap-2">
+          {ouvert?.html ? <ApercuHtml html={demiPage ? enDeuxParFeuille(ouvert.html) : ouvert.html} /> : <p className="text-sm text-muted-foreground">Le contenu de ce document n'a pas été conservé.</p>}
+          <DialogFooter className="gap-2 sm:justify-between">
+            <BoutonDemiPage actif={demiPage} onChange={setDemiPage} />
             <Button variant="outline" onClick={() => setOuvert(null)}>Fermer</Button>
             {ouvert?.html && (
               <>
@@ -657,6 +680,7 @@ const DialogProduction = ({
   const [action, setAction] = useState<'imprimer' | 'pdf' | 'word' | null>(null);
   const { p, erreur } = useProduction(demande?.source ?? null, demande?.contextes ?? null);
   const { delivrer, conserverContenu } = useDocumentsDelivres(false);
+  const [demiPage, setDemiPage] = useDemiPage();
   // Les numéros délivrés pour cette fenêtre : imprimer puis télécharger ne consomme pas deux numéros.
   const [delivre, setDelivre] = useState<{ html: string; contextes: ContexteDocument[]; numeros: string[] } | null>(null);
   useEffect(() => { setDelivre(null); }, [demande]);
@@ -690,8 +714,9 @@ const DialogProduction = ({
         if (demande.source.genre === 'word') telechargerWordRempli(demande.source.fichier, doc.contextes, demande.nomFichier);
       } else {
         const sortie = await import('@/lib/modelesDocumentsPdf');
-        if (quoi === 'imprimer') await sortie.imprimerHtml(doc.html);
-        else await sortie.telechargerPdfHtml(doc.html, nomDeFichier(demande.nomFichier));
+        const html = demiPage ? enDeuxParFeuille(doc.html) : doc.html;
+        if (quoi === 'imprimer') await sortie.imprimerHtml(html);
+        else await sortie.telechargerPdfHtml(html, nomDeFichier(demande.nomFichier));
       }
     } catch (e) {
       const titres = { imprimer: "L'impression n'a pas pu s'ouvrir", pdf: "Le PDF n'a pas pu être fabriqué", word: "Le Word n'a pas pu être fabriqué" };
@@ -718,9 +743,10 @@ const DialogProduction = ({
         {erreur ? <p className="text-sm text-destructive">{erreur}</p>
           : !p ? <p className="text-sm text-muted-foreground flex items-center gap-2"><Loader2 className="h-4 w-4 animate-spin" /> Préparation…</p>
           : p.refus ? <Refus production={p} estDirecteur={estDirecteur} onAllerAuxModeles={onAllerAuxModeles} />
-          : <ApercuHtml html={delivre?.html ?? p.html} />}
+          : <ApercuHtml html={demiPage ? enDeuxParFeuille(delivre?.html ?? p.html) : (delivre?.html ?? p.html)} />}
 
         <DialogFooter className="gap-2">
+          {pret && <BoutonDemiPage actif={demiPage} onChange={setDemiPage} />}
           <Button variant="outline" onClick={onFermer}>Fermer</Button>
           {pret && (
             <>
