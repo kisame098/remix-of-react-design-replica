@@ -124,7 +124,7 @@ export const EditeurVisuel = ({ ouvert, onFermer, initial, logo, exemple, onEnre
   }, [edition, doc]);
 
   const commencerEdition = (id: string) => {
-    avantEdition.current = doc;
+    avantEdition.current = docRef.current;
     setSelection(id);
     setEdition(id);
   };
@@ -173,7 +173,13 @@ export const EditeurVisuel = ({ ouvert, onFermer, initial, logo, exemple, onEnre
       arreterGeste.current = null;
       geste.current = null;
       setGuides({ vertical: false, horizontal: false });
-      if (bouge) dispatch({ type: 'valider', doc: dernier, avant: g.avant });
+      if (bouge) { dispatch({ type: 'valider', doc: dernier, avant: g.avant }); return; }
+      // Un simple clic (sans glisser) sur un texte : on écrit tout de suite,
+      // le curseur à l'endroit cliqué. Glisser, lui, déplace le texte.
+      if (g.type === 'deplacer' && (el.type === 'texte' || el.type === 'bloc')) {
+        pointDeClic = { x: g.x0, y: g.y0 };
+        commencerEdition(el.id);
+      }
     };
     window.addEventListener('pointermove', surMouvement);
     window.addEventListener('pointerup', fin);
@@ -424,7 +430,7 @@ const ElementSurFeuille = ({
     <div
       style={{ ...position, cursor: enEdition ? 'text' : 'move', outline: choisi ? `${1.5 / zoom}px solid #2563eb` : undefined, outlineOffset: 0 }}
       onPointerDown={e => onPointerDown(e)}
-      onDoubleClick={e => { dernierDoubleClic = { x: e.clientX, y: e.clientY }; onDoubleClick(); }}
+      onDoubleClick={e => { pointDeClic = { x: e.clientX, y: e.clientY }; onDoubleClick(); }}
       data-element={el.type}
     >
       {(el.type === 'texte' || el.type === 'bloc') && (enEdition
@@ -453,8 +459,23 @@ const ElementSurFeuille = ({
   );
 };
 
-/** Le dernier double-clic sur la feuille : là où poser le curseur dans un bloc importé. */
-let dernierDoubleClic: { x: number; y: number } | null = null;
+/** Là où l'on vient de cliquer pour écrire : le curseur s'y pose. */
+let pointDeClic: { x: number; y: number } | null = null;
+
+/** La position du texte sous ce point (Chrome, Safari, Edge, puis Firefox). */
+const plageAuPoint = (x: number, y: number): Range | null => {
+  const d = document as Document & {
+    caretRangeFromPoint?: (x: number, y: number) => Range | null;
+    caretPositionFromPoint?: (x: number, y: number) => { offsetNode: Node; offset: number } | null;
+  };
+  if (typeof d.caretRangeFromPoint === 'function') return d.caretRangeFromPoint(x, y);
+  const pos = d.caretPositionFromPoint?.(x, y);
+  if (!pos) return null;
+  const r = document.createRange();
+  r.setStart(pos.offsetNode, pos.offset);
+  r.collapse(true);
+  return r;
+};
 
 /** Le contenu d'une zone de texte ou d'un bloc, nettoyé avant affichage. */
 const ContenuTexte = ({ el }: { el: ElementTexte | ElementBloc }) => {
@@ -472,18 +493,19 @@ const TexteEnEdition = ({ el, zoneTexte }: { el: ElementTexte | ElementBloc; zon
     div.innerHTML = nettoyerFragment(el.html);
     div.focus();
     const sel = window.getSelection();
-    // Zone de texte : tout est sélectionné, on remplace directement. Bloc
-    // importé (tout un document) : le curseur se pose là où l'on a cliqué.
+    // Ouvert par un clic : le curseur se pose là où l'on a cliqué. Texte
+    // tout juste ajouté : tout est sélectionné, on tape directement par-dessus.
     let plage: Range | null = null;
-    const point = dernierDoubleClic;
-    if (el.type === 'bloc' && point && 'caretRangeFromPoint' in document) {
-      plage = document.caretRangeFromPoint(point.x, point.y);
+    const point = pointDeClic;
+    pointDeClic = null;
+    if (point) {
+      plage = plageAuPoint(point.x, point.y);
       if (plage && !div.contains(plage.startContainer)) plage = null;
     }
     if (!plage) {
       plage = document.createRange();
       plage.selectNodeContents(div);
-      if (el.type === 'bloc') plage.collapse(true);
+      if (point || el.type === 'bloc') plage.collapse(false);
     }
     sel?.removeAllRanges();
     sel?.addRange(plage);

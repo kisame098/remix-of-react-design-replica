@@ -98,7 +98,7 @@ const EditeurBordure = ({ bordure, onChange, obligatoire = false }: {
 const ChampsEleve = ({ enEdition, onInserer }: { enEdition: boolean; onInserer: (champ: string) => void }) => (
   <Section titre="Informations de l'élève">
     <p className="text-[11px] text-muted-foreground">
-      {enEdition ? 'Cliquez : le champ s\'insère à l\'endroit du curseur.' : 'Double-cliquez d\'abord le texte pour choisir l\'endroit.'}
+      {enEdition ? 'Cliquez : le champ s\'insère à l\'endroit du curseur.' : 'Cliquez d\'abord dans le texte pour choisir l\'endroit.'}
     </p>
     {GROUPES.map(g => (
       <div key={g}>
@@ -132,7 +132,7 @@ export const PanneauProprietes = ({
         </Section>
         <div className="p-3 text-xs text-muted-foreground space-y-1.5">
           <p>Ajoutez des éléments avec la barre du haut, puis déplacez-les à la souris.</p>
-          <p><strong>Double-cliquez</strong> un texte pour l'écrire. Les informations de l'élève s'insèrent depuis ce panneau quand un texte est choisi.</p>
+          <p><strong>Cliquez</strong> un texte pour l'écrire ; faites-le glisser pour le déplacer. Les informations de l'élève s'insèrent depuis ce panneau.</p>
           <p>Flèches : déplacer (Maj : 5 mm). Suppr : effacer. Ctrl+D : dupliquer. Ctrl+Z : annuler.</p>
         </div>
       </>
@@ -199,7 +199,7 @@ export const PanneauProprietes = ({
       {el.type === 'bloc' && (
         <>
           <Section titre="Texte">
-            <p className="text-[11px] text-muted-foreground">Double-cliquez dans le document pour écrire. Sélectionnez du texte pour le mettre en forme.</p>
+            <p className="text-[11px] text-muted-foreground">Cliquez dans le document pour écrire. Sélectionnez du texte pour le mettre en forme.</p>
             <div className="flex items-center gap-1">
               <Button size="icon" variant="ghost" className="h-8 w-8" onMouseDown={garderFocus} onClick={() => onFormat('bold', 'gras')} aria-label="Gras"><Bold className="h-4 w-4" /></Button>
               <Button size="icon" variant="ghost" className="h-8 w-8" onMouseDown={garderFocus} onClick={() => onFormat('italic', 'italique')} aria-label="Italique"><Italic className="h-4 w-4" /></Button>

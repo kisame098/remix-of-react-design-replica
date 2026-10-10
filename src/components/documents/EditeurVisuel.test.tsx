@@ -65,4 +65,20 @@ describe('éditeur visuel', () => {
     expect(screen.getByText('Fermer sans enregistrer ?')).toBeInTheDocument();
     expect(onFermer).not.toHaveBeenCalled();
   });
+
+  it('UN seul clic sur un texte permet d\'écrire ; le faire glisser le déplace sans l\'ouvrir', () => {
+    const doc = documentVierge();
+    doc.elements = [{ ...nouvelElement('texte', 'portrait'), html: 'Bonjour' } as ElementTexte];
+    ouvrir(doc);
+    const texte = elements()[0] as HTMLElement;
+    // glisser : déplacé, pas en écriture
+    fireEvent.pointerDown(texte, { button: 0, clientX: 100, clientY: 100 });
+    fireEvent.pointerMove(window, { clientX: 160, clientY: 100 });
+    fireEvent.pointerUp(window, { clientX: 160, clientY: 100 });
+    expect(screen.queryByTestId('texte-en-edition')).toBeNull();
+    // un clic : en écriture tout de suite
+    fireEvent.pointerDown(elements()[0], { button: 0, clientX: 100, clientY: 100 });
+    fireEvent.pointerUp(window, { clientX: 100, clientY: 100 });
+    expect(screen.getByTestId('texte-en-edition')).toHaveTextContent('Bonjour');
+  });
 });
