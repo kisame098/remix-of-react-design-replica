@@ -17,14 +17,33 @@ import { dateDakar, type InfosEcole } from '@/lib/documentsEcole';
 // ressource chargée depuis Internet) et affiché dans un cadre isolé.
 // ═══════════════════════════════════════════════════════════════════════════
 
-export type GroupeChamp = 'ecole' | 'document' | 'eleve' | 'scolarite';
+export type GroupeChamp = 'ecole' | 'document' | 'eleve' | 'scolarite' | 'professeur';
 
 export const LIBELLES_GROUPE_CHAMP: Record<GroupeChamp, string> = {
   ecole: "L'établissement",
   document: 'Le document',
   eleve: "L'élève",
   scolarite: 'La scolarité',
+  professeur: 'Le professeur',
 };
+
+/** Ce qu'il faut pour remplir un modèle pour un professeur. */
+export interface ProfesseurDocument {
+  matricule: string;
+  prenom: string;
+  nom: string;
+  sexe?: 'homme' | 'femme' | string;
+  dateNaissance?: string;
+  lieuNaissance?: string;
+  telephone?: string;
+  email?: string;
+  adresse?: string;
+  diplome?: string;
+  contrat?: string;
+  /** Tirées de l'emploi du temps. */
+  matieres: string[];
+  classes: string[];
+}
 
 /** Ce qu'il faut pour remplir un modèle pour un élève. */
 export interface EleveDocument {
@@ -44,7 +63,9 @@ export interface EleveDocument {
 
 export interface ContexteDocument {
   ecole: InfosEcole;
+  /** Pour un document de professeur : un élève vide (ses champs sont interdits dans ce cas). */
   eleve: EleveDocument;
+  professeur?: ProfesseurDocument;
   anneeScolaire?: string;
   /** Date du document (ISO) — aujourd'hui, à l'heure de Dakar. */
   date: string;
@@ -80,6 +101,13 @@ const dateEnLettres = (iso: string): string => {
   const jour = Number(m[1]);
   return `${jour === 1 ? '1er' : jour} ${MOIS[Number(m[2]) - 1]} ${m[3]}`;
 };
+
+const PROF_VIDE: ProfesseurDocument = { matricule: '', prenom: '', nom: '', matieres: [], classes: [] };
+const prof = (c: ContexteDocument): ProfesseurDocument => c.professeur ?? PROF_VIDE;
+const LIBELLES_CONTRAT: Record<string, string> = { cdi: 'CDI', cdd: 'CDD', vacataire: 'Vacataire', stagiaire: 'Stagiaire' };
+
+/** L'élève d'un document de professeur : aucun de ses champs n'y est permis. */
+export const ELEVE_VIDE: EleveDocument = { matricule: '', prenom: '', nom: '', tuteurs: [] };
 
 const tuteurDeQualite = (e: EleveDocument, qualite: string) =>
   e.tuteurs.find(t => t.qualite === qualite && t.nom?.trim());
@@ -121,6 +149,22 @@ export const CHAMPS: readonly ChampModele[] = [
   { nom: 'CLASSE', groupe: 'scolarite', source: "Classe de l'élève cette année", valeur: c => c.eleve.classe ?? '' },
   { nom: 'ANNÉE SCOLAIRE', groupe: 'scolarite', source: 'Année choisie en haut de l\'écran : 2026-2027', valeur: c => c.anneeScolaire ?? '' },
   { nom: "DATE D'INSCRIPTION", groupe: 'scolarite', source: "Inscription de l'élève pour l'année", valeur: c => dateCourte(c.eleve.dateInscription) },
+  // ── Le professeur ──
+  { nom: 'NOM ET PRÉNOM DU PROFESSEUR', groupe: 'professeur', source: 'Fiche professeur : SARR Mamadou', valeur: c => [prof(c).nom, prof(c).prenom].filter(Boolean).join(' ') },
+  { nom: 'PRÉNOM ET NOM DU PROFESSEUR', groupe: 'professeur', source: 'Fiche professeur : Mamadou SARR', valeur: c => [prof(c).prenom, prof(c).nom].filter(Boolean).join(' ') },
+  { nom: 'NOM DU PROFESSEUR', groupe: 'professeur', source: 'Fiche professeur', valeur: c => prof(c).nom },
+  { nom: 'PRÉNOM DU PROFESSEUR', groupe: 'professeur', source: 'Fiche professeur', valeur: c => prof(c).prenom },
+  { nom: 'CIVILITÉ DU PROFESSEUR', groupe: 'professeur', source: 'Monsieur / Madame, selon le sexe (vide si inconnu)', valeur: c => prof(c).sexe === 'homme' ? 'Monsieur' : prof(c).sexe === 'femme' ? 'Madame' : '' },
+  { nom: 'MATRICULE DU PROFESSEUR', groupe: 'professeur', source: 'Identifiant unique du professeur', valeur: c => prof(c).matricule },
+  { nom: 'MATIÈRES ENSEIGNÉES', groupe: 'professeur', source: 'Emploi du temps : matières de ses cours', valeur: c => prof(c).matieres.join(', ') },
+  { nom: 'CLASSES DU PROFESSEUR', groupe: 'professeur', source: 'Emploi du temps : classes de ses cours', valeur: c => prof(c).classes.join(', ') },
+  { nom: 'TÉLÉPHONE DU PROFESSEUR', groupe: 'professeur', source: 'Fiche professeur', valeur: c => prof(c).telephone ?? '' },
+  { nom: 'E-MAIL DU PROFESSEUR', groupe: 'professeur', source: 'Fiche professeur', valeur: c => prof(c).email ?? '' },
+  { nom: 'ADRESSE DU PROFESSEUR', groupe: 'professeur', source: 'Fiche professeur → Résidence', valeur: c => prof(c).adresse ?? '' },
+  { nom: 'DATE DE NAISSANCE DU PROFESSEUR', groupe: 'professeur', source: 'Fiche professeur', valeur: c => dateCourte(prof(c).dateNaissance) },
+  { nom: 'LIEU DE NAISSANCE DU PROFESSEUR', groupe: 'professeur', source: 'Fiche professeur', valeur: c => prof(c).lieuNaissance ?? '' },
+  { nom: 'DIPLÔME DU PROFESSEUR', groupe: 'professeur', source: 'Fiche professeur', valeur: c => prof(c).diplome ?? '' },
+  { nom: 'CONTRAT DU PROFESSEUR', groupe: 'professeur', source: 'Fiche professeur : CDI, CDD, vacataire, stagiaire', valeur: c => LIBELLES_CONTRAT[prof(c).contrat ?? ''] ?? '' },
 ];
 
 /**
@@ -191,6 +235,8 @@ export interface VerificationModele {
   retraits: string[];
   /** Problème qui empêche tout le reste : vide, trop lourd… */
   erreur?: string;
+  /** Pour qui le document se produit : des élèves, des professeurs, ou personne en particulier. */
+  cible?: Cible;
 }
 
 export const verifierModele = (html: string, tailleMax = TAILLE_MAX_MODELE): VerificationModele => {
@@ -212,10 +258,26 @@ export const verifierModele = (html: string, tailleMax = TAILLE_MAX_MODELE): Ver
     if (!utilises.includes(ch.nom)) utilises.push(ch.nom);
   }
   const { retraits } = nettoyer(html);
+  const cible = cibleDesChamps(utilises);
   return {
-    ok: inconnus.size === 0 && imagesMalPlacees.size === 0,
+    ok: inconnus.size === 0 && imagesMalPlacees.size === 0 && cible !== 'mixte',
     inconnus: [...inconnus], imagesMalPlacees: [...imagesMalPlacees], utilises, retraits,
+    cible: cible === 'mixte' ? 'aucune' : cible,
+    ...(cible === 'mixte' ? { erreur: ERREUR_MIXTE } : {}),
   };
+};
+
+/** Pour qui le document est produit, d'après ses champs. */
+export type Cible = 'eleve' | 'professeur' | 'aucune';
+
+export const ERREUR_MIXTE = "Un document concerne soit un élève, soit un professeur : n'utilisez pas les champs des deux.";
+
+export const cibleDesChamps = (utilises: string[]): Cible | 'mixte' => {
+  const groupes = new Set(utilises.map(nom => champConnu(nom)?.groupe));
+  const eleve = groupes.has('eleve') || groupes.has('scolarite');
+  const professeur = groupes.has('professeur');
+  if (eleve && professeur) return 'mixte';
+  return eleve ? 'eleve' : professeur ? 'professeur' : 'aucune';
 };
 
 // ─── Nettoyage ─────────────────────────────────────────────────────────────
@@ -435,6 +497,12 @@ export const contexteExemple = (ecole: InfosEcole, anneeScolaire?: string): Cont
     ],
     classe: '6ème A',
   },
+  // Les deux exemples à la fois : un modèle valide n'utilise que l'un des deux.
+  professeur: {
+    matricule: 'PROF-2026-00001', prenom: 'Mamadou', nom: 'SARR', sexe: 'homme',
+    dateNaissance: '1985-06-12', lieuNaissance: 'Thiès', telephone: '77 000 00 01', email: '', adresse: 'Thiès',
+    diplome: 'Licence', contrat: 'cdi', matieres: ['Mathématiques', 'Physique-Chimie'], classes: ['6ème A', '5ème B'],
+  },
 });
 
 // ─── Production ────────────────────────────────────────────────────────────
@@ -462,6 +530,39 @@ export const eleveDocument = (s: EleveSource, classe?: string): EleveDocument =>
     .map(t => ({ nom: t.fullName, telephone: t.phone, qualite: t.status })),
   classe,
 });
+
+/** Ce que SchoolContext sait d'un professeur (sous-ensemble de `Teacher`). */
+export interface ProfesseurSource {
+  id: string;
+  teacherId: string;
+  firstName: string;
+  lastName: string;
+  sex?: string;
+  dateOfBirth?: string;
+  placeOfBirth?: string;
+  phone?: string;
+  email?: string;
+  residence?: string;
+  diploma?: string;
+  contractType?: string;
+}
+
+/** Une séance de l'emploi du temps : d'où viennent ses matières et ses classes. */
+export interface SeanceSource { teacherId: string | null; subjectName: string; className: string }
+
+const listeTriee = (valeurs: string[]): string[] =>
+  [...new Set(valeurs.map(v => v.trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'fr', { numeric: true }));
+
+export const professeurDocument = (t: ProfesseurSource, seances: SeanceSource[]): ProfesseurDocument => {
+  const siennes = seances.filter(se => se.teacherId === t.id);
+  return {
+    matricule: t.teacherId, prenom: t.firstName, nom: t.lastName, sexe: t.sex,
+    dateNaissance: t.dateOfBirth, lieuNaissance: t.placeOfBirth, telephone: t.phone, email: t.email,
+    adresse: t.residence, diplome: t.diploma, contrat: t.contractType,
+    matieres: listeTriee(siennes.map(se => se.subjectName)),
+    classes: listeTriee(siennes.map(se => se.className)),
+  };
+};
 
 /** Un document prêt à afficher : rempli PUIS nettoyé (le nettoyage passe en dernier). */
 export const documentPret = (modeleHtml: string, c: ContexteDocument): string =>
@@ -493,17 +594,21 @@ export const produireDocuments = (modeleHtml: string, contextes: ContexteDocumen
   };
 };
 
+/** « DIOP Awa » : l'élève, ou le professeur pour un document de professeur. */
+export const nomPersonne = (c: ContexteDocument): string =>
+  (c.eleve.nom || !c.professeur ? `${c.eleve.nom} ${c.eleve.prenom}` : `${c.professeur.nom} ${c.professeur.prenom}`).trim();
+
 /** Les champs utilisés restés vides, élève par élève (ceux de l'école : une seule fois). */
 export const listerVides = (utilises: string[], contextes: ContexteDocument[]): Production['vides'] => {
   const vides = new Map<string, string[]>();
   for (const c of contextes) {
     for (const champ of utilises.filter(nom => !champConnu(nom)?.valeur(c).trim())) {
-      vides.set(champ, [...(vides.get(champ) ?? []), `${c.eleve.nom} ${c.eleve.prenom}`.trim()]);
+      vides.set(champ, [...(vides.get(champ) ?? []), nomPersonne(c)]);
     }
   }
   return [...vides].map(([champ, eleves]) => {
     const ch = champConnu(champ);
-    return ch && ch.groupe !== 'eleve' && ch.groupe !== 'scolarite'
+    return ch && ch.groupe !== 'eleve' && ch.groupe !== 'scolarite' && ch.groupe !== 'professeur'
       ? { champ, eleves: [], source: ch.source }
       : { champ, eleves };
   });

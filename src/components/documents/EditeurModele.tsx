@@ -166,7 +166,7 @@ export const EditeurModele = ({
           <div className="space-y-2 min-w-0">
             <p className="text-sm font-medium">Aperçu</p>
             <p className="text-xs rounded-md bg-amber-50 text-amber-900 border border-amber-200 px-2 py-1">
-              Aperçu rempli avec un élève <strong>d'exemple</strong> ({exemple.eleve.prenom} {exemple.eleve.nom}) — ce n'est pas un vrai élève.
+              Aperçu rempli avec des données <strong>d'exemple</strong> — pas un vrai élève ni un vrai professeur.
               Les informations de l'école sont les vôtres.
             </p>
             {apercu

@@ -96,7 +96,7 @@ const EditeurBordure = ({ bordure, onChange, obligatoire = false }: {
 
 /** La liste cliquable des informations de l'élève. */
 const ChampsEleve = ({ enEdition, onInserer }: { enEdition: boolean; onInserer: (champ: string) => void }) => (
-  <Section titre="Informations de l'élève">
+  <Section titre="Champs">
     <p className="text-[11px] text-muted-foreground">
       {enEdition ? 'Cliquez : le champ s\'insère à l\'endroit du curseur.' : 'Cliquez d\'abord dans le texte pour choisir l\'endroit.'}
     </p>

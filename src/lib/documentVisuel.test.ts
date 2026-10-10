@@ -89,14 +89,26 @@ describe('lecture prudente d\'un document enregistré', () => {
 });
 
 describe('modèles fournis par SenClass', () => {
-  it('chacun est valide, a le logo et produit une page remplie', () => {
+  it('les 7 documents scolaires sont fournis, chacun valide, avec le logo, rempli pour SA cible', () => {
+    expect(MODELES_PAR_DEFAUT.map(m => m.nom)).toEqual([
+      'Certificat de scolarité', "Certificat d'inscription", "Convocation de l'élève", "Convocation d'un parent",
+      "Demande de permission d'absence — élève", "Demande de permission d'absence — professeur",
+      'Autorisation parentale de sortie scolaire',
+    ]);
     for (const m of MODELES_PAR_DEFAUT) {
       const v = verifierSource({ genre: 'visuel', contenu: m.contenu });
       expect(v, m.nom).toMatchObject({ ok: true, inconnus: [] });
-      expect(v.utilises).toContain("LOGO DE L'ÉTABLISSEMENT");
+      expect(v.utilises, m.nom).toContain("LOGO DE L'ÉTABLISSEMENT");
       const p = produireDocuments(visuelVersHtml(m.contenu), [contexteExemple({ nom: 'Les Roses', directeurGeneral: 'Ousmane FALL' })]);
-      expect(p.html).toContain('DIOP Awa');
-      expect(p.html).toContain('Ousmane FALL');
+      expect(p.refus, m.nom).toBeUndefined();
+      expect(p.html, m.nom).toMatch(v.cible === 'professeur' ? /Mamadou SARR/ : /DIOP Awa|Awa DIOP/);
     }
+    const prof = MODELES_PAR_DEFAUT.find(m => m.nom.includes('professeur'))!;
+    expect(verifierSource({ genre: 'visuel', contenu: prof.contenu }).cible).toBe('professeur');
+  });
+
+  it('chaque élément a un identifiant unique (les copier n\'en mélange jamais deux)', () => {
+    const ids = MODELES_PAR_DEFAUT.flatMap(m => m.contenu.elements.map(e => e.id));
+    expect(new Set(ids).size).toBe(ids.length);
   });
 });
