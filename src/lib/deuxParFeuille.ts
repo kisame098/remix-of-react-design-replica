@@ -1,4 +1,4 @@
-import { CLASSE_FEUILLE, CLASSE_PAGE, CLASSE_ZONE, lireReglagesPage } from '@/lib/modelesDocuments';
+import { CLASSE_DEMI, CLASSE_FEUILLE, CLASSE_PAGE, CLASSE_ZONE, lireReglagesPage } from '@/lib/modelesDocuments';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // DEUX DOCUMENTS PAR FEUILLE (demi-page)
@@ -18,7 +18,6 @@ import { CLASSE_FEUILLE, CLASSE_PAGE, CLASSE_ZONE, lireReglagesPage } from '@/li
 export const ECHELLE_DEMI_PAGE = Math.SQRT1_2;
 
 const CLASSE_DOUBLE = 'senclass-double';
-const CLASSE_DEMI = 'senclass-demi';
 const CLASSE_A4 = 'senclass-a4';
 
 const STYLE = `
