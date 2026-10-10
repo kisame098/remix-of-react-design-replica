@@ -220,23 +220,26 @@ const DocumentsEcole = () => {
                   tousModeles.filter(m => !m.fourni).map(m => (
                     <CarteModele key={m.id} modele={m} onApercu={() => setApercuModele(m)}>
                       {m.source.genre === 'word' && (
-                        <Button size="sm" variant="ghost" onClick={() => m.source.genre === 'word' && telechargerWordOriginal(m.source.fichier, m.nom)} title="Télécharger le Word pour le retoucher">
-                          <Download className="h-3.5 w-3.5 mr-1.5" /> Word
-                        </Button>
+                        <BoutonIcone titre="Télécharger le Word" onClick={() => m.source.genre === 'word' && telechargerWordOriginal(m.source.fichier, m.nom)}>
+                          <Download className="h-4 w-4" />
+                        </BoutonIcone>
                       )}
                       {estDirecteur && (
                         <>
                           {m.source.genre !== 'visuel' && (
-                            <Button size="sm" variant="outline" onClick={() => ouvrirDansEditeur(m.id, m.nom, m.source)} disabled={conversion}>
-                              {conversion ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <PenSquare className="h-3.5 w-3.5 mr-1.5" />} Modifier dans l'éditeur
-                            </Button>
+                            <BoutonIcone titre="Modifier dans l'éditeur" onClick={() => ouvrirDansEditeur(m.id, m.nom, m.source)} disabled={conversion}>
+                              {conversion ? <Loader2 className="h-4 w-4 animate-spin" /> : <PenSquare className="h-4 w-4" />}
+                            </BoutonIcone>
                           )}
-                          <Button size="sm" variant="outline" onClick={() => ouvrirEdition(m)}>
-                            <Pencil className="h-3.5 w-3.5 mr-1.5" /> {m.source.genre === 'visuel' ? 'Modifier' : m.source.genre === 'word' ? 'Remplacer le Word' : 'Modifier le HTML'}
-                          </Button>
-                          <Button size="sm" variant="ghost" className="text-destructive hover:text-destructive" onClick={() => setASupprimer(m)} aria-label={`Supprimer ${m.nom}`}>
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </Button>
+                          <BoutonIcone
+                            titre={m.source.genre === 'visuel' ? 'Modifier' : m.source.genre === 'word' ? 'Remplacer le fichier Word' : 'Modifier le HTML'}
+                            onClick={() => ouvrirEdition(m)}
+                          >
+                            {m.source.genre === 'visuel' ? <Pencil className="h-4 w-4" /> : m.source.genre === 'word' ? <FileUp className="h-4 w-4" /> : <Code2 className="h-4 w-4" />}
+                          </BoutonIcone>
+                          <BoutonIcone titre="Supprimer" onClick={() => setASupprimer(m)} danger>
+                            <Trash2 className="h-4 w-4" />
+                          </BoutonIcone>
                         </>
                       )}
                     </CarteModele>
@@ -249,9 +252,9 @@ const DocumentsEcole = () => {
                 {tousModeles.filter(m => m.fourni).map(m => (
                   <CarteModele key={m.id} modele={m} onApercu={() => setApercuModele(m)}>
                     {estDirecteur && (
-                      <Button size="sm" variant="outline" onClick={() => ouvrirEdition(m, true)}>
-                        <Copy className="h-3.5 w-3.5 mr-1.5" /> Copier pour le modifier
-                      </Button>
+                      <BoutonIcone titre="Copier pour le modifier" onClick={() => ouvrirEdition(m, true)}>
+                        <Copy className="h-4 w-4" />
+                      </BoutonIcone>
                     )}
                   </CarteModele>
                 ))}
@@ -309,6 +312,18 @@ const DocumentsEcole = () => {
   );
 };
 
+/** Un bouton icône : son rôle s'affiche au survol (et est lu par les lecteurs d'écran). */
+const BoutonIcone = ({ titre, onClick, disabled, danger, children }: {
+  titre: string; onClick: () => void; disabled?: boolean; danger?: boolean; children: React.ReactNode;
+}) => (
+  <Button
+    size="icon" variant="ghost" title={titre} aria-label={titre} onClick={onClick} disabled={disabled}
+    className={`h-8 w-8 ${danger ? 'text-destructive hover:text-destructive' : ''}`}
+  >
+    {children}
+  </Button>
+);
+
 const CarteModele = ({ modele, onApercu, children }: { modele: ModeleListe; onApercu: () => void; children?: React.ReactNode }) => {
   const Icone = ICONES_GENRE[modele.source.genre];
   return (
@@ -317,7 +332,7 @@ const CarteModele = ({ modele, onApercu, children }: { modele: ModeleListe; onAp
         <Icone className="h-4 w-4 text-primary shrink-0" />
         <span className="font-medium flex-1 min-w-0 truncate">{modele.nom}</span>
         {modele.fourni ? <Badge variant="secondary">SenClass</Badge> : <Badge variant="outline">{LIBELLES_GENRE[modele.source.genre]}</Badge>}
-        <Button size="sm" variant="ghost" onClick={onApercu}><Eye className="h-3.5 w-3.5 mr-1.5" /> Aperçu</Button>
+        <BoutonIcone titre="Aperçu" onClick={onApercu}><Eye className="h-4 w-4" /></BoutonIcone>
         {children}
       </CardContent>
     </Card>
