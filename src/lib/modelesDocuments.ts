@@ -1,5 +1,5 @@
 import DOMPurify from 'dompurify';
-import { dateDakar, dateHeureDakar, type InfosEcole } from '@/lib/documentsEcole';
+import { dateDakar, dateLongueDakar, type InfosEcole } from '@/lib/documentsEcole';
 import { formaterMontant, montantEnLettres } from '@/lib/montantEnLettres';
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -133,30 +133,47 @@ const dateEnLettres = (iso: string): string => {
  * comme TEXTE (jamais interprétées comme du HTML).
  */
 const tableauPaiements = (doc: Document, lignes: RecuDocument['lignes']): HTMLElement => {
-  const table = doc.createElement('table');
-  table.setAttribute('style', 'width:100%;border-collapse:collapse;font:inherit;color:inherit');
-  const cellule = (balise: 'th' | 'td', texte: string, droite: boolean, style = '') => {
+  // Le style du reçu SenClass : en-têtes en petites capitales espacées, filet
+  // sous l'en-tête, une ligne sur deux légèrement grisée, montant en gras.
+  // Les lignes se resserrent quand elles sont nombreuses ; au-delà de huit, le
+  // tableau passe sur deux colonnes (une année entière payée d'un coup).
+  const deuxColonnes = lignes.length > 8;
+  const hauteur = lignes.length <= 4 ? 6.8 : deuxColonnes ? 5.6 : 5.6;
+  const entete = 'font-size:6.6pt;font-weight:bold;letter-spacing:0.2mm;text-transform:uppercase;color:#374151;padding:0 1mm 1.2mm;border-bottom:0.5mm solid #374151';
+  const cellule = (balise: 'th' | 'td', texte: string, style: string) => {
     const c = doc.createElement(balise);
     c.textContent = texte;
-    c.setAttribute('style', `padding:1.2mm 1.5mm;text-align:${droite ? 'right' : 'left'};${style}`);
+    c.setAttribute('style', style);
     return c;
   };
-  const tete = doc.createElement('tr');
-  tete.append(
-    cellule('th', 'Désignation', false, 'border-bottom:0.4mm solid #000;font-weight:bold'),
-    cellule('th', 'Montant (FCFA)', true, 'border-bottom:0.4mm solid #000;font-weight:bold;white-space:nowrap'),
-  );
-  table.appendChild(tete);
-  for (const l of lignes) {
-    const tr = doc.createElement('tr');
-    const barre = l.annulee ? 'text-decoration:line-through;' : '';
-    tr.append(
-      cellule('td', l.designation, false, `border-bottom:0.2mm solid #000;${barre}`),
-      cellule('td', formaterMontant(l.montant), true, `border-bottom:0.2mm solid #000;white-space:nowrap;${barre}`),
+  const table = (liste: RecuDocument['lignes']) => {
+    const t = doc.createElement('table');
+    t.setAttribute('style', `width:${deuxColonnes ? '48%' : '100%'};border-collapse:collapse;font:inherit;color:#1F2937`);
+    const tete = doc.createElement('tr');
+    tete.append(
+      cellule('th', 'Désignation', `${entete};text-align:left`),
+      cellule('th', deuxColonnes ? 'FCFA' : 'Montant (FCFA)', `${entete};text-align:right;white-space:nowrap`),
     );
-    table.appendChild(tr);
-  }
-  return table;
+    t.appendChild(tete);
+    liste.forEach((l, i) => {
+      const tr = doc.createElement('tr');
+      const fond = i % 2 === 1 ? 'background:#F6F6F6;' : '';
+      const ligne = `${fond}height:${hauteur}mm;padding:0 1mm;border-bottom:0.15mm solid #E5E7EB;${l.annulee ? 'color:#6B7280;' : ''}`;
+      tr.append(
+        cellule('td', l.annulee ? `${l.designation} (annulé)` : l.designation, `${ligne}text-align:left;${l.annulee ? 'text-decoration:line-through;' : ''}`),
+        cellule('td', formaterMontant(l.montant), `${ligne}text-align:right;font-weight:bold;white-space:nowrap`),
+      );
+      t.appendChild(tr);
+    });
+    return t;
+  };
+  if (!deuxColonnes) return table(lignes);
+  // Lecture en colonnes, comme un relevé : la première de haut en bas, puis la seconde.
+  const moitie = Math.ceil(lignes.length / 2);
+  const deux = doc.createElement('div');
+  deux.setAttribute('style', 'display:flex;justify-content:space-between;align-items:flex-start');
+  deux.append(table(lignes.slice(0, moitie)), table(lignes.slice(moitie)));
+  return deux;
 };
 
 const PROF_VIDE: ProfesseurDocument = { matricule: '', prenom: '', nom: '', matieres: [], classes: [] };
@@ -209,12 +226,15 @@ export const CHAMPS: readonly ChampModele[] = [
   { nom: "DATE D'INSCRIPTION", groupe: 'scolarite', source: "Inscription de l'élève pour l'année", valeur: c => dateCourte(c.eleve.dateInscription) },
   // ── Le reçu ──
   { nom: 'NUMÉRO DU REÇU', groupe: 'recu', source: 'REC-2026-00042', valeur: c => c.recu?.numero ?? '' },
-  { nom: 'DATE DU PAIEMENT', groupe: 'recu', source: 'Date et heure du paiement : 10/10/2026 à 14:32', valeur: c => (c.recu ? dateHeureDakar(c.recu.date) : '') },
+  { nom: 'DATE DU PAIEMENT', groupe: 'recu', source: 'Date et heure du paiement : 10 octobre 2026 à 14:32', valeur: c => (c.recu ? dateLongueDakar(c.recu.date) : '') },
+  { nom: 'JOUR DU PAIEMENT', groupe: 'recu', source: 'Date courte du paiement : 10/10/2026', valeur: c => (c.recu ? dateDakar(c.recu.date) : '') },
   { nom: 'MONTANT TOTAL', groupe: 'recu', source: 'Total payé : 75 000 FCFA', valeur: c => (c.recu ? `${formaterMontant(c.recu.total)} FCFA` : '') },
+  { nom: 'TOTAL EN CHIFFRES', groupe: 'recu', source: 'Total payé, sans « FCFA » : 75 000', valeur: c => (c.recu ? formaterMontant(c.recu.total) : '') },
+  { nom: 'ÉTAT DU PAIEMENT', groupe: 'recu', source: 'ACQUITTÉ, ou ANNULÉ si le paiement a été annulé', valeur: c => (c.recu ? (c.recu.annule ? 'ANNULÉ' : 'ACQUITTÉ') : '') },
   { nom: 'MONTANT EN LETTRES', groupe: 'recu', source: 'Soixante-quinze mille francs CFA', valeur: c => (c.recu ? montantEnLettres(c.recu.total) : '') },
   { nom: 'MODE DE PAIEMENT', groupe: 'recu', source: 'Espèces, Wave, Orange Money…', valeur: c => c.recu?.mode ?? '' },
-  { nom: 'RÉFÉRENCE DU PAIEMENT', groupe: 'recu', source: 'Référence de la transaction (vide en espèces)', valeur: c => c.recu?.reference ?? '' },
-  { nom: 'ENCAISSÉ PAR', groupe: 'recu', source: 'Nom de la personne qui a encaissé', valeur: c => c.recu?.encaissePar ?? '' },
+  { nom: 'RÉFÉRENCE DU PAIEMENT', groupe: 'recu', source: 'Référence de la transaction (— si aucune)', valeur: c => (c.recu ? (c.recu.reference?.trim() || '—') : '') },
+  { nom: 'ENCAISSÉ PAR', groupe: 'recu', source: 'Nom de la personne qui a encaissé', valeur: c => (c.recu ? (c.recu.encaissePar?.trim() || '—') : '') },
   { nom: 'MENTION DU REÇU', groupe: 'recu', source: 'ANNULÉ ou DUPLICATA (vide sinon)', valeur: c => (c.recu?.annule ? 'ANNULÉ' : c.recu?.duplicata ? 'DUPLICATA' : '') },
   {
     nom: 'TABLEAU DES PAIEMENTS', groupe: 'recu', source: 'La liste des paiements du reçu (désignation, montant)',
@@ -578,6 +598,32 @@ export const separerFeuilles = (html: string): string[] => {
     seul.body.replaceChildren(seul.importNode(f, true));
     return serialiser(seul);
   });
+};
+
+/**
+ * Une zone de texte trop pleine (un reçu de douze lignes dans la place prévue
+ * pour quatre) est réduite pour tenir dans son cadre, au lieu de déborder sur
+ * ce qui suit — comme le reçu SenClass, qui se resserre. À appeler sur le
+ * document affiché (aperçu, impression, PDF), qui seul connaît les hauteurs.
+ */
+export const ajusterTextesDebordants = (doc: Document): void => {
+  for (const boite of Array.from(doc.querySelectorAll<HTMLElement>('.el.texte, .el.bloc'))) {
+    if (boite.dataset.ajuste) continue;
+    const place = boite.clientHeight;
+    if (!place || boite.scrollHeight <= place + 2) continue;
+    const contenu = doc.createElement('div');
+    contenu.append(...Array.from(boite.childNodes));
+    boite.appendChild(contenu);
+    boite.dataset.ajuste = '1';
+    // Deux passes : en élargissant le contenu, le texte se réarrange et raccourcit un peu.
+    let f = 1;
+    for (let i = 0; i < 3; i++) {
+      const hauteur = contenu.scrollHeight * f;
+      if (hauteur <= place + 1) break;
+      f = Math.max(0.5, f * (place / hauteur));
+      contenu.style.cssText = `transform:scale(${f});transform-origin:0 0;width:${100 / f}%`;
+    }
+  }
 };
 
 /**
