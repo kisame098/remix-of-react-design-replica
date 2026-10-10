@@ -138,8 +138,8 @@ const tableauPaiements = (doc: Document, lignes: RecuDocument['lignes']): HTMLEl
   // Les lignes se resserrent quand elles sont nombreuses ; au-delà de huit, le
   // tableau passe sur deux colonnes (une année entière payée d'un coup).
   const deuxColonnes = lignes.length > 8;
-  const hauteur = lignes.length <= 4 ? 6.8 : deuxColonnes ? 5.6 : 5.6;
-  const entete = 'font-size:6.6pt;font-weight:bold;letter-spacing:0.2mm;text-transform:uppercase;color:#374151;padding:0 1mm 1.2mm;border-bottom:0.5mm solid #374151';
+  const hauteur = lignes.length <= 4 ? 6.8 : deuxColonnes ? 4.4 : 5;
+  const entete = 'font-size:6.6pt;line-height:1.3;font-weight:bold;letter-spacing:0.2mm;text-transform:uppercase;color:#374151;padding:0 1mm 1.2mm;border-bottom:0.5mm solid #374151';
   const cellule = (balise: 'th' | 'td', texte: string, style: string) => {
     const c = doc.createElement(balise);
     c.textContent = texte;
@@ -148,7 +148,7 @@ const tableauPaiements = (doc: Document, lignes: RecuDocument['lignes']): HTMLEl
   };
   const table = (liste: RecuDocument['lignes']) => {
     const t = doc.createElement('table');
-    t.setAttribute('style', `width:${deuxColonnes ? '48%' : '100%'};border-collapse:collapse;font:inherit;color:#1F2937`);
+    t.setAttribute('style', `width:${deuxColonnes ? '48%' : '100%'};border-collapse:collapse;font-family:inherit;font-size:inherit;line-height:1.3;white-space:normal;color:#1F2937`);
     const tete = doc.createElement('tr');
     tete.append(
       cellule('th', 'Désignation', `${entete};text-align:left`),
@@ -158,7 +158,15 @@ const tableauPaiements = (doc: Document, lignes: RecuDocument['lignes']): HTMLEl
     liste.forEach((l, i) => {
       const tr = doc.createElement('tr');
       const fond = i % 2 === 1 ? 'background:#F6F6F6;' : '';
-      const ligne = `${fond}height:${hauteur}mm;padding:0 1mm;border-bottom:0.15mm solid #E5E7EB;${l.annulee ? 'color:#6B7280;' : ''}`;
+      // Interligne PROPRE au tableau (celui de la zone de texte peut être serré)
+      // et hauteur MINIMALE : avec une grande police, la ligne s'agrandit au
+      // lieu d'être recouverte par le fond de la suivante.
+      // Beaucoup de lignes : interligne et marges resserrés ; sur deux colonnes,
+      // police un peu plus petite (comme le reçu SenClass, 8 pt environ).
+      const serre = lignes.length > 4;
+      const police = deuxColonnes ? 'font-size:8.2pt;' : '';
+      const marges = deuxColonnes ? '0.2mm 1mm 0.5mm' : serre ? '0.3mm 1mm 0.7mm' : '0.5mm 1mm 1mm';
+      const ligne = `${fond}${police}height:${hauteur}mm;line-height:${serre ? 1.15 : 1.3};padding:${marges};vertical-align:top;border-bottom:0.15mm solid #E5E7EB;${l.annulee ? 'color:#6B7280;' : ''}`;
       tr.append(
         cellule('td', l.annulee ? `${l.designation} (annulé)` : l.designation, `${ligne}text-align:left;${l.annulee ? 'text-decoration:line-through;' : ''}`),
         cellule('td', formaterMontant(l.montant), `${ligne}text-align:right;font-weight:bold;white-space:nowrap`),
@@ -606,11 +614,18 @@ export const separerFeuilles = (html: string): string[] => {
  * ce qui suit — comme le reçu SenClass, qui se resserre. À appeler sur le
  * document affiché (aperçu, impression, PDF), qui seul connaît les hauteurs.
  */
+/** Une zone de texte n'est jamais réduite en deçà de 80 % : au-delà, le texte deviendrait trop petit. */
+const REDUCTION_MAX = 0.8;
+
 export const ajusterTextesDebordants = (doc: Document): void => {
   for (const boite of Array.from(doc.querySelectorAll<HTMLElement>('.el.texte, .el.bloc'))) {
     if (boite.dataset.ajuste) continue;
     const place = boite.clientHeight;
     if (!place || boite.scrollHeight <= place + 2) continue;
+    // Réduction LÉGÈRE seulement : si le contenu est bien plus grand que la
+    // zone (un tableau de douze lignes dans 14 mm), on le laisse à sa taille,
+    // il continue dessous — l'écraser le rendrait illisible.
+    if (boite.scrollHeight * REDUCTION_MAX < place) continue;
     const contenu = doc.createElement('div');
     contenu.append(...Array.from(boite.childNodes));
     boite.appendChild(contenu);
@@ -620,7 +635,7 @@ export const ajusterTextesDebordants = (doc: Document): void => {
     for (let i = 0; i < 3; i++) {
       const hauteur = contenu.scrollHeight * f;
       if (hauteur <= place + 1) break;
-      f = Math.max(0.5, f * (place / hauteur));
+      f = Math.max(REDUCTION_MAX, f * (place / hauteur));
       contenu.style.cssText = `transform:scale(${f});transform-origin:0 0;width:${100 / f}%`;
     }
   }

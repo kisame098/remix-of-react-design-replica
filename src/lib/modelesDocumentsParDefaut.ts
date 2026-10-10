@@ -266,8 +266,9 @@ export const estModeleParDefaut = (idModele: string): boolean => idModele.starts
 // encaissé par, signatures et cachet, pied de page. L'école en fait une copie
 // et la modifie à son goût (Documents → Reçus).
 //
-// Le tableau, le total et la somme en lettres sont dans UN bloc qui s'allonge
-// avec le nombre de lignes, comme sur le reçu SenClass.
+// Le tableau, le total, la somme en lettres, les informations et les
+// signatures sont dans UN bloc qui s'allonge avec le nombre de lignes, comme
+// sur le reçu SenClass (et se resserre un peu s'il manque de place).
 
 const R_FONCE = '#111827';
 const R_ACCENT = '#374151';
@@ -298,7 +299,7 @@ const BLOC_PAIEMENT =
   '{TABLEAU DES PAIEMENTS}'
   // Tampon et total, côte à côte.
   + '<div style="display:flex;align-items:center;justify-content:space-between;margin-top:4.5mm">'
-  + `<div style="margin-left:7mm;transform:rotate(-11deg);border:0.9mm double ${R_ENCRE};padding:0.8mm 3.2mm;text-align:center;opacity:0.88;color:${R_ENCRE}">`
+  + `<div style="margin-left:7mm;transform:rotate(-11deg);border:0.9mm double ${R_ENCRE};padding:0.8mm 3.2mm 1.4mm;text-align:center;opacity:0.88;color:${R_ENCRE}">`
   + '<div style="font-family:Arial,Helvetica,sans-serif;font-weight:bold;font-size:13.5pt;letter-spacing:0.4mm;line-height:1.1">{ÉTAT DU PAIEMENT}</div>'
   + '<div style="font-family:Arial,Helvetica,sans-serif;font-weight:bold;font-size:6.6pt;letter-spacing:0.12mm">{JOUR DU PAIEMENT}</div></div>'
   + `<div style="width:84mm;height:13.6mm;box-sizing:border-box;border:0.8mm solid ${R_FONCE};border-radius:2mm;display:flex;align-items:center;justify-content:space-between;padding:0 5mm;color:${R_FONCE};font-family:Arial,Helvetica,sans-serif;font-weight:bold">`
@@ -312,6 +313,13 @@ const BLOC_PAIEMENT =
   + `<div style="width:27%">${etiquetteRecu('Mode de paiement')}<br><b style="font-size:9pt">{MODE DE PAIEMENT}</b></div>`
   + `<div style="width:23%">${etiquetteRecu('Référence')}<br><b style="font-size:9pt">{RÉFÉRENCE DU PAIEMENT}</b></div>`
   + `<div style="width:50%">${etiquetteRecu('Encaissé par')}<br><b style="font-size:9pt">{ENCAISSÉ PAR}</b></div>`
+  + '</div>'
+  // Signatures et cachet : ils suivent le bloc, comme sur le reçu SenClass
+  // (un reçu de douze lignes les pousse vers le bas).
+  + '<div style="display:flex;justify-content:space-between;align-items:flex-end;height:21mm;margin-top:2mm">'
+  + `<div style="width:48mm;text-align:center"><div style="border-top:0.3mm dashed ${R_GRIS};margin-bottom:1.6mm"></div>${etiquetteRecu('Le parent / tuteur', R_GRIS)}</div>`
+  + `<div style="align-self:flex-start;width:21mm;height:21mm;box-sizing:border-box;border:0.3mm dashed ${R_ACCENT};border-radius:50%;display:flex;align-items:center;justify-content:center">${etiquetteRecu('Cachet')}</div>`
+  + `<div style="width:48mm;text-align:center"><div style="border-top:0.3mm dashed ${R_GRIS};margin-bottom:1.6mm"></div>${etiquetteRecu('Le caissier', R_GRIS)}</div>`
   + '</div>';
 
 export const MODELES_RECUS_PAR_DEFAUT: readonly ModeleParDefaut[] = [
@@ -353,15 +361,8 @@ export const MODELES_RECUS_PAR_DEFAUT: readonly ModeleParDefaut[] = [
         recuTexte(18, 74.4, 37, 9, `${etiquetteRecu('Matricule', R_GRIS)}<br><b>{MATRICULE}</b>`, { interligne: 1.35 }),
         recuTexte(57, 74.4, 37, 9, `${etiquetteRecu('Classe', R_GRIS)}<br><b>{CLASSE}</b>`, { interligne: 1.35 }),
         recuTexte(96, 74.4, 37, 9, `${etiquetteRecu('Année scolaire', R_GRIS)}<br><b>{ANNÉE SCOLAIRE}</b>`, { interligne: 1.35 }),
-        // ── Tableau, total, tampon, somme en lettres, informations (un bloc qui s'allonge) ──
-        recuTexte(11, 89, 126, 73, BLOC_PAIEMENT, { taille: 9.6, interligne: 1.25 }),
-        // ── Signatures et cachet, calés en bas ──
-        forme(11, 179.2, 48, 0.3, { bord: R_GRIS, epaisseur: 0.3, style: 'dashed' }),
-        recuTexte(11, 181, 48, 4, etiquetteRecu('Le parent / tuteur', R_GRIS), { alignement: 'center', interligne: 1 }),
-        forme(63.5, 164, 21, 21, { ellipse: true, bord: R_ACCENT, epaisseur: 0.3, style: 'dashed' }),
-        recuTexte(63.5, 173.1, 21, 4, etiquetteRecu('Cachet'), { alignement: 'center', interligne: 1 }),
-        forme(89, 179.2, 48, 0.3, { bord: R_GRIS, epaisseur: 0.3, style: 'dashed' }),
-        recuTexte(89, 181, 48, 4, etiquetteRecu('Le caissier', R_GRIS), { alignement: 'center', interligne: 1 }),
+        // ── Tableau, total, tampon, somme en lettres, informations, signatures (un bloc qui s'allonge) ──
+        recuTexte(11, 89, 126, 105, BLOC_PAIEMENT, { taille: 9.6, interligne: 1.25 }),
         // ── Pied de page : mention, signature SenClass, motif de sécurité ──
         recuTexte(11, 195, 80, 4, '<i>Ce reçu fait foi de paiement : conservez-le précieusement.</i>', { taille: 7.2, couleur: R_GRIS, interligne: 1 }),
         recuTexte(91, 195, 46, 4, `Édité avec <b style="color:${R_ACCENT}">SenClass</b>`, { taille: 7.2, couleur: R_GRIS, alignement: 'right', interligne: 1 }),
