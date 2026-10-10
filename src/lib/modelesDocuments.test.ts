@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   CHAMPS, champConnu, normaliserNomChamp, verifierModele, nettoyer, remplirModele, valeursChamps,
   champsVides, assemblerDocuments, versionImprimee, contexteExemple, CLASSE_FEUILLE, TAILLE_MAX_MODELE,
-  produireDocuments, eleveDocument, lireReglagesPage, professeurDocument, ELEVE_VIDE,
+  produireDocuments, eleveDocument, lireReglagesPage, professeurDocument, ELEVE_VIDE, separerFeuilles,
   type ContexteDocument,
 } from './modelesDocuments';
 import { MODELES_PAR_DEFAUT } from './modelesDocumentsParDefaut';
@@ -271,5 +271,17 @@ describe('documents de professeur', () => {
     const mixte = verifierModele(page('<p>{NOM DU PROFESSEUR} {CLASSE}</p>'));
     expect(mixte.ok).toBe(false);
     expect(mixte.erreur).toMatch(/soit un élève, soit un professeur/);
+  });
+});
+
+describe('séparer un document assemblé', () => {
+  it('une feuille par élève, chacune avec les styles du modèle (pour le registre)', () => {
+    const modele = page("<p>{NOM DE L'ÉLÈVE}</p>", '<style>p{color:red}</style>');
+    const assemble = assemblerDocuments(['DIOP', 'FALL'].map(nom => remplirModele(modele, valeursChamps(contexte({ nom })))));
+    const parts = separerFeuilles(assemble);
+    expect(parts).toHaveLength(2);
+    expect(parts[1]).toContain('FALL');
+    expect(parts[1]).not.toContain('DIOP');
+    expect(parts[1]).toContain('p{color:red}');
   });
 });

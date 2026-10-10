@@ -66,6 +66,8 @@ export interface ContexteDocument {
   /** Pour un document de professeur : un élève vide (ses champs sont interdits dans ce cas). */
   eleve: EleveDocument;
   professeur?: ProfesseurDocument;
+  /** Numéro attribué par SenClass (CS-2026-00001) ; à l'aperçu, un numéro provisoire. */
+  numero?: string;
   anneeScolaire?: string;
   /** Date du document (ISO) — aujourd'hui, à l'heure de Dakar. */
   date: string;
@@ -128,6 +130,7 @@ export const CHAMPS: readonly ChampModele[] = [
   { nom: "LOGO DE L'ÉTABLISSEMENT", groupe: 'ecole', source: 'Paramètres → École → Logo (à placer dans <img src="…">)', image: true, valeur: c => c.ecole.logo ?? '' },
   // ── Le document ──
   { nom: 'DATE', groupe: 'document', source: 'Date du jour : 10/10/2026', valeur: c => dateCourte(c.date) },
+  { nom: 'NUMÉRO DU DOCUMENT', groupe: 'document', source: "Attribué par SenClass à l'impression : CS-2026-00001", valeur: c => c.numero ?? '' },
   { nom: 'DATE EN LETTRES', groupe: 'document', source: 'Date du jour : 10 octobre 2026', valeur: c => dateEnLettres(c.date) },
   // ── L'élève ──
   { nom: "NOM ET PRÉNOM DE L'ÉLÈVE", groupe: 'eleve', source: 'Fiche élève : DIOP Awa', valeur: c => `${c.eleve.nom} ${c.eleve.prenom}`.trim() },
@@ -470,6 +473,20 @@ export const assemblerDocuments = (documents: string[]): string => {
     premier.head.appendChild(feuille);
   }
   return serialiser(premier);
+};
+
+/**
+ * Un document assemblé (plusieurs élèves) → un document complet par feuille,
+ * avec les mêmes styles : ce qu'on garde au registre pour chaque personne.
+ */
+export const separerFeuilles = (html: string): string[] => {
+  const doc = lireDocument(html);
+  const feuilles = Array.from(doc.querySelectorAll(`body > .${CLASSE_FEUILLE}`));
+  return feuilles.map(f => {
+    const seul = lireDocument(html);
+    seul.body.replaceChildren(seul.importNode(f, true));
+    return serialiser(seul);
+  });
 };
 
 /**
