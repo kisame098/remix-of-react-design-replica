@@ -84,14 +84,4 @@ export const enDeuxParFeuille = (html: string): string => {
   return `<!DOCTYPE html>\n${doc.documentElement.outerHTML}`;
 };
 
-// ─── Le choix, retenu sur cet ordinateur ───────────────────────────────────
-
-const CLE = 'senclass:documents:deux-par-feuille';
-
-export const lireDeuxParFeuille = (): boolean => {
-  try { return localStorage.getItem(CLE) === '1'; } catch { return false; }
-};
-
-export const retenirDeuxParFeuille = (actif: boolean): void => {
-  try { localStorage.setItem(CLE, actif ? '1' : '0'); } catch { /* stockage indisponible : choix non retenu */ }
-};
+export { lireDeuxParFeuille, retenirDeuxParFeuille } from '@/lib/choixDeuxParFeuille';

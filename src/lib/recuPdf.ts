@@ -432,12 +432,25 @@ export const planifierRecu = (doc: jsPDF, data: RecuData): PlanRecu => {
 
 // ─── Assemblage ───────────────────────────────────────────────────────────────
 
+/** Largeur d'une feuille A4 horizontale : deux reçus A5 côte à côte. */
+const A4_PAYSAGE_L = 297;
+
 export async function genererRecuPdf(data: RecuData & {
   couleur?: string | null;
   /** Imprimante noir et blanc : aucun grand aplat (Paramètres → École). */
   economique?: boolean;
+  /**
+   * Deux exemplaires côte à côte sur une feuille A4 horizontale (un pour la
+   * famille, un pour l'école), pointillé de coupe au milieu. Le reçu est déjà
+   * en A5 : rien n'est réduit. Seulement si le reçu tient sur une page.
+   */
+  deuxParFeuille?: boolean;
 }): Promise<jsPDF> {
-  const doc = new jsPDF({ unit: 'mm', format: 'a5', orientation: 'portrait' });
+  const plan = planifierRecu(new jsPDF({ unit: 'mm', format: 'a5', orientation: 'portrait' }), data);
+  const deux = !!data.deuxParFeuille && plan.unePage;
+  const doc = deux
+    ? new jsPDF({ unit: 'mm', format: 'a4', orientation: 'landscape' })
+    : new jsPDF({ unit: 'mm', format: 'a5', orientation: 'portrait' });
   doc.setProperties({
     title: `Reçu ${data.numero}`,
     subject: `Reçu de paiement — ${data.eleve.nom}`,
@@ -449,55 +462,74 @@ export async function genererRecuPdf(data: RecuData & {
   const c = data.economique
     ? PALETTE_ECONOMIQUE
     : paletteDepuis(data.couleur !== undefined ? data.couleur : await couleurDominanteDuLogo(data.ecole.logo));
-  const plan = planifierRecu(doc, data);
   const base = { normale: NORMALE, compacte: COMPACTE, dense: DENSE }[plan.densite];
   const d: Dims = { ...base, pas: plan.pas };
   const e: Etat = { doc, c, data, d, colonnes: plan.colonnes };
   const annule = data.annule !== null;
 
-  filigrane(doc, data.ecole, L, H, 84, e.c.fonce);
-  dessinerBandeau(doc, data.ecole, e.c, { largeurPage: L, marge: M, hauteur: d.bandeau, k: d.k });
-  let y = titre(e, d.bandeau + d.ecartTitre);
-  y = carteEleve(e, y);
+  const dessiner = () => {
+    filigrane(doc, data.ecole, L, H, 84, e.c.fonce);
+    dessinerBandeau(doc, data.ecole, e.c, { largeurPage: L, marge: M, hauteur: d.bandeau, k: d.k });
+    let y = titre(e, d.bandeau + d.ecartTitre);
+    y = carteEleve(e, y);
 
-  // ── Tableau ──
-  y = enteteTableau(e, y);
-  if (plan.colonnes === 2) {
-    // Lecture en colonnes, comme un relevé : la première de haut en bas, puis la seconde.
-    const cols = colonnesTableau(2);
-    data.lignes.forEach((ligne, i) => {
-      const rang = i % plan.lignesParColonne;
-      ligneTableau(e, ligne, y + rang * d.pas, rang, cols[Math.floor(i / plan.lignesParColonne)]);
-    });
-    y += plan.lignesParColonne * d.pas;
-  } else {
-    let rang = 0;
-    for (const ligne of data.lignes) {
-      if (!plan.unePage && y + d.pas > d.basTableau) {
-        doc.addPage('a5', 'portrait');
-        filigrane(doc, data.ecole, L, H, 84, e.c.fonce);
-        y = enteteTableau(e, enTeteDeSuite(e));
-        rang = 0;
+    // ── Tableau ──
+    y = enteteTableau(e, y);
+    if (plan.colonnes === 2) {
+      // Lecture en colonnes, comme un relevé : la première de haut en bas, puis la seconde.
+      const cols = colonnesTableau(2);
+      data.lignes.forEach((ligne, i) => {
+        const rang = i % plan.lignesParColonne;
+        ligneTableau(e, ligne, y + rang * d.pas, rang, cols[Math.floor(i / plan.lignesParColonne)]);
+      });
+      y += plan.lignesParColonne * d.pas;
+    } else {
+      let rang = 0;
+      for (const ligne of data.lignes) {
+        if (!plan.unePage && y + d.pas > d.basTableau) {
+          doc.addPage('a5', 'portrait');
+          filigrane(doc, data.ecole, L, H, 84, e.c.fonce);
+          y = enteteTableau(e, enTeteDeSuite(e));
+          rang = 0;
+        }
+        ligneTableau(e, ligne, y, rang++);
+        y += d.pas;
       }
-      ligneTableau(e, ligne, y, rang++);
-      y += d.pas;
     }
+
+    // ── Total, tampon, somme en lettres ──
+    y += d.ecartTotal;
+    const yTotal = y;
+    y = blocTotal(e, y, annule);
+    if (!annule) tamponAcquitte(e, M + 24, yTotal + d.hTotal / 2 + 0.6);
+    y += d.ecartLettres;
+    if (!annule) y = lettres(e, y);
+    y = infosPaiement(e, y);
+
+    // ── Signatures et pied, calés en bas de page ──
+    const ySign = Math.max(y + 2, H - d.signatures);
+    signatures(e, ySign);
+    pied(e, Y_PIED);
+    if (annule) marqueAnnule(e, ySign - 2);
+  };
+
+  dessiner();
+  if (deux) {
+    // Le même reçu, décalé d'une demi-feuille : tout le dessin suit (texte, logo, filigrane).
+    const decalage = A4_PAYSAGE_L / 2;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const avance = doc as any;
+    avance.saveGraphicsState();
+    avance.setCurrentTransformationMatrix(new avance.Matrix(1, 0, 0, 1, decalage * (72 / 25.4), 0));
+    dessiner();
+    avance.restoreGraphicsState();
+    // Pointillé de coupe.
+    doc.setDrawColor(120, 120, 120);
+    doc.setLineWidth(0.2);
+    doc.setLineDashPattern([1.5, 1.5], 0);
+    doc.line(decalage, 4, decalage, H - 4);
+    doc.setLineDashPattern([], 0);
   }
-
-  // ── Total, tampon, somme en lettres ──
-  y += d.ecartTotal;
-  const yTotal = y;
-  y = blocTotal(e, y, annule);
-  if (!annule) tamponAcquitte(e, M + 24, yTotal + d.hTotal / 2 + 0.6);
-  y += d.ecartLettres;
-  if (!annule) y = lettres(e, y);
-  y = infosPaiement(e, y);
-
-  // ── Signatures et pied, calés en bas de page ──
-  const ySign = Math.max(y + 2, H - d.signatures);
-  signatures(e, ySign);
-  pied(e, Y_PIED);
-  if (annule) marqueAnnule(e, ySign - 2);
 
   return doc;
 }

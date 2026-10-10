@@ -391,7 +391,7 @@ const Refus = ({ production, estDirecteur, onAllerAuxModeles }: { production: Pr
 
 /** Le choix « deux par feuille », retenu sur cet ordinateur. */
 const useDemiPage = (): [boolean, (v: boolean) => void] => {
-  const [actif, setActif] = useState(lireDeuxParFeuille);
+  const [actif, setActif] = useState(() => lireDeuxParFeuille());
   const changer = (v: boolean) => { setActif(v); retenirDeuxParFeuille(v); };
   return [actif, changer];
 };
