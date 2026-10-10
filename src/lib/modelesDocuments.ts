@@ -133,13 +133,13 @@ const dateEnLettres = (iso: string): string => {
  * comme TEXTE (jamais interprétées comme du HTML).
  */
 const tableauPaiements = (doc: Document, lignes: RecuDocument['lignes']): HTMLElement => {
-  // Le style du reçu SenClass : en-têtes en petites capitales espacées, filet
-  // sous l'en-tête, une ligne sur deux légèrement grisée, montant en gras.
+  // En-têtes à la même taille et dans la même police que les lignes (en gras),
+  // filet sous l'en-tête, un trait fin entre les lignes, montant en gras.
   // Les lignes se resserrent quand elles sont nombreuses ; au-delà de huit, le
   // tableau passe sur deux colonnes (une année entière payée d'un coup).
   const deuxColonnes = lignes.length > 8;
   const hauteur = lignes.length <= 4 ? 6.8 : deuxColonnes ? 4.4 : 5;
-  const entete = 'font-size:6.6pt;line-height:1.3;font-weight:bold;letter-spacing:0.2mm;text-transform:uppercase;color:#374151;padding:0 1mm 1.2mm;border-bottom:0.5mm solid #374151';
+  const entete = `${deuxColonnes ? 'font-size:8.2pt;' : ''}line-height:1.3;font-weight:bold;padding:0 1mm 2mm;border-bottom:0.5mm solid #374151`;
   const cellule = (balise: 'th' | 'td', texte: string, style: string) => {
     const c = doc.createElement(balise);
     c.textContent = texte;
