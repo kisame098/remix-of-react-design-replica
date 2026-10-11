@@ -11,6 +11,8 @@ import {
 import { GradePeriod, SubjectGrade, weightedAvg } from './portalHelpers';
 import { generateBulletinsPdf, BulletinPdfData } from '@/lib/bulletinPdf';
 import TeacherNotes from './teacher/TeacherNotes';
+import TeacherNotesFormation from './teacher/TeacherNotesFormation';
+import { estFormationPro } from '@/lib/modeGestion';
 import PortalNotesElementary from './PortalNotesElementary';
 import PortalNotesFormation from './PortalNotesFormation';
 import { NIVEAUX_ELEMENTAIRE } from '@/lib/elementaryDefaults';
@@ -127,7 +129,7 @@ function SubjectCard({ g, isLast, onPress }: {
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function PortalNotes() {
-  const { schoolAccount, accountRole } = useAuth();
+  const { schoolAccount, accountRole, school } = useAuth();
   const navigate = useNavigate();
 
   const [selId, setSelId] = useState<string | null>(null);
@@ -319,7 +321,7 @@ export default function PortalNotes() {
   const graded         = pg.filter(g => calcMoyenne(g) !== null || g.note !== null);
   const selectedPeriod = periods.find(p => p.id === selId);
 
-  if (accountRole === 'teacher') return <TeacherNotes />;
+  if (accountRole === 'teacher') return estFormationPro(school) ? <TeacherNotesFormation /> : <TeacherNotes />;
 
   if (isElementary === null) return (
     <div className="flex h-[60vh] items-center justify-center">

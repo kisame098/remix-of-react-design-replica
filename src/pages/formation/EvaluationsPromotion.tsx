@@ -46,8 +46,9 @@ const EvaluationsPromotion = () => {
   const {
     loading, promotions, formations, niveaux, niveauMatieres, baremeCategories,
     periodes, evaluations, notes, addPeriode, updatePeriode, deletePeriode, saisirNote, supprimerNote,
+    affectations, affecterFormateur,
   } = useFormationPro();
-  const { students } = useSchool();
+  const { students, teachers } = useSchool();
   const examens = useExamens();
   const stagesCtx = useStages();
   const sauvegarde = useSauvegardeNotes({ enregistrer: saisirNote, supprimer: supprimerNote, analyser: analyserSaisieNote });
@@ -310,6 +311,24 @@ const EvaluationsPromotion = () => {
                     <BookOpen className="h-5 w-5 text-primary" />{matiere.matiereName}
                     <span className="text-sm font-normal text-muted-foreground">coefficient {matiere.coefficient} · {periode.name}</span>
                   </h2>
+                  {/* Le formateur attitré saisit lui-même les notes de cette matière depuis son portail. */}
+                  <div className="flex items-center gap-2 flex-wrap text-sm">
+                    <span className="text-muted-foreground">Formateur :</span>
+                    <Select
+                      value={affectations.find(a => a.promotionId === promotion.id && a.niveauMatiereId === matiere.id)?.teacherId ?? '__aucun'}
+                      onValueChange={v => affecterFormateur(promotion.id, matiere.id, v === '__aucun' ? null : v)
+                        .then(() => toast({ title: v === '__aucun' ? 'Formateur retiré' : 'Formateur affecté', description: v === '__aucun' ? undefined : 'Il peut saisir les notes de cette matière depuis son portail.' }))
+                        .catch(err => toast({ title: "Impossible d'affecter le formateur", description: String(err?.message ?? err), variant: 'destructive' }))}
+                    >
+                      <SelectTrigger className="h-8 w-auto min-w-[200px]" aria-label="Formateur de la matière"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__aucun">Aucun (saisie par l'administration)</SelectItem>
+                        {[...teachers].sort((a, b) => a.lastName.localeCompare(b.lastName, 'fr')).map(t => (
+                          <SelectItem key={t.id} value={t.id}>{t.lastName} {t.firstName}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
                   {/* La formule en un coup d'œil : ce qu'on saisit ici, et ce qui vient des examens. */}
                   <div className="flex items-center gap-1.5 flex-wrap text-xs">
                     <span className="text-muted-foreground mr-0.5">Moyenne =</span>
