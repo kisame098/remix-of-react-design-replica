@@ -34,9 +34,12 @@ const ctx = {
   updatePromotion: vi.fn().mockResolvedValue(undefined),
   deletePromotion: vi.fn().mockResolvedValue(undefined),
   duplicatePromotion: vi.fn().mockResolvedValue({ id: 'pdup' }),
+  affectations: [{ id: 'af1', promotionId: 'p1', niveauMatiereId: 'nm1', teacherId: 't1' }],
+  affecterFormateur: vi.fn().mockResolvedValue(undefined),
 };
 vi.mock('@/contexts/FormationProContext', () => ({ useFormationPro: () => ctx }));
 vi.mock('@/hooks/use-toast', () => ({ toast: vi.fn() }));
+vi.mock('@/contexts/SchoolContext', () => ({ useSchool: () => ({ teachers: [{ id: 't1', firstName: 'Khady', lastName: 'Sarr' }] }) }));
 
 import Promotions from './Promotions';
 
@@ -54,6 +57,13 @@ describe('Promotions — liste groupée par formation puis niveau', () => {
     expect(screen.getByText('Jour')).toBeInTheDocument();
     expect(screen.getByText(/2026-09-01/)).toBeInTheDocument();
     expect(screen.getByText('30 places max')).toBeInTheDocument();
+  });
+
+  it('le bouton « Formateurs » ouvre le formateur de chaque matière de la promotion', async () => {
+    const user = userEvent.setup();
+    rendre();
+    await user.click(screen.getByRole('button', { name: /Formateurs \(1\/1\)/ }));
+    expect(screen.getByRole('combobox', { name: 'Formateur — TP Cuisine' })).toHaveTextContent('Sarr Khady');
   });
 
   it('crée une promotion : le niveau donne l\'aperçu du programme, sans rien ressaisir', async () => {

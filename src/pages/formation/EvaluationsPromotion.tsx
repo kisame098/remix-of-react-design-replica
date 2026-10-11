@@ -12,7 +12,7 @@ import {
   AlertDialogDescription, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import {
-  Plus, Loader2, ClipboardList, Users, Check, AlertCircle, ArrowLeft, ChevronRight, Pencil, Trash2, CalendarRange, Trophy, BookOpen, FileText,
+  Plus, Loader2, ClipboardList, Users, Check, AlertCircle, ArrowLeft, ChevronRight, Pencil, Trash2, CalendarRange, Trophy, BookOpen, FileText, UserCog,
 } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import { triPeriodes, baremeComplet, sommeBareme, analyserSaisieNote, evaluationsDepuisExamens, LIBELLES_TYPE_EXAMEN } from '@/lib/formationPro';
@@ -21,6 +21,7 @@ import { RecapitulatifPeriode } from '@/components/formation/RecapitulatifPeriod
 import { NotesStageMatiere } from '@/components/formation/NotesStageMatiere';
 import { BoutonBulletins } from '@/components/formation/BoutonBulletins';
 import { DialogPeriode } from '@/components/formation/DialogPeriode';
+import { DialogFormateurs } from '@/components/formation/DialogFormateurs';
 import { useSauvegardeNotes } from '@/components/formation/useSauvegardeNotes';
 
 const dateFr = (iso?: string) => { if (!iso) return null; const [y, m, d] = iso.split('-'); return `${d}/${m}/${y}`; };
@@ -109,6 +110,7 @@ const EvaluationsPromotion = () => {
 
   // ── Périodes : créer, modifier, supprimer ────────────────────────────────
   const [dialogPeriode, setDialogPeriode] = useState<'create' | 'edit' | null>(null);
+  const [dialogFormateurs, setDialogFormateurs] = useState(false);
   const [confirmerSuppression, setConfirmerSuppression] = useState(false);
   const supprimerPeriode = async () => {
     if (!periode) return;
@@ -158,11 +160,16 @@ const EvaluationsPromotion = () => {
             </p>
           </div>
         </div>
+        <div className="flex items-start gap-3 flex-shrink-0">
+        <Button variant="outline" size="sm" className="gap-2 mt-1" onClick={() => setDialogFormateurs(true)}>
+          <UserCog className="h-4 w-4" />Formateurs
+        </Button>
         <span className="text-sm text-muted-foreground min-w-[110px] text-right pt-2">
           {etat === 'saving' && <span className="animate-pulse">Enregistrement…</span>}
           {etat === 'saved' && <span className="flex items-center gap-1 justify-end text-green-600"><Check className="h-3.5 w-3.5" />Enregistré</span>}
           {etat === 'error' && <span className="flex items-center gap-1 justify-end text-destructive"><AlertCircle className="h-3.5 w-3.5" />Erreur</span>}
         </span>
+        </div>
       </div>
 
       {/* ── Périodes ── */}
@@ -366,6 +373,8 @@ const EvaluationsPromotion = () => {
           </div>
         </div>
       )}
+
+      <DialogFormateurs promotion={promotion} open={dialogFormateurs} onOpenChange={setDialogFormateurs} />
 
       <DialogPeriode
         open={dialogPeriode !== null}
