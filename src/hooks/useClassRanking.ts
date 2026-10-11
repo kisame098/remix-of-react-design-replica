@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { useSchool, Student, Subject, Grade, SubjectSettingsData } from '@/contexts/SchoolContext';
-import { selectSemestersSoFar, averageAcrossPeriods } from '@/lib/cumulativeAverage';
+import { selectSemestersSoFar, averageAcrossPeriods, type PeriodColumn } from '@/lib/cumulativeAverage';
 
 export type RankingCalculationMode = 'top2' | 'top3' | 'all';
 
@@ -201,6 +201,8 @@ export interface CumulativeAverageInfo {
   label: string;
   periodNames: string[];
   rankings: CumulativeStudentAverage[];
+  /** Moyenne et rang de chaque période cumulée — le récapitulatif du bulletin. */
+  periods: PeriodColumn[];
 }
 
 // Moyenne annuelle / cumulée : au Sénégal, l'immense majorité des établissements
@@ -230,17 +232,21 @@ export function useCumulativeAverage(
     const selection = selectSemestersSoFar(gradePeriods, isClassInPeriod, periodId, classId);
     if (!selection) return null;
 
-    const perPeriod = selection.periodsSoFar.map(p =>
-      // periodsSoFar ne contient que des semestres (filtré) — jamais d'examen.
-      computeClassRanking(p.id, classId, mode, students, subjects, grades, getSubjectSettings, false)
-        .map(r => ({ studentId: r.studentId, average: r.averageGeneral })),
-    );
+    // periodsSoFar ne contient que des semestres (filtré) — jamais d'examen.
+    const periodRankings = selection.periodsSoFar.map(p =>
+      computeClassRanking(p.id, classId, mode, students, subjects, grades, getSubjectSettings, false));
+    const perPeriod = periodRankings.map(rs => rs.map(r => ({ studentId: r.studentId, average: r.averageGeneral })));
 
     return {
       isFinal: selection.isFinal,
       label: selection.label,
       periodNames: selection.periodsSoFar.map(p => p.name),
       rankings: averageAcrossPeriods(perPeriod),
+      periods: selection.periodsSoFar.map((p, i) => ({
+        periodName: p.name,
+        classSize: periodRankings[i].length,
+        results: periodRankings[i].map(r => ({ studentId: r.studentId, average: r.averageGeneral, rank: r.rank })),
+      })),
     };
   }, [periodId, classId, mode, gradePeriods, isClassInPeriod, students, subjects, grades, getSubjectSettings]);
 }

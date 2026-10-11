@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { useSchool, Student, ElementaryClassLine, ElementaryGrade, ElementaryLineSetting } from '@/contexts/SchoolContext';
-import { selectSemestersSoFar, averageAcrossPeriods } from '@/lib/cumulativeAverage';
+import { selectSemestersSoFar, averageAcrossPeriods, type PeriodColumn } from '@/lib/cumulativeAverage';
 
 export interface ElementaryStudentRanking {
   studentId: string;
@@ -103,6 +103,8 @@ export interface ElementaryCumulativeAverageInfo {
   label: string;
   periodNames: string[];
   rankings: ElementaryCumulativeStudentAverage[];
+  /** Moyenne et rang de chaque période cumulée — le récapitulatif du bulletin. */
+  periods: PeriodColumn[];
 }
 
 // Moyenne annuelle/cumulée élémentaire — même logique de détection dynamique
@@ -122,17 +124,25 @@ export function useElementaryCumulativeAverage(
 
     // Un élève sans aucune note sur une période n'y a pas de moyenne : cette
     // période est simplement absente de son cumul, jamais comptée comme 0.
-    const perPeriod = selection.periodsSoFar.map(p =>
-      computeElementaryClassRanking(classId, p.id, students, elementaryClassLines, elementaryGrades, elementaryLineSettings)
-        .filter(r => r.average !== undefined)
-        .map(r => ({ studentId: r.studentId, average: r.average! })),
-    );
+    const periodRankings = selection.periodsSoFar.map(p =>
+      computeElementaryClassRanking(classId, p.id, students, elementaryClassLines, elementaryGrades, elementaryLineSettings));
+    const perPeriod = periodRankings.map(rs => rs
+      .filter(r => r.average !== undefined)
+      .map(r => ({ studentId: r.studentId, average: r.average! })));
 
     return {
       isFinal: selection.isFinal,
       label: selection.label,
       periodNames: selection.periodsSoFar.map(p => p.name),
       rankings: averageAcrossPeriods(perPeriod),
+      periods: selection.periodsSoFar.map((p, i) => ({
+        periodName: p.name,
+        // Même effectif que sur le bulletin de cette période (élèves sans note compris).
+        classSize: periodRankings[i].length,
+        results: periodRankings[i]
+          .filter(r => r.average !== undefined)
+          .map(r => ({ studentId: r.studentId, average: r.average!, rank: r.rank })),
+      })),
     };
   }, [periodId, classId, gradePeriods, isClassInPeriod, students, elementaryClassLines, elementaryGrades, elementaryLineSettings]);
 }
