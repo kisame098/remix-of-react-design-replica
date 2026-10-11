@@ -12,6 +12,7 @@ import { GradePeriod, SubjectGrade, weightedAvg } from './portalHelpers';
 import { generateBulletinsPdf, BulletinPdfData } from '@/lib/bulletinPdf';
 import TeacherNotes from './teacher/TeacherNotes';
 import PortalNotesElementary from './PortalNotesElementary';
+import PortalNotesFormation from './PortalNotesFormation';
 import { NIVEAUX_ELEMENTAIRE } from '@/lib/elementaryDefaults';
 import { estPrescolaire } from '@/lib/prescolaire';
 import { periodesDeLEleve, periodeParDefaut } from '@/lib/studentPeriods';
@@ -145,6 +146,8 @@ export default function PortalNotes() {
     isElementary: boolean;
     /** Maternelle : pas de notes (absent des données gardées hors connexion avant cette version). */
     isPrescolaire?: boolean;
+    /** École de formation professionnelle : la promotion qui porte sa classe (absent avant cette version). */
+    promotionFormationId?: string | null;
     periods: GradePeriod[];
     grades: SubjectGrade[];
     publishedBulletins: PublishedBulletin[];
@@ -162,6 +165,16 @@ export default function PortalNotes() {
       const cls = classeId
         ? (await supabase.from('classes').select('niveau').eq('id', classeId).maybeSingle()).data
         : null;
+
+      // Formation professionnelle : sa classe appartient à une promotion, et
+      // ses notes sont dans les tables fp_* — un tout autre écran.
+      const promo = classeId
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        ? (await (supabase as any).from('fp_promotions').select('id').eq('class_id', classeId).maybeSingle()).data
+        : null;
+      if (promo?.id) {
+        return { isElementary: false, promotionFormationId: promo.id as string, periods: [], grades: [], publishedBulletins: [] };
+      }
 
       const [bulR, pR, gR, pcR] = await Promise.all([
         // Un élève ne voit JAMAIS que son bulletin : filtré côté serveur par
@@ -313,6 +326,9 @@ export default function PortalNotes() {
       <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
     </div>
   );
+  if (donnees?.promotionFormationId) {
+    return <PortalNotesFormation promotionId={donnees.promotionFormationId} eleveId={eleveId} />;
+  }
   if (isElementary) return <PortalNotesElementary />;
   if (donnees?.isPrescolaire) return (
     <div className="flex h-[60vh] flex-col items-center justify-center gap-2 px-6 text-center">
