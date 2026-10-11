@@ -14,7 +14,8 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { Plus, Trash2, Loader2, Pencil, Copy, Users, GraduationCap } from 'lucide-react';
+import { Plus, Trash2, Loader2, Pencil, Copy, Users, GraduationCap, UserCog } from 'lucide-react';
+import { DialogFormateurs } from '@/components/formation/DialogFormateurs';
 import { toast } from '@/hooks/use-toast';
 import {
   type Promotion, type RythmePromotion, type StatutPromotion,
@@ -38,8 +39,9 @@ const COULEUR_STATUT: Record<StatutPromotion, string> = {
 const Promotions = () => {
   const {
     loading, formations, niveaux, niveauMatieres, choixGroups, promotions,
-    addPromotion, updatePromotion, deletePromotion, duplicatePromotion,
+    addPromotion, updatePromotion, deletePromotion, duplicatePromotion, affectations,
   } = useFormationPro();
+  const [formateursDe, setFormateursDe] = useState<Promotion | null>(null);
 
   const groupes = useMemo(() => grouperPromotions(promotions, niveaux, formations), [promotions, niveaux, formations]);
   const niveauxTries = useMemo(
@@ -233,6 +235,15 @@ const Promotions = () => {
                                 </p>
                               )}
                               <Badge variant="outline" className="w-fit">{p.studentLimit} places max</Badge>
+                              {(() => {
+                                const total = niveauMatieres.filter(m => m.niveauId === p.niveauId && m.nature !== 'stage').length;
+                                const affectees = affectations.filter(a => a.promotionId === p.id).length;
+                                return (
+                                  <Button variant="outline" size="sm" className="mt-3 gap-2 w-full" onClick={() => setFormateursDe(p)}>
+                                    <UserCog className="h-3.5 w-3.5" />Formateurs ({affectees}/{total})
+                                  </Button>
+                                );
+                              })()}
                             </CardContent>
                           </Card>
                         );
@@ -362,6 +373,8 @@ const Promotions = () => {
           </div>
         </AlertDialogContent>
       </AlertDialog>
+
+      <DialogFormateurs promotion={formateursDe} open={!!formateursDe} onOpenChange={o => !o && setFormateursDe(null)} />
     </div>
   );
 };
