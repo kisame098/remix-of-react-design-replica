@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { selectSemestersSoFar, averageAcrossPeriods, type PeriodAverage } from './cumulativeAverage';
+import { selectSemestersSoFar, averageAcrossPeriods, recapForStudent, type PeriodAverage, type PeriodColumn } from './cumulativeAverage';
 import type { GradePeriod } from '@/contexts/SchoolContext';
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -144,5 +144,25 @@ describe('averageAcrossPeriods — moyenne des moyennes', () => {
     const res = averageAcrossPeriods([[p('a', 10), p('b', 12)], [p('a', 14), p('b', 8)]]);
     expect(new Set(res.map(r => r.studentId)).size).toBe(res.length);
     expect(res).toHaveLength(2);
+  });
+});
+
+describe('recapForStudent — la moyenne de chaque période sur le bulletin', () => {
+  const colonnes: PeriodColumn[] = [
+    { periodName: 'Premier Semestre', classSize: 3, results: [{ studentId: 'a', average: 12.5, rank: 2 }, { studentId: 'b', average: 14, rank: 1 }] },
+    { periodName: 'Second Semestre', classSize: 3, results: [{ studentId: 'a', average: 13, rank: 1 }] },
+  ];
+
+  it('rend une case par période, dans l\'ordre, avec moyenne, rang et effectif de CETTE période', () => {
+    expect(recapForStudent(colonnes, 'a')).toEqual([
+      { periodName: 'Premier Semestre', average: 12.5, rank: 2, classSize: 3 },
+      { periodName: 'Second Semestre', average: 13, rank: 1, classSize: 3 },
+    ]);
+  });
+
+  it('laisse la case VIDE (jamais 0) quand l\'élève n\'a pas de note sur une période', () => {
+    const recap = recapForStudent(colonnes, 'b');
+    expect(recap[1]).toEqual({ periodName: 'Second Semestre', classSize: 3 });
+    expect(recap[1].average).toBeUndefined();
   });
 });

@@ -2,9 +2,10 @@ import jsPDF from 'jspdf';
 import QRCode from 'qrcode';
 import { ElementaryStudentRanking } from '@/hooks/useElementaryClassRanking';
 import {
-  BulletinStudentInfo, BulletinSchoolInfo,
-  PAGE_W, PAGE_H, MARGIN, GREY_HEADER,
+  BulletinStudentInfo, BulletinSchoolInfo, AnnualAverageInfo, Gabarit,
+  PAGE_W, PAGE_H, MARGIN, GREY_HEADER, SIGNATURE_MAX_Y,
   formatDate, drawFlag, drawSchoolEmblem, labelValue, bracketCorners,
+  choisirGabarit, policeTableau, baseLigne, hauteurRecap, drawRecapAnnuel,
 } from '@/lib/bulletinPdf';
 import { ElementaryDomaine, ElementaryRegistre, DOMAINE_LABELS, REGISTRE_LABELS } from '@/lib/elementaryDefaults';
 
@@ -39,7 +40,7 @@ export interface ElementaryBulletinPdfData {
   absencesCount: number;
   justifiedAbsencesCount: number;
   retardsCount: number;
-  annualAverage?: { label: string; average: number; rank: number; classSize: number };
+  annualAverage?: AnnualAverageInfo;
   /** "Admis en classe supérieure" ou "Redouble" — undefined hors bulletin de fin d'année, ou sans moyenne annuelle. */
   decisionPassage?: string;
   observations?: string;
@@ -62,6 +63,16 @@ const appreciationPct = (pct: number | undefined): string => {
   if (pct >= 25) return 'Très Insuffisant';
   return 'Très Médiocre';
 };
+
+// Du plus aéré (la mise en page d'origine) au plus serré — blocH est la
+// hauteur du cadre « Observations du conseil des maîtres ».
+const GABARITS_ELEMENTAIRE: Gabarit[] = [
+  { rowH: 5, gap: 8, lineGap: 7, blocH: 20 },
+  { rowH: 4.7, gap: 6, lineGap: 6.5, blocH: 18 },
+  { rowH: 4.4, gap: 5, lineGap: 6, blocH: 16 },
+  { rowH: 4.1, gap: 4, lineGap: 5.5, blocH: 14 },
+  { rowH: 3.8, gap: 3.5, lineGap: 5, blocH: 12 },
+];
 
 export async function drawElementaryBulletinPage(doc: jsPDF, data: ElementaryBulletinPdfData): Promise<void> {
   const {
@@ -130,17 +141,29 @@ export async function drawElementaryBulletinPage(doc: jsPDF, data: ElementaryBul
   const headers = ['Domaine', 'Discipline', 'Barème', 'Points', 'Appréciation'];
   const colWidths = [16, 75, 16, 16, 57];
   const tableW = colWidths.reduce((a, b) => a + b, 0);
-  const rowH = 5;
   const tableTop = y;
+
+  // En-tête + (bandeau + disciplines + sous-total) par registre + total général.
+  const registresPresents = (['COMPETENCE', 'RESSOURCES'] as ElementaryRegistre[])
+    .filter(r => lines.some(l => l.registre === r)).length;
+  const nbLignes = 2 + lines.length + 2 * registresPresents;
+  // Tout ce qui suit le tableau, signature comprise (voir SIGNATURE_MAX_Y).
+  const horsTableau = (g: Gabarit) =>
+    g.gap + g.lineGap + hauteurRecap(annualAverage, g) + (decisionPassage ? g.lineGap : 0) + 3 + g.blocH + 12;
+  const gabarit = choisirGabarit(GABARITS_ELEMENTAIRE, nbLignes, horsTableau, SIGNATURE_MAX_Y - tableTop, 3.2);
+  const { rowH } = gabarit;
+  // Le tableau d'origine (lignes de 5 mm) était en 8 pt, une demi-taille sous le collège.
+  const fontSize = Math.min(8, policeTableau(rowH + 0.5));
+  const textY = (yy: number) => baseLigne(yy, rowH, fontSize);
 
   doc.setFillColor(GREY_HEADER);
   doc.rect(MARGIN, y, tableW, rowH, 'F');
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(8);
+  doc.setFontSize(fontSize);
   let cx = MARGIN;
   headers.forEach((h, i) => {
-    if (i === 1) doc.text(h, cx + 2, y + 3.6);
-    else doc.text(h, cx + colWidths[i] / 2, y + 3.6, { align: 'center' });
+    if (i === 1) doc.text(h, cx + 2, textY(y));
+    else doc.text(h, cx + colWidths[i] / 2, textY(y), { align: 'center' });
     cx += colWidths[i];
   });
   y += rowH;
@@ -156,12 +179,12 @@ export async function drawElementaryBulletinPage(doc: jsPDF, data: ElementaryBul
     doc.setFillColor('#EFEFEF');
     doc.rect(MARGIN, y, tableW, rowH, 'F');
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(7.5);
-    doc.text(REGISTRE_LABELS[registre].toUpperCase(), MARGIN + 2, y + 3.6);
+    doc.setFontSize(fontSize - 0.5);
+    doc.text(REGISTRE_LABELS[registre].toUpperCase(), MARGIN + 2, textY(y));
     y += rowH;
 
     doc.setFont('helvetica', 'normal');
-    doc.setFontSize(8);
+    doc.setFontSize(fontSize);
     // Début des lignes de disciplines : c'est la SEULE plage où les
     // séparateurs de colonnes ont un sens. Les bandeaux de registre et les
     // lignes de total portent un libellé qui court sur plusieurs colonnes —
@@ -179,8 +202,8 @@ export async function drawElementaryBulletinPage(doc: jsPDF, data: ElementaryBul
       cx = MARGIN;
       vals.forEach((v, i) => {
         const text = i === 1 ? doc.splitTextToSize(v, colWidths[1] - 3)[0] : v;
-        if (i === 1) doc.text(text, cx + 2, y + 3.6);
-        else doc.text(v, cx + colWidths[i] / 2, y + 3.6, { align: 'center' });
+        if (i === 1) doc.text(text, cx + 2, textY(y));
+        else doc.text(v, cx + colWidths[i] / 2, textY(y), { align: 'center' });
         cx += colWidths[i];
       });
       y += rowH;
@@ -190,12 +213,12 @@ export async function drawElementaryBulletinPage(doc: jsPDF, data: ElementaryBul
     doc.setFillColor(GREY_HEADER);
     doc.rect(MARGIN, y, tableW, rowH, 'F');
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(8);
-    doc.text(`Sous-total ${REGISTRE_LABELS[registre]}`, MARGIN + 2, y + 3.6);
+    doc.setFontSize(fontSize);
+    doc.text(`Sous-total ${REGISTRE_LABELS[registre]}`, MARGIN + 2, textY(y));
     cx = MARGIN + colWidths[0] + colWidths[1];
-    doc.text(String(total.max), cx + colWidths[2] / 2, y + 3.6, { align: 'center' });
+    doc.text(String(total.max), cx + colWidths[2] / 2, textY(y), { align: 'center' });
     cx += colWidths[2];
-    doc.text(String(total.obtenus), cx + colWidths[3] / 2, y + 3.6, { align: 'center' });
+    doc.text(String(total.obtenus), cx + colWidths[3] / 2, textY(y), { align: 'center' });
     y += rowH;
   };
 
@@ -208,14 +231,14 @@ export async function drawElementaryBulletinPage(doc: jsPDF, data: ElementaryBul
   doc.rect(MARGIN, y, tableW, rowH, 'F');
   doc.setTextColor('#FFFFFF');
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(8);
-  doc.text('TOTAL GÉNÉRAL', MARGIN + 2, y + 3.6);
+  doc.setFontSize(fontSize);
+  doc.text('TOTAL GÉNÉRAL', MARGIN + 2, textY(y));
   cx = MARGIN + colWidths[0] + colWidths[1];
-  doc.text(String(grandMax), cx + colWidths[2] / 2, y + 3.6, { align: 'center' });
+  doc.text(String(grandMax), cx + colWidths[2] / 2, textY(y), { align: 'center' });
   cx += colWidths[2];
-  doc.text(String(grandObtenus), cx + colWidths[3] / 2, y + 3.6, { align: 'center' });
+  doc.text(String(grandObtenus), cx + colWidths[3] / 2, textY(y), { align: 'center' });
   cx += colWidths[3];
-  doc.text(ranking.average !== undefined ? `${ranking.average.toFixed(2)} / 10` : '—', cx + colWidths[4] / 2, y + 3.6, { align: 'center' });
+  doc.text(ranking.average !== undefined ? `${ranking.average.toFixed(2)} / 10` : '—', cx + colWidths[4] / 2, textY(y), { align: 'center' });
   y += rowH;
   doc.setTextColor('#000000');
 
@@ -237,30 +260,27 @@ export async function drawElementaryBulletinPage(doc: jsPDF, data: ElementaryBul
     cx += w;
   });
 
-  y = tableBottom + 8;
+  y = tableBottom + gabarit.gap;
 
   // ---------- Ligne de synthèse ----------
   labelValue(doc, MARGIN, y, 'Moyenne', ranking.average !== undefined ? `${ranking.average.toFixed(2)} / 10` : '—');
   labelValue(doc, MARGIN + 45, y, 'Rang', ranking.average !== undefined ? `${ranking.rank}/${effectif}` : '—');
   labelValue(doc, MARGIN + 80, y, 'Retards', String(retardsCount));
   labelValue(doc, MARGIN + 115, y, 'Absences', `${absencesCount} dont ${justifiedAbsencesCount} justifiée(s)`);
-  y += 7;
+  y += gabarit.lineGap;
 
-  if (annualAverage) {
-    labelValue(doc, MARGIN, y, annualAverage.label, `${annualAverage.average.toFixed(2)} / 10`);
-    labelValue(doc, MARGIN + 70, y, 'Rang', `${annualAverage.rank}/${annualAverage.classSize}`);
-    y += 7;
-  }
+  // Récapitulatif : moyenne de chaque trimestre + annuelle (absent à la 1re période).
+  if (annualAverage) y += drawRecapAnnuel(doc, y, annualAverage, gabarit, ' / 10');
 
   if (decisionPassage) {
     labelValue(doc, MARGIN, y, 'Décision', decisionPassage);
-    y += 7;
+    y += gabarit.lineGap;
   }
 
   y += 3;
 
   // ---------- Observations ----------
-  const obsH = 20;
+  const obsH = gabarit.blocH;
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(8);
   doc.text('Observations du conseil des maîtres', MARGIN, y - 1);

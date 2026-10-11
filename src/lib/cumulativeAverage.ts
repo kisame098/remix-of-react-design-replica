@@ -102,3 +102,39 @@ export const averageAcrossPeriods = (
   }
   return list;
 };
+
+// ─── Récapitulatif par période ──────────────────────────────────────────────
+// Sur le bulletin du 2e semestre (ou du 2e/3e trimestre), on imprime la
+// moyenne de CHAQUE période déjà passée à côté de la moyenne annuelle : le
+// parent voit d'où vient la moyenne annuelle sans ressortir l'ancien bulletin.
+
+export interface PeriodResult {
+  studentId: string;
+  average: number;
+  /** Le rang tel qu'imprimé sur le bulletin de cette période. */
+  rank: number;
+}
+
+/** Résultats d'une classe sur une période — l'effectif est celui du bulletin de cette période. */
+export interface PeriodColumn {
+  periodName: string;
+  classSize: number;
+  results: PeriodResult[];
+}
+
+/** Une case du récapitulatif — reste un objet simple : il est figé tel quel dans le bulletin publié (jsonb). */
+export interface PeriodRecapCell {
+  periodName: string;
+  /** Absente si l'élève n'a aucune note sur cette période (arrivé en cours d'année…). */
+  average?: number;
+  rank?: number;
+  classSize: number;
+}
+
+export const recapForStudent = (columns: PeriodColumn[], studentId: string): PeriodRecapCell[] =>
+  columns.map(c => {
+    const row = c.results.find(r => r.studentId === studentId);
+    return row
+      ? { periodName: c.periodName, average: row.average, rank: row.rank, classSize: c.classSize }
+      : { periodName: c.periodName, classSize: c.classSize };
+  });

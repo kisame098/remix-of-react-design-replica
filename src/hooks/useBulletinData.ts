@@ -5,6 +5,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useAttendance } from '@/contexts/AttendanceContext';
 import { useClassRanking, useCumulativeAverage, RankingCalculationMode } from '@/hooks/useClassRanking';
 import { decisionDePassage } from '@/lib/decisionPassage';
+import { recapForStudent } from '@/lib/cumulativeAverage';
 import { useConfigScolarite } from '@/hooks/useConfigScolarite';
 import { cycleDuNiveau } from '@/lib/configScolarite';
 import { BulletinPdfData } from '@/lib/bulletinPdf';
@@ -75,7 +76,10 @@ export function useBulletinDataList(
       const absences = attendances.filter(a => a.status === 'absent');
       const cumulativeRow = cumulativeAverage?.rankings.find(r => r.studentId === ranking.studentId);
       const annualAverage = cumulativeAverage && cumulativeRow
-        ? { label: cumulativeAverage.label, average: cumulativeRow.average, rank: cumulativeRow.rank, classSize: cumulativeAverage.rankings.length }
+        ? {
+            label: cumulativeAverage.label, average: cumulativeRow.average, rank: cumulativeRow.rank, classSize: cumulativeAverage.rankings.length,
+            periodes: recapForStudent(cumulativeAverage.periods, ranking.studentId),
+          }
         : undefined;
       return [{
         school: { name: school?.name ?? 'École', phone: school?.phone, email: school?.email, logoUrl: school?.logo_url },

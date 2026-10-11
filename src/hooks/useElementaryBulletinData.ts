@@ -6,6 +6,7 @@ import { useAttendance } from '@/contexts/AttendanceContext';
 import { useElementaryClassRanking, useElementaryCumulativeAverage } from '@/hooks/useElementaryClassRanking';
 import { ElementaryBulletinPdfData, ElementaryBulletinLine } from '@/lib/elementaryBulletinPdf';
 import { decisionDePassage } from '@/lib/decisionPassage';
+import { recapForStudent } from '@/lib/cumulativeAverage';
 import { useConfigScolarite } from '@/hooks/useConfigScolarite';
 import { cycleDuNiveau } from '@/lib/configScolarite';
 
@@ -90,6 +91,7 @@ export function useElementaryBulletinDataList(
         ? {
             label: isLastPeriodOfYear ? 'Moyenne Annuelle' : 'Moyenne cumulée',
             average: cumulativeRow.average, rank: cumulativeRow.rank, classSize: cumulativeAverage.rankings.length,
+            periodes: recapForStudent(cumulativeAverage.periods, ranking.studentId),
           }
         : undefined;
 

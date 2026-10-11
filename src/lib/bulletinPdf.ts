@@ -1,6 +1,7 @@
 import jsPDF from 'jspdf';
 import QRCode from 'qrcode';
 import { StudentRanking } from '@/hooks/useClassRanking';
+import type { PeriodRecapCell } from '@/lib/cumulativeAverage';
 
 // ─── Bulletin de notes — génération PDF vectorielle ─────────────────────────
 // Dessiné directement avec les primitives de jsPDF (texte, lignes, rectangles,
@@ -65,10 +66,21 @@ export interface BulletinPdfData {
   justifiedAbsencesCount: number;
   retardsCount: number;
   /** Moyenne annuelle/cumulée (semestres précédents + celui-ci) — absent pour le 1er semestre de l'année ou une période de type examen. */
-  annualAverage?: { label: string; average: number; rank: number; classSize: number };
+  annualAverage?: AnnualAverageInfo;
   /** Décision de passage — absente hors bulletin de fin d'année. */
   decisionPassage?: string;
   observations?: string;
+}
+
+export interface AnnualAverageInfo {
+  label: string;
+  average: number;
+  rank: number;
+  classSize: number;
+  /** Moyenne de chaque période cumulée (S1, S2…), imprimée à côté de la
+   *  moyenne annuelle. Absente des bulletins publiés avant son ajout : ceux-là
+   *  gardent l'ancienne ligne « Moyenne Annuelle — Rang ». */
+  periodes?: PeriodRecapCell[];
 }
 
 export const PAGE_W = 210;
@@ -227,6 +239,145 @@ export const bracketCorners = (doc: jsPDF, x: number, y: number, w: number, h: n
   doc.line(x + w, y + h, x + w - r, y + h);
 };
 
+// ─── Tout tenir sur une page ────────────────────────────────────────────────
+// Le pied de page (QR codes, N.B., bandeau d'édition) est ancré en bas ; la
+// signature du chef d'établissement doit rester au-dessus des QR codes. Avec
+// beaucoup de matières (lycée : 12-14) plus le récapitulatif annuel, la mise
+// en page d'origine débordait sur les QR. On essaie donc des gabarits de plus
+// en plus serrés et on garde le premier qui tient.
+
+/** Ligne de base la plus basse admise pour « Le Chef d'établissement » :
+ *  les libellés des QR codes sont à 241 mm. */
+export const SIGNATURE_MAX_Y = 236;
+
+export interface Gabarit {
+  /** Hauteur d'une ligne du tableau des notes. */
+  rowH: number;
+  /** Espace entre le tableau et la ligne de synthèse. */
+  gap: number;
+  /** Interligne des lignes de synthèse (Moyenne, Décision…). */
+  lineGap: number;
+  /** Hauteur du bloc mentions / observations. */
+  blocH: number;
+}
+
+/**
+ * Premier gabarit dont la hauteur totale tient dans `dispo` ; à défaut, le
+ * plus serré, avec des lignes de tableau réduites juste assez pour tenir
+ * (jamais sous `rowHMin`, en dessous le texte n'est plus lisible).
+ */
+export const choisirGabarit = (
+  gabarits: Gabarit[], nbLignes: number, horsTableau: (g: Gabarit) => number, dispo: number, rowHMin = 3.4,
+): Gabarit => {
+  for (const g of gabarits) {
+    if (nbLignes * g.rowH + horsTableau(g) <= dispo) return g;
+  }
+  const dernier = gabarits[gabarits.length - 1];
+  const rowH = Math.max(rowHMin, (dispo - horsTableau(dernier)) / Math.max(1, nbLignes));
+  return { ...dernier, rowH };
+};
+
+/** Taille de police du tableau des notes selon la hauteur de ligne. */
+export const policeTableau = (rowH: number): number => (rowH >= 5.5 ? 8 : rowH >= 4.5 ? 7.5 : 7);
+
+/** Ligne de base qui centre verticalement un texte de `fontSize` pt dans une ligne de `rowH` mm. */
+export const baseLigne = (y: number, rowH: number, fontSize: number): number =>
+  y + (rowH + fontSize * 0.3528 * 0.7) / 2;
+
+/** Hauteur d'une ligne du récapitulatif annuel. */
+export const recapRowH = (g: Gabarit): number => Math.min(5.5, Math.max(4.5, g.rowH));
+
+/** Hauteur occupée par le récapitulatif annuel (ou l'ancienne ligne), espace après compris. */
+export const hauteurRecap = (annual: AnnualAverageInfo | undefined, g: Gabarit): number => {
+  if (!annual) return 0;
+  if (!annual.periodes?.length) return g.lineGap;
+  return 2 * recapRowH(g) + 2.5;
+};
+
+/**
+ * Récapitulatif de l'année : une colonne par période déjà passée, puis la
+ * moyenne annuelle (ou cumulée), chacune avec son rang. Rend la hauteur
+ * occupée, espace après compris.
+ */
+export const drawRecapAnnuel = (
+  doc: jsPDF, y: number, annual: AnnualAverageInfo, g: Gabarit, suffixe = '',
+): number => {
+  if (!annual.periodes?.length) {
+    labelValue(doc, MARGIN, y, annual.label, `${annual.average.toFixed(2)}${suffixe}`);
+    labelValue(doc, MARGIN + 70, y, 'Rang', `${annual.rank}/${annual.classSize}`);
+    return g.lineGap;
+  }
+
+  const cellules = [
+    ...annual.periodes.map(c => ({
+      titre: `Moyenne ${c.periodName}`,
+      valeur: c.average !== undefined
+        ? `${c.average.toFixed(2)}${suffixe} — Rang ${c.rank}/${c.classSize}`
+        : '—',
+      gras: false,
+    })),
+    {
+      titre: annual.label,
+      valeur: `${annual.average.toFixed(2)}${suffixe} — Rang ${annual.rank}/${annual.classSize}`,
+      gras: true,
+    },
+  ];
+  const h = recapRowH(g);
+  const w = PAGE_W - 2 * MARGIN;
+  const colW = w / cellules.length;
+  // Le texte d'en-tête de la ligne de synthèse est à sa ligne de base : on
+  // remonte le tableau pour qu'il commence là où le texte aurait commencé.
+  const top = y - 3.5;
+
+  // Police unique pour tout le tableau : la plus grande qui fait tenir chaque case.
+  const tailleQuiTient = (textes: string[], gras: boolean, max: number): number => {
+    doc.setFont('helvetica', gras ? 'bold' : 'normal');
+    let size = max;
+    while (size > 5.5) {
+      doc.setFontSize(size);
+      if (textes.every(t => doc.getTextWidth(t) <= colW - 3)) break;
+      size -= 0.5;
+    }
+    return size;
+  };
+  const tailleTitre = tailleQuiTient(cellules.map(c => c.titre), true, 8);
+  const tailleValeur = Math.min(
+    tailleQuiTient(cellules.map(c => c.valeur), false, 8.5),
+    tailleQuiTient(cellules.filter(c => c.gras).map(c => c.valeur), true, 8.5),
+  );
+
+  doc.setFillColor(GREY_HEADER);
+  doc.rect(MARGIN, top, w, h, 'F');
+  cellules.forEach((c, i) => {
+    const cx = MARGIN + i * colW + colW / 2;
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(tailleTitre);
+    doc.text(c.titre, cx, baseLigne(top, h, tailleTitre), { align: 'center' });
+    doc.setFont('helvetica', c.gras ? 'bold' : 'normal');
+    doc.setFontSize(tailleValeur);
+    doc.text(c.valeur, cx, baseLigne(top + h, h, tailleValeur), { align: 'center' });
+  });
+
+  doc.setDrawColor(LINE_GREY);
+  doc.setLineWidth(0.2);
+  doc.line(MARGIN, top + h, MARGIN + w, top + h);
+  for (let i = 1; i < cellules.length; i++) doc.line(MARGIN + i * colW, top, MARGIN + i * colW, top + 2 * h);
+  doc.setDrawColor('#000000');
+  doc.setLineWidth(0.4);
+  doc.rect(MARGIN, top, w, 2 * h, 'S');
+
+  return 2 * h + 2.5;
+};
+
+// Du plus aéré (la mise en page d'origine) au plus serré.
+const GABARITS_BULLETIN: Gabarit[] = [
+  { rowH: 6, gap: 8, lineGap: 7, blocH: 7 * 5.5 },
+  { rowH: 5.5, gap: 6, lineGap: 6.5, blocH: 7 * 5.2 },
+  { rowH: 5, gap: 5, lineGap: 6, blocH: 7 * 4.8 },
+  { rowH: 4.5, gap: 4, lineGap: 5.5, blocH: 7 * 4.5 },
+  { rowH: 4.1, gap: 3.5, lineGap: 5, blocH: 7 * 4.2 },
+];
+
 export async function drawBulletinPage(doc: jsPDF, data: BulletinPdfData): Promise<void> {
   const {
     school, yearLabel, periodName, niveau, className, filiereName, effectif,
@@ -306,23 +457,32 @@ export async function drawBulletinPage(doc: jsPDF, data: BulletinPdfData): Promi
     ? [72, 20, 13, 20, 13, 42]
     : [58, 17, 17, 14, 13, 20, 13, 28];
   const tableW = colWidths.reduce((a, b) => a + b, 0);
-  const rowH = 6;
   const tableTop = y;
+
+  // Tout ce qui suit le tableau, signature comprise (voir SIGNATURE_MAX_Y).
+  const horsTableau = (g: Gabarit) =>
+    g.gap + g.lineGap + hauteurRecap(annualAverage, g) + (decisionPassage ? g.lineGap : 0) + 3 + g.blocH + 12;
+  const gabarit = choisirGabarit(
+    GABARITS_BULLETIN, ranking.subjectDetails.length + 2, horsTableau, SIGNATURE_MAX_Y - tableTop,
+  );
+  const { rowH } = gabarit;
+  const fontSize = policeTableau(rowH);
+  const textY = (yy: number) => baseLigne(yy, rowH, fontSize);
 
   doc.setFillColor(GREY_HEADER);
   doc.rect(MARGIN, y, tableW, rowH, 'F');
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(8);
+  doc.setFontSize(fontSize);
   let cx = MARGIN;
   headers.forEach((h, i) => {
-    if (i === 0) doc.text(h, cx + 2, y + 4);
-    else doc.text(h, cx + colWidths[i] / 2, y + 4, { align: 'center' });
+    if (i === 0) doc.text(h, cx + 2, textY(y));
+    else doc.text(h, cx + colWidths[i] / 2, textY(y), { align: 'center' });
     cx += colWidths[i];
   });
   y += rowH;
 
   doc.setFont('helvetica', 'normal');
-  doc.setFontSize(8);
+  doc.setFontSize(fontSize);
   const lastColIdx = headers.length - 1;
   ranking.subjectDetails.forEach(s => {
     const rank = subjectRanks.get(s.subjectName)?.get(ranking.studentId) ?? null;
@@ -347,8 +507,8 @@ export async function drawBulletinPage(doc: jsPDF, data: BulletinPdfData): Promi
         ];
     cx = MARGIN;
     vals.forEach((v, i) => {
-      if (i === 0 || i === lastColIdx) doc.text(v, cx + 2, y + 4);
-      else doc.text(v, cx + colWidths[i] / 2, y + 4, { align: 'center' });
+      if (i === 0 || i === lastColIdx) doc.text(v, cx + 2, textY(y));
+      else doc.text(v, cx + colWidths[i] / 2, textY(y), { align: 'center' });
       cx += colWidths[i];
     });
     y += rowH;
@@ -359,17 +519,17 @@ export async function drawBulletinPage(doc: jsPDF, data: BulletinPdfData): Promi
   doc.rect(MARGIN, y, tableW, rowH, 'F');
   doc.setFont('helvetica', 'bold');
   cx = MARGIN;
-  doc.text('Totaux', cx + 2, y + 4);
+  doc.text('Totaux', cx + 2, textY(y));
   if (isExam) {
     cx += colWidths[0] + colWidths[1];
-    doc.text(String(ranking.totalCoef), cx + colWidths[2] / 2, y + 4, { align: 'center' });
+    doc.text(String(ranking.totalCoef), cx + colWidths[2] / 2, textY(y), { align: 'center' });
     cx += colWidths[2];
-    doc.text(totalPPond.toFixed(2), cx + colWidths[3] / 2, y + 4, { align: 'center' });
+    doc.text(totalPPond.toFixed(2), cx + colWidths[3] / 2, textY(y), { align: 'center' });
   } else {
     cx += colWidths[0] + colWidths[1] + colWidths[2] + colWidths[3];
-    doc.text(String(ranking.totalCoef), cx + colWidths[4] / 2, y + 4, { align: 'center' });
+    doc.text(String(ranking.totalCoef), cx + colWidths[4] / 2, textY(y), { align: 'center' });
     cx += colWidths[4];
-    doc.text(totalPPond.toFixed(2), cx + colWidths[5] / 2, y + 4, { align: 'center' });
+    doc.text(totalPPond.toFixed(2), cx + colWidths[5] / 2, textY(y), { align: 'center' });
   }
   y += rowH;
 
@@ -388,32 +548,28 @@ export async function drawBulletinPage(doc: jsPDF, data: BulletinPdfData): Promi
   doc.setLineWidth(0.4);
   doc.rect(MARGIN, tableTop, tableW, tableBottom - tableTop, 'S');
 
-  y = tableBottom + 8;
+  y = tableBottom + gabarit.gap;
 
   // ---------- Ligne de synthèse ----------
   labelValue(doc, MARGIN, y, 'Moyenne', ranking.averageGeneral.toFixed(2));
   labelValue(doc, MARGIN + 45, y, 'Rang', `${ranking.rank}/${effectif}`);
   labelValue(doc, MARGIN + 80, y, 'Retards', String(retardsCount));
   labelValue(doc, MARGIN + 115, y, 'Absences', `${absencesCount} dont ${justifiedAbsencesCount} justifiée(s)`);
-  y += 7;
+  y += gabarit.lineGap;
 
-  // ---------- Moyenne annuelle / cumulée (absente pour le 1er semestre de l'année) ----------
-  if (annualAverage) {
-    labelValue(doc, MARGIN, y, annualAverage.label, annualAverage.average.toFixed(2));
-    labelValue(doc, MARGIN + 70, y, 'Rang', `${annualAverage.rank}/${annualAverage.classSize}`);
-    y += 7;
-  }
+  // ---------- Récapitulatif : moyenne de chaque semestre + annuelle (absent au 1er semestre) ----------
+  if (annualAverage) y += drawRecapAnnuel(doc, y, annualAverage, gabarit);
 
   // ---------- Décision de passage (bulletin de fin d'année uniquement) ----------
   if (decisionPassage) {
     labelValue(doc, MARGIN, y, 'Décision', decisionPassage);
-    y += 7;
+    y += gabarit.lineGap;
   }
 
   y += 3;
 
   // ---------- Mentions + Observations ----------
-  const mentionColW = 45, mentionXW = 8, mentionRowH = 5.5;
+  const mentionColW = 45, mentionXW = 8, mentionRowH = gabarit.blocH / MENTIONS_HONNEUR.length;
   const mentionsTop = y;
 
   const drawMentions = (x: number, items: string[], checked?: string): number => {
@@ -425,11 +581,11 @@ export async function drawBulletinPage(doc: jsPDF, data: BulletinPdfData): Promi
       doc.rect(x + mentionColW, yy, mentionXW, mentionRowH, 'S');
       doc.setFont('helvetica', 'normal');
       doc.setFontSize(7.5);
-      doc.text(item, x + 1.5, yy + mentionRowH - 1.8);
+      doc.text(item, x + 1.5, baseLigne(yy, mentionRowH, 7.5));
       if (item === checked) {
         doc.setFont('helvetica', 'bold');
         doc.setFontSize(8);
-        doc.text('×', x + mentionColW + mentionXW / 2, yy + mentionRowH - 1.8, { align: 'center' });
+        doc.text('×', x + mentionColW + mentionXW / 2, baseLigne(yy, mentionRowH, 8), { align: 'center' });
       }
       yy += mentionRowH;
     });
