@@ -515,8 +515,10 @@ const PaymentEntry = ({ initialMode = 'search' }: { initialMode?: 'search' | 'sc
           </div>
         ) : (
           <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
-            {/* Payment items */}
-            <div className="flex-1 overflow-y-auto px-5 pt-3 pb-2 space-y-1">
+            {/* Payment items — gardent toujours ~3 lignes visibles : sur un
+                écran peu haut, c'est le panneau d'encaissement qui défile
+                au lieu d'écraser la liste. */}
+            <div className="flex-1 min-h-[11rem] overflow-y-auto px-5 pt-3 pb-2 space-y-1">
               <div className="flex items-center justify-between mb-2">
                 <h3 className="font-semibold text-sm">
                   Éléments à régler
@@ -575,7 +577,7 @@ const PaymentEntry = ({ initialMode = 'search' }: { initialMode?: 'search' | 'sc
 
             {/* Payment panel */}
             {versements.length > 0 && (
-              <div className="flex-shrink-0 border-t px-5 pt-4 pb-5 space-y-4 bg-muted/20">
+              <div className="shrink min-h-0 overflow-y-auto border-t px-5 pt-4 pb-5 space-y-4 bg-muted/20">
                 {/* Montant versé par élément : moins que le reste = acompte.
                     Liste plafonnée à ~4 lignes visibles : au-delà elle défile,
                     sinon le total et le bouton Valider sortent de l'écran quand
