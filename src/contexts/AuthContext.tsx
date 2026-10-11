@@ -198,10 +198,14 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
         // maybeSingle : `single()` répond 406 quand il n'y a pas exactement une
         // ligne, et l'absence de ligne est un cas normal, pas une erreur.
+        // Filtré sur l'école retenue : un compte rattaché à deux écoles (le
+        // personnel qui recevait une « Mon École » en trop) faisait échouer
+        // maybeSingle, et l'absence de rôle le transformait en directeur.
         const { data: memberData } = await supabase
           .from('school_members')
           .select('role, permissions')
           .eq('user_id', userId)
+          .eq('school_id', schoolId)
           .eq('is_active', true)
           .maybeSingle();
         setAccountRole(memberData?.role === 'staff' ? 'staff' : 'admin');
