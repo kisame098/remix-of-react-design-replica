@@ -79,3 +79,17 @@ describe('periodeEnCours', () => {
     expect(periodeEnCours(base().periodes, '2027-08-01')?.id).toBe('S2');
   });
 });
+
+import { elevesDeLaPromotion } from './portailNotesFormation';
+
+describe('elevesDeLaPromotion', () => {
+  it("garde les inscrits actifs de l'année la plus récente, triés par nom", () => {
+    const r = elevesDeLaPromotion([
+      { id: '1', academicYearLabel: '2025-2026', firstName: 'Awa', lastName: 'Diop' },
+      { id: '2', academicYearLabel: '2026-2027', firstName: 'Awa', lastName: 'Diop' },
+      { id: '3', academicYearLabel: '2026-2027', firstName: 'Moussa', lastName: 'Ba' },
+      { id: '4', academicYearLabel: '2026-2027', firstName: 'Ida', lastName: 'Sy', status: 'withdrawn' },
+    ]);
+    expect(r.map(e => e.id)).toEqual(['3', '2']);
+  });
+});

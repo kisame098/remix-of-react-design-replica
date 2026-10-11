@@ -52,6 +52,8 @@ const ctxInitial = () => ({
   deleteEvaluation: vi.fn().mockResolvedValue(undefined),
   saisirNote: vi.fn().mockResolvedValue(undefined),
   supprimerNote: vi.fn().mockResolvedValue(undefined),
+  affectations: [{ id: 'af1', promotionId: 'p1', niveauMatiereId: 'nm1', teacherId: 't1' }],
+  affecterFormateur: vi.fn().mockResolvedValue(undefined),
 });
 let ctx = ctxInitial();
 vi.mock('@/contexts/FormationProContext', () => ({ useFormationPro: () => ctx }));
@@ -82,6 +84,7 @@ vi.mock('@/contexts/SchoolContext', () => ({
       { id: 's1', firstName: 'Awa', lastName: 'Diop', classId: 'c1' },
       { id: 's2', firstName: 'Moussa', lastName: 'Fall', classId: 'c1' },
     ],
+    teachers: [{ id: 't1', firstName: 'Khady', lastName: 'Sarr' }],
   }),
 }));
 vi.mock('@/hooks/use-toast', () => ({ toast: vi.fn() }));
@@ -117,6 +120,11 @@ describe('EvaluationsPromotion — une grille par matière, catégories en colon
     expect(caseDe('Devoir 1', 'Diop Awa')).toHaveValue('14');
     const ligneAwa = screen.getByText('Diop').closest('tr')!;
     expect(within(ligneAwa).getAllByText('14').length).toBeGreaterThan(0);   // moyenne de la matière
+  });
+
+  it('affiche le formateur attitré de la matière (il saisit depuis son portail)', () => {
+    rendre();
+    expect(screen.getByRole('combobox', { name: 'Formateur de la matière' })).toHaveTextContent('Sarr Khady');
   });
 
   it('la moyenne compte l\'examen final saisi dans la rubrique Examens — sans le ressaisir', () => {

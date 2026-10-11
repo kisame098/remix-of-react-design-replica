@@ -419,6 +419,15 @@ export interface Periode {
 
 export const nomPeriodeValide = (name: string): boolean => name.trim() !== '';
 
+/** Le formateur attitré d'UNE matière dans UNE promotion — c'est lui qui en saisit les notes depuis son portail. */
+export interface Affectation {
+  id: string;
+  promotionId: string;
+  niveauMatiereId: string;
+  /** teacher_enrollments.id */
+  teacherId: string;
+}
+
 export type StatutNote = 'note' | 'absent' | 'absent_justifie' | 'non_evalue';
 
 export const LIBELLES_STATUT_NOTE: Record<StatutNote, string> = {

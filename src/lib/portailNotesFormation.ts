@@ -87,3 +87,25 @@ export const notesDeLaPeriode = (d: DonneesNotesFormation, periodeId: string): P
   }));
   return { generale: ligne?.generale ?? null, matieres };
 };
+
+// ─── Portail du formateur ───────────────────────────────────────────────────
+export interface InscriptionPromotion {
+  id: string;
+  academicYearLabel: string;
+  status?: string | null;
+  firstName: string;
+  lastName: string;
+}
+
+/**
+ * Les élèves à noter dans une promotion : les inscrits actifs de sa classe,
+ * pour l'année la plus récente où elle a des inscrits — une promotion qui
+ * court sur deux années scolaires ne montre pas deux fois le même élève.
+ */
+export const elevesDeLaPromotion = (inscriptions: InscriptionPromotion[]): InscriptionPromotion[] => {
+  const actives = inscriptions.filter(i => i.status !== 'withdrawn');
+  const annee = actives.map(i => i.academicYearLabel).sort().pop();
+  return actives
+    .filter(i => i.academicYearLabel === annee)
+    .sort((a, b) => a.lastName.localeCompare(b.lastName, 'fr') || a.firstName.localeCompare(b.firstName, 'fr'));
+};

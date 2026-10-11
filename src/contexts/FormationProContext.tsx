@@ -6,7 +6,7 @@ import { estFormationPro } from '@/lib/modeGestion';
 import {
   type Formation, type Niveau, type MatiereCatalogue, type NiveauMatiere, type ChoixGroup, type ChoixOption,
   type NiveauMatiereType, type NiveauMatiereNature, type Promotion, type RythmePromotion, type StatutPromotion,
-  type BaremeCategorie, type Periode, type Evaluation, type Note, type StatutNote, type TypeExamen, DEFAUT_BAREME_CATEGORIES,
+  type BaremeCategorie, type Periode, type Evaluation, type Note, type StatutNote, type TypeExamen, type Affectation, DEFAUT_BAREME_CATEGORIES,
 } from '@/lib/formationPro';
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -159,6 +159,10 @@ interface FormationProContextType {
   deleteEvaluation: (id: string) => Promise<void>;
 
   notes: Note[];
+  /** Formateur de chaque matière d'une promotion (docs/sql/formation_pro_formateurs.sql). */
+  affectations: Affectation[];
+  /** `teacherId` null : la matière n'a plus de formateur attitré. */
+  affecterFormateur: (promotionId: string, niveauMatiereId: string, teacherId: string | null) => Promise<void>;
   /** Insère ou met à jour la note d'un élève pour une évaluation — trace le changement dans fp_notes_historique. */
   saisirNote: (evaluationId: string, studentEnrollmentId: string, data: DonneesNote) => Promise<void>;
   /** Une case vidée dans la grille : la note disparaît (rien n'est jamais remplacé par un 0). */
@@ -187,18 +191,19 @@ export const FormationProProvider = ({ children }: { children: ReactNode }) => {
   const [periodes, setPeriodes] = useState<Periode[]>([]);
   const [evaluations, setEvaluations] = useState<Evaluation[]>([]);
   const [notes, setNotes] = useState<Note[]>([]);
+  const [affectations, setAffectations] = useState<Affectation[]>([]);
 
   useEffect(() => {
     let annule = false;
     if (!schoolId || !actif) {
       setFormations([]); setNiveaux([]); setCatalogue([]); setNiveauMatieresBrut([]); setChoixGroups([]); setPromotionsBrut([]);
-      setBaremeCategories([]); setPeriodes([]); setEvaluations([]); setNotes([]);
+      setBaremeCategories([]); setPeriodes([]); setEvaluations([]); setNotes([]); setAffectations([]);
       setLoading(false);
       return;
     }
     setLoading(true);
     (async () => {
-      const [fRes, nRes, mRes, nmRes, cRes, oRes, pRes, bcRes, perRes, evRes, noRes] = await Promise.all([
+      const [fRes, nRes, mRes, nmRes, cRes, oRes, pRes, bcRes, perRes, evRes, noRes, afRes] = await Promise.all([
         sb.from('fp_formations').select('*').eq('school_id', schoolId).order('ordering'),
         sb.from('fp_niveaux').select('*').eq('school_id', schoolId).order('ordering'),
         sb.from('fp_matieres').select('*').eq('school_id', schoolId).order('name'),
@@ -210,12 +215,17 @@ export const FormationProProvider = ({ children }: { children: ReactNode }) => {
         sb.from('fp_periodes').select('*').eq('school_id', schoolId).order('ordering'),
         sb.from('fp_evaluations').select('*').eq('school_id', schoolId).order('date', { ascending: false }),
         sb.from('fp_notes').select('*').eq('school_id', schoolId),
+        sb.from('fp_affectations').select('*').eq('school_id', schoolId),
       ]);
       if (annule) return;
       setBaremeCategories((bcRes.data ?? []).map(mapBaremeCategorie));
       setPeriodes((perRes.data ?? []).map(mapPeriode));
       setEvaluations((evRes.data ?? []).map(mapEvaluation));
       setNotes((noRes.data ?? []).map(mapNote));
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      setAffectations((afRes.data ?? []).map((r: any) => ({
+        id: r.id, promotionId: r.promotion_id, niveauMatiereId: r.niveau_matiere_id, teacherId: r.teacher_enrollment_id,
+      })));
       const options = (oRes.data ?? []).map(mapOption);
       setFormations((fRes.data ?? []).map(mapFormation));
       setNiveaux((nRes.data ?? []).map(mapNiveau));
@@ -738,6 +748,23 @@ export const FormationProProvider = ({ children }: { children: ReactNode }) => {
     setNotes(prev => prev.filter(n => n.id !== existante.id));
   }, [schoolId]);
 
+  const affecterFormateur = useCallback(async (promotionId: string, niveauMatiereId: string, teacherId: string | null): Promise<void> => {
+    if (!schoolId) return;
+    if (!teacherId) {
+      const { error } = await sb.from('fp_affectations').delete()
+        .eq('promotion_id', promotionId).eq('niveau_matiere_id', niveauMatiereId).eq('school_id', schoolId);
+      if (error) throw error;
+      setAffectations(prev => prev.filter(a => !(a.promotionId === promotionId && a.niveauMatiereId === niveauMatiereId)));
+      return;
+    }
+    const { data: row, error } = await sb.from('fp_affectations').upsert({
+      school_id: schoolId, promotion_id: promotionId, niveau_matiere_id: niveauMatiereId, teacher_enrollment_id: teacherId,
+    }, { onConflict: 'promotion_id,niveau_matiere_id' }).select().single();
+    if (error) throw error;
+    const a: Affectation = { id: row.id, promotionId, niveauMatiereId, teacherId };
+    setAffectations(prev => [...prev.filter(x => !(x.promotionId === promotionId && x.niveauMatiereId === niveauMatiereId)), a]);
+  }, [schoolId]);
+
   const value = useMemo<FormationProContextType>(() => ({
     loading, formations, niveaux, catalogue, niveauMatieres, choixGroups, promotions,
     addFormation, updateFormation, deleteFormation, duplicateFormation,
@@ -748,7 +775,7 @@ export const FormationProProvider = ({ children }: { children: ReactNode }) => {
     baremeCategories, addBaremeCategorie, updateBaremeCategorie, deleteBaremeCategorie, appliquerBaremeParDefaut,
     periodes, addPeriode, updatePeriode, deletePeriode,
     evaluations, addEvaluation, updateEvaluation, deleteEvaluation,
-    notes, saisirNote, supprimerNote,
+    notes, saisirNote, supprimerNote, affectations, affecterFormateur,
   }), [loading, formations, niveaux, catalogue, niveauMatieres, choixGroups, promotions,
       addFormation, updateFormation, deleteFormation, duplicateFormation,
       addNiveau, updateNiveau, deleteNiveau, duplicateNiveau,
@@ -758,7 +785,7 @@ export const FormationProProvider = ({ children }: { children: ReactNode }) => {
       baremeCategories, addBaremeCategorie, updateBaremeCategorie, deleteBaremeCategorie, appliquerBaremeParDefaut,
       periodes, addPeriode, updatePeriode, deletePeriode,
       evaluations, addEvaluation, updateEvaluation, deleteEvaluation,
-      notes, saisirNote, supprimerNote]);
+      notes, saisirNote, supprimerNote, affectations, affecterFormateur]);
 
   return <FormationProContext.Provider value={value}>{children}</FormationProContext.Provider>;
 };
