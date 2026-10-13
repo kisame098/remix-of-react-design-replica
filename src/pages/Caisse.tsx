@@ -20,6 +20,7 @@ import {
 } from '@/types/payment';
 import { Student } from '@/contexts/SchoolContext';
 import { useRecus } from '@/hooks/useRecus';
+import { useElementsAPayer } from '@/hooks/useElementsAPayer';
 import { useAnnulerPaiement } from '@/hooks/useAnnulerPaiement';
 import { resteAPayer } from '@/lib/paiementPartiel';
 import { montantEleve } from '@/lib/tarifsEleve';
@@ -72,6 +73,12 @@ const Caisse = () => {
 
   const [tab, setTab]         = useState<Tab>('scan');
   const [matched, setMatched] = useState<{ student: Student; item: ResolvedItem } | null>(null);
+  // Carte scolaire scannée : l'élève est trouvé, le caissier choisit ce qu'il encaisse.
+  const [carte, setCarte]     = useState<Student | null>(null);
+  const { elementsDe } = useElementsAPayer();
+  // Exactement la liste de Gestion paiements (acomptes, tarif personnalisé, mois
+  // dans l'ordre) : ce qui reste à payer, sans sauter un mois impayé.
+  const aEncaisser = useMemo(() => (carte ? elementsDe(carte).filter(i => !i.paid && !i.blocked) : []), [carte, elementsDe]);
   const [scanError, setScanError]   = useState<string | null>(null);
   const [method, setMethod]         = useState<PaymentMethod>('especes');
   const [confirming, setConfirming] = useState(false);
@@ -122,10 +129,13 @@ const Caisse = () => {
   };
 
   const handleScan = (code: string) => {
-    if (matched) return; // déjà en attente de confirmation
+    if (matched || carte) return; // déjà en attente de confirmation
     const intent = decodePaymentIntent(code);
     if (!intent) {
-      flashError("Ce n'est pas un QR de paiement — l'élève doit d'abord choisir un montant à payer dans son espace élève.");
+      // Carte scolaire : son QR ne contient que le matricule de l'élève.
+      const eleve = students.find(s => s.studentId.toLowerCase() === code.trim().toLowerCase());
+      if (eleve) { setCarte(eleve); return; }
+      flashError("Code inconnu : ce n'est ni la carte scolaire d'un élève de l'école, ni un QR de paiement.");
       return;
     }
     const student = students.find(s => s.id === intent.enrollmentId);
@@ -138,6 +148,7 @@ const Caisse = () => {
 
   const resetScan = () => {
     setMatched(null);
+    setCarte(null);
     setJustPaid(false);
     setMethod('especes');
   };
@@ -219,11 +230,60 @@ const Caisse = () => {
                 <Loader2 className="h-6 w-6 animate-spin text-primary" />
                 <p className="text-sm text-slate-400">Chargement des données de l'école…</p>
               </div>
+            ) : !matched && carte ? (
+              <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-4 space-y-3">
+                <div className="flex items-center gap-3">
+                  <div className="w-11 h-11 rounded-xl bg-primary/10 flex items-center justify-center text-primary font-bold flex-shrink-0 overflow-hidden">
+                    {carte.photoUrl
+                      ? <img src={carte.photoUrl} className="w-full h-full object-cover" alt="" />
+                      : getInitials(carte.firstName, carte.lastName)}
+                  </div>
+                  <div className="min-w-0">
+                    <p className="font-bold text-slate-800 truncate">{carte.firstName} {carte.lastName}</p>
+                    <p className="text-xs text-slate-400 font-mono">{carte.studentId}</p>
+                  </div>
+                </div>
+                {aEncaisser.length === 0 ? (
+                  <div className="flex items-center gap-2 text-emerald-700 bg-emerald-50 border border-emerald-100 rounded-xl px-3 py-2.5 text-sm">
+                    <CheckCircle2 className="h-4 w-4 flex-shrink-0" />
+                    Tout est réglé — rien à encaisser.
+                  </div>
+                ) : (
+                  <>
+                    <p className="text-xs font-semibold text-slate-500">Que paie l'élève ?</p>
+                    <div className="space-y-2">
+                      {aEncaisser.map(i => (
+                        <button
+                          key={i.id}
+                          onClick={() => setMatched({
+                            student: carte,
+                            item: { type: i.type, monthKey: i.monthKey, serviceId: i.serviceId, amount: i.amount, label: i.label, alreadyPaid: false },
+                          })}
+                          className="w-full flex items-center gap-3 rounded-xl border border-slate-100 px-3 py-2.5 text-left hover:border-primary hover:bg-primary/5 transition-colors"
+                        >
+                          <span className="flex-1 min-w-0">
+                            <span className="block text-sm font-semibold text-slate-700 truncate">{i.label}</span>
+                            {(i.overdue || i.dejaVerse > 0) && (
+                              <span className={`block text-xs ${i.overdue ? 'text-red-500' : 'text-slate-400'}`}>
+                                {[i.overdue && 'En retard', i.dejaVerse > 0 && `Acompte déjà versé : ${fmt(i.dejaVerse)}`].filter(Boolean).join(' · ')}
+                              </span>
+                            )}
+                          </span>
+                          <span className="font-bold text-slate-900 whitespace-nowrap">{fmt(i.amount)}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </>
+                )}
+                <button onClick={resetScan} className="w-full text-center text-xs text-slate-400 hover:text-slate-600">
+                  Annuler / scanner autre chose
+                </button>
+              </div>
             ) : !matched ? (
               <>
                 <QrScanner onScan={handleScan} />
                 <p className="text-xs text-slate-400 text-center px-6">
-                  Présentez le QR de paiement affiché sur le téléphone de l'élève (généré depuis son espace élève, pas sa carte).
+                  Scannez la carte scolaire de l'élève, ou le QR de paiement affiché sur son téléphone (espace élève).
                 </p>
               </>
             ) : justPaid ? (

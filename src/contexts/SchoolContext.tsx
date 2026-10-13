@@ -1829,12 +1829,32 @@ export const SchoolProvider = ({ children }: { children: ReactNode }) => {
     if (updates.phone        !== undefined) profileUpdates.phone   = updates.phone ?? null;
     if (updates.email        !== undefined) profileUpdates.email   = updates.email ?? null;
     if (updates.residence    != null) profileUpdates.residence     = updates.residence;
+    // Photo : '' ou null = supprimée.
+    if (updates.photoUrl     !== undefined) profileUpdates.photo_url = updates.photoUrl || null;
+    // Tuteurs : envoyés ensemble par le formulaire de modification. Sans
+    // tuteur 2 dans la mise à jour, il est retiré (le formulaire l'a vidé).
+    if (updates.tutor1 !== undefined) {
+      const t1 = updates.tutor1;
+      const t2 = updates.tutor2;
+      Object.assign(profileUpdates, {
+        tutor1_full_name: t1.fullName?.trim() || null,
+        tutor1_phone:     t1.phone,
+        tutor1_status:    t1.status,
+        tutor1_email:     t1.email?.trim() || null,
+        tutor2_full_name: t2?.fullName?.trim() || null,
+        tutor2_phone:     t2?.phone?.trim() || null,
+        tutor2_status:    t2?.status || null,
+        tutor2_email:     t2?.email?.trim() || null,
+      });
+    }
 
     if (Object.keys(profileUpdates).length > 0) {
-      await supabase
+      const { error } = await supabase
         .from('student_profiles')
         .update(profileUpdates)
         .eq('id', enrollment.studentProfileId);
+      // Une modification refusée ne doit pas s'afficher comme enregistrée.
+      if (error) throw error;
 
       setStudentRecords(prev =>
         prev.map(r =>
@@ -1849,6 +1869,9 @@ export const SchoolProvider = ({ children }: { children: ReactNode }) => {
                 phone:        updates.phone        ?? r.phone,
                 email:        updates.email        ?? r.email,
                 residence:    updates.residence    ?? r.residence,
+                photoUrl:     updates.photoUrl !== undefined ? (updates.photoUrl || undefined) : r.photoUrl,
+                tutor1:       updates.tutor1 ?? r.tutor1,
+                tutor2:       updates.tutor1 !== undefined ? (updates.tutor2?.phone?.trim() ? updates.tutor2 : undefined) : r.tutor2,
               }
             : r
         )
