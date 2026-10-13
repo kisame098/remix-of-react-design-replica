@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
-  Archive, CheckCircle2, Code2, Columns2, Copy, ReceiptText, Download, Eye, FilePlus2, FileText, FileType2, FileUp, Loader2, Pencil, PenSquare, Printer, Search, Trash2, TriangleAlert, Wand2,
+  Archive, CheckCircle2, IdCard, Code2, Columns2, Copy, ReceiptText, Download, Eye, FilePlus2, FileText, FileType2, FileUp, Loader2, Pencil, PenSquare, Printer, Search, Trash2, TriangleAlert, Wand2,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useSchool } from '@/contexts/SchoolContext';
@@ -25,6 +25,8 @@ import { ApercuHtml } from '@/components/documents/ApercuHtml';
 import { EditeurModele } from '@/components/documents/EditeurModele';
 import { EditeurVisuel } from '@/components/documents/EditeurVisuel';
 import { ImportWord } from '@/components/documents/ImportWord';
+import { CartesScolaires } from '@/components/documents/CartesScolaires';
+import { CLE_CARTE_SCOLAIRE, lireReglagesCarte } from '@/lib/carteScolaire';
 import { useModelesDocuments, type CategorieModele } from '@/hooks/useModelesDocuments';
 import { dateHeureDakar, infosEcole, nomDeFichier, type EcoleSource } from '@/lib/documentsEcole';
 import {
@@ -41,10 +43,11 @@ import {
 import { MODELES_PAR_DEFAUT, MODELES_RECUS_PAR_DEFAUT } from '@/lib/modelesDocumentsParDefaut';
 import { estUneErreurDeChargement } from '@/lib/rechargementApresDeploiement';
 
-type Onglet = 'produire' | 'modeles' | 'recus' | 'delivres';
+type Onglet = 'produire' | 'cartes' | 'modeles' | 'recus' | 'delivres';
 
 const ONGLETS: { id: Onglet; label: string; description: string; icon: typeof FileText }[] = [
   { id: 'produire', label: 'Produire', description: 'Certificats, attestations…', icon: Printer },
+  { id: 'cartes', label: 'Cartes scolaires', description: "Cartes d'identité scolaire recto verso", icon: IdCard },
   { id: 'modeles', label: 'Modèles', description: 'Créer, importer, modifier', icon: FileText },
   { id: 'recus', label: 'Reçus', description: 'Le modèle de reçu de la caisse', icon: ReceiptText },
   { id: 'delivres', label: 'Délivrés', description: 'Registre des documents numérotés', icon: Archive },
@@ -123,6 +126,7 @@ const DocumentsEcole = () => {
   const anneeScolaire = currentYear?.id;
   const exemple = useMemo(() => contexteExemple(ecole, anneeScolaire), [ecole, anneeScolaire]);
   const { modeles: modelesEcole, loading, creer, modifier, supprimer } = useModelesDocuments();
+  const reglagesCarte = useMemo(() => lireReglagesCarte(school?.settings), [school?.settings]);
 
   const [onglet, setOnglet] = useState<Onglet>('produire');
   const [edition, setEdition] = useState<Edition | null>(null);
@@ -243,6 +247,13 @@ const DocumentsEcole = () => {
               modeles={tousModeles} students={students} teachers={teachers} classes={classes}
               ecole={ecole} anneeScolaire={anneeScolaire} estDirecteur={estDirecteur}
               onAllerAuxModeles={() => setOnglet('modeles')}
+            />
+          )}
+
+          {onglet === 'cartes' && (
+            <CartesScolaires
+              students={students} classes={classes} ecole={ecole} anneeScolaire={anneeScolaire} estDirecteur={estDirecteur}
+              reglages={reglagesCarte} onEnregistrer={r => updateSchoolSettings({ [CLE_CARTE_SCOLAIRE]: r })}
             />
           )}
 

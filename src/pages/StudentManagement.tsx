@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import StudentExportDialog from '@/components/student/StudentExportDialog';
 import { BoutonRetirer, ListeRetires } from '@/components/retrait/Retraits';
+import { PhotoPicker } from '@/components/student/PhotoPicker';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -69,6 +70,8 @@ interface EditFormData {
   classId: string | null;
   tutor1: Tutor;
   tutor2: Tutor;
+  /** Photo en data URL ; '' = pas de photo (supprimée ou jamais ajoutée). */
+  photoUrl: string;
 }
 
 type ViewMode = 'grid' | 'table';
@@ -115,6 +118,7 @@ const StudentManagement = () => {
     classId: null,
     tutor1: { phone: '', status: '', email: '' },
     tutor2: { phone: '', status: '', email: '' },
+    photoUrl: '',
   });
   const { groups: editRequiredGroups, facultatives: editRequiredFacultatives } = useAcademicChoicesRequirement(editForm.classId);
 
@@ -183,16 +187,21 @@ const StudentManagement = () => {
       email: student.email || '',
       residence: student.residence,
       classId: student.classId,
+      // Le nom complet du tuteur n'est pas dans ce formulaire : on le garde
+      // tel quel, sinon l'enregistrement l'effacerait.
       tutor1: {
+        fullName: student.tutor1.fullName,
         phone: student.tutor1.phone,
         status: student.tutor1.status,
         email: student.tutor1.email || '',
       },
       tutor2: {
+        fullName: student.tutor2?.fullName,
         phone: student.tutor2?.phone || '',
         status: student.tutor2?.status || '',
         email: student.tutor2?.email || '',
       },
+      photoUrl: student.photoUrl || '',
     });
 
     // Pré-remplir les choix déjà résolus pour la classe actuelle de l'élève,
@@ -252,19 +261,29 @@ const StudentManagement = () => {
       return;
     }
 
-    await updateStudent(selectedStudent.id, {
-      firstName: editForm.firstName,
-      lastName: editForm.lastName,
-      dateOfBirth: editForm.dateOfBirth,
-      placeOfBirth: editForm.placeOfBirth,
-      sex: editForm.sex as 'homme' | 'femme',
-      phone: editForm.phone || undefined,
-      email: editForm.email || undefined,
-      residence: editForm.residence,
-      classId: editForm.classId,
-      tutor1: editForm.tutor1 as Tutor,
-      tutor2: editForm.tutor2.phone ? editForm.tutor2 as Tutor : undefined,
-    });
+    try {
+      await updateStudent(selectedStudent.id, {
+        firstName: editForm.firstName,
+        lastName: editForm.lastName,
+        dateOfBirth: editForm.dateOfBirth,
+        placeOfBirth: editForm.placeOfBirth,
+        sex: editForm.sex as 'homme' | 'femme',
+        phone: editForm.phone || undefined,
+        email: editForm.email || undefined,
+        residence: editForm.residence,
+        classId: editForm.classId,
+        tutor1: editForm.tutor1 as Tutor,
+        tutor2: editForm.tutor2.phone ? editForm.tutor2 as Tutor : undefined,
+        photoUrl: editForm.photoUrl,
+      });
+    } catch (e) {
+      toast({
+        title: 'Modifications non enregistrées',
+        description: (e as { message?: string } | null)?.message || 'Vérifiez la connexion, puis recommencez.',
+        variant: 'destructive',
+      });
+      return;
+    }
 
     for (const [groupId, subjectName] of Object.entries(editGroupChoices)) {
       await resolveFiliereChoice(groupId, selectedStudent.id, subjectName, 'admin_correction');
@@ -931,6 +950,13 @@ const StudentManagement = () => {
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="grid gap-4 md:grid-cols-2">
+                    <div className="md:col-span-2">
+                      <PhotoPicker
+                        value={editForm.photoUrl}
+                        onChange={photoUrl => setEditForm(prev => ({ ...prev, photoUrl }))}
+                        name={`${editForm.firstName} ${editForm.lastName}`.trim()}
+                      />
+                    </div>
                     <div className="space-y-2">
                       <Label htmlFor="edit-lastName">Nom *</Label>
                       <Input
