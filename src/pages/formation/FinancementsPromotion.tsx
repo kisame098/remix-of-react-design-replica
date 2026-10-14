@@ -9,11 +9,16 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { DialogDossier } from '@/components/financements/DialogDossier';
 import { DialogActiver } from '@/components/financements/DialogActiver';
+import { OngletFinances } from '@/components/financements/OngletFinances';
+import { OngletRapports } from '@/components/financements/OngletRapports';
+import { OngletInsertion } from '@/components/financements/OngletInsertion';
 import {
   COULEUR_STATUT_DOSSIER, LIBELLES_SITUATION, LIBELLES_STATUT_DOSSIER, STATUTS_DOSSIER, type StatutDossier,
 } from '@/lib/financements';
 
 type Filtre = 'tous' | StatutDossier | 'sortis';
+type Onglet = 'dossiers' | 'finances' | 'rapports' | 'insertion';
+const ONGLETS: [Onglet, string][] = [['dossiers', 'Dossiers'], ['finances', 'Finances'], ['rapports', 'Rapports de fin'], ['insertion', 'Insertion']];
 
 /**
  * Page 2 du module Financements : les apprenants financés d'une promotion,
@@ -54,6 +59,7 @@ const FinancementsPromotion = () => {
   }, [lignes, filtre, recherche]);
 
   const [ouvert, setOuvert] = useState<Student | null>(null);
+  const [onglet, setOnglet] = useState<Onglet>('dossiers');
   const [activer, setActiver] = useState(false);
 
   if (loading || fin.loading) {
@@ -95,8 +101,25 @@ const FinancementsPromotion = () => {
         </Button>
       </div>
 
+      {fin.disponible && lignes.length > 0 && (
+        <div className="px-4 md:px-6 border-b flex gap-1 overflow-x-auto flex-shrink-0">
+          {ONGLETS.map(([id, libelle]) => (
+            <button key={id} onClick={() => setOnglet(id)}
+              className={`px-3 py-2.5 text-sm whitespace-nowrap border-b-2 -mb-px transition-colors ${onglet === id ? 'border-primary text-foreground font-medium' : 'border-transparent text-muted-foreground hover:text-foreground'}`}>
+              {libelle}
+            </button>
+          ))}
+        </div>
+      )}
+
       <div className="flex-1 min-h-0 overflow-y-auto p-4 md:p-6 space-y-4">
-        {!fin.disponible ? (
+        {fin.disponible && lignes.length > 0 && onglet === 'finances' ? (
+          <OngletFinances lignes={lignes} classId={promotion.classId} nomFormation={`${formation?.name ?? ''} · ${promotion.name}`} finFormation={promotion.endDate} />
+        ) : fin.disponible && lignes.length > 0 && onglet === 'rapports' ? (
+          <OngletRapports lignes={lignes} classId={promotion.classId} nomPromotion={promotion.name} />
+        ) : fin.disponible && lignes.length > 0 && onglet === 'insertion' ? (
+          <OngletInsertion lignes={lignes} />
+        ) : !fin.disponible ? (
           <div className="rounded-md border border-dashed p-4 text-sm text-muted-foreground">
             Le module Financements n'est pas encore activé pour la base de données de l'école. Contactez l'assistance SenClass.
           </div>
