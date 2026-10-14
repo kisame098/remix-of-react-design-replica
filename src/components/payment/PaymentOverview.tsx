@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { EncadreFinancementsPaiements } from '@/components/financements/EncadreFinancementsPaiements';
+import { MONTANT_MASQUE, useMontantsMasques } from '@/hooks/useMontantsMasques';
 import {
   Banknote, TrendingUp, Users, School, CheckCircle2, AlertTriangle,
   CreditCard, ArrowUpRight
@@ -29,7 +30,10 @@ const PaymentOverview = () => {
     [currentYear, billingTiming]
   );
 
+  // Montants masqués (œil en haut de Gestion des paiements) : total encaissé, par classe, par mode.
+  const [masques] = useMontantsMasques();
   const fmt = (n: number) => new Intl.NumberFormat('fr-FR').format(Math.round(n));
+  const somme = (n: number) => (masques ? MONTANT_MASQUE : fmt(n));
 
   // ── Global stats — un paiement annulé n'est plus de l'argent encaissé ───────
   const confirmedPayments = useMemo(() => payments.filter(p => p.status !== 'cancelled'), [payments]);
@@ -117,7 +121,7 @@ const PaymentOverview = () => {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-xs text-muted-foreground">Total encaissé</p>
-                <p className="text-2xl font-bold mt-0.5">{fmt(totalCollected)}</p>
+                <p className="text-2xl font-bold mt-0.5">{somme(totalCollected)}</p>
                 <p className="text-xs text-muted-foreground">FCFA</p>
               </div>
               <div className="p-2.5 rounded-xl bg-green-500/10">
@@ -205,7 +209,7 @@ const PaymentOverview = () => {
                   </div>
                   <div className="flex items-center gap-3 text-sm">
                     <span className="text-muted-foreground text-xs">{paidInscription}/{studentCount} inscrits</span>
-                    <span className="font-semibold">{fmt(collected)} FCFA</span>
+                    <span className="font-semibold">{somme(collected)} FCFA</span>
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
@@ -234,7 +238,7 @@ const PaymentOverview = () => {
                 <div key={method}>
                   <div className="flex items-center justify-between mb-1">
                     <span className="text-sm">{PAYMENT_METHOD_LABELS[method]}</span>
-                    <span className="text-sm font-semibold">{fmt(amount)} FCFA</span>
+                    <span className="text-sm font-semibold">{somme(amount)} FCFA</span>
                   </div>
                   <div className="flex items-center gap-2">
                     <Progress value={pct} className="h-1.5 flex-1" />
