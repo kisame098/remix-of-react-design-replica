@@ -30,7 +30,8 @@ const elements: PayableItem[] = [
 describe('réglages', () => {
   it('rien d\'enregistré : module éteint', () => {
     expect(lireReglagesFinancements(null)).toEqual({ actif: false, organismes: [] });
-    expect(lireReglagesFinancements({ [CLE_FINANCEMENTS]: { actif: true, organismes: [] } }).actif).toBe(false);
+    // Allumé sans organisme : le module propose d'en créer un.
+    expect(lireReglagesFinancements({ [CLE_FINANCEMENTS]: { actif: true, organismes: [] } }).actif).toBe(true);
   });
 
   it('le 3FPT par défaut reprend la demande : 90 % pris en charge, acompte 70 % puis solde 30 %', () => {

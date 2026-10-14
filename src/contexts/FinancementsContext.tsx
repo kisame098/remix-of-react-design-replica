@@ -4,7 +4,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import type { Student } from '@/contexts/SchoolContext';
 import { estFormationPro } from '@/lib/modeGestion';
 import {
-  TAILLE_MAX_FICHIER, lireReglagesFinancements, priseEnChargeDe,
+  TAILLE_MAX_FICHIER, lireReglagesFinancements, priseEnChargeDe, priseEnChargeEffective,
   type Dossier, type Organisme, type PieceDossier, type ReglagesFinancements,
 } from '@/lib/financements';
 import type { PriseEnCharge } from '@/lib/priseEnCharge';
@@ -19,7 +19,8 @@ import {
 //
 // Rien n'est chargé tant que l'école n'a pas activé le module (Paramètres →
 // Financements). Activer le financement d'un apprenant crée son DOSSIER, et
-// c'est tout : aucune réduction n'est posée. La prise en charge n'est pas un
+// c'est tout : aucune réduction n'est posée. Le partage ne s'applique qu'une
+// fois le dossier VALIDÉ. La prise en charge n'est pas un
 // rabais — le frais reste dû en entier, partagé entre l'apprenant et
 // l'organisme au moment du calcul (src/lib/priseEnCharge.ts), à partir du
 // dossier. Retirer le dossier, c'est retirer le partage.
@@ -95,7 +96,8 @@ export interface BrouillonFacture {
   trancheLibelle: string;
   tranchePourcentage: number;
   portee: PorteeFacture;
-  classId: string;
+  /** La promotion facturée ; absente pour une formation entière ou tous les apprenants. */
+  classId?: string;
   dateEmission: string;
   dateEcheance?: string;
   lignes: LigneFactureFinanceur[];
@@ -149,9 +151,9 @@ interface FinancementsContextType {
   dossierDe: (enrollmentId: string) => Dossier | undefined;
   organisme: (id: string) => Organisme | undefined;
 
-  /** Le partage des frais de cet apprenant (organisme, part, frais concernés), s'il est financé. */
+  /** Le partage des frais de cet apprenant (organisme, part, frais concernés), si son dossier est validé. */
   priseEnChargeDe: (enrollmentId: string) => PriseEnCharge | undefined;
-  /** Ouvre son dossier : dès lors, ses frais concernés sont partagés avec l'organisme. */
+  /** Ouvre son dossier (en attente) : ses frais seront partagés une fois le dossier validé. */
   activer: (eleve: Student, organismeId: string) => Promise<Dossier>;
   /** Supprime le dossier : l'apprenant redoit la totalité de ce qui n'est pas payé. */
   desactiver: (eleve: Student) => Promise<void>;
@@ -176,7 +178,7 @@ interface FinancementsContextType {
   /** Numérote (par organisme et par année) et enregistre ; renvoie les factures créées. */
   emettreFactures: (brouillons: BrouillonFacture[]) => Promise<FactureFinanceur[]>;
   annulerFacture: (id: string, motif: string) => Promise<void>;
-  ajouterVersement: (factureId: string, v: Omit<Versement, 'id' | 'factureId' | 'creePar'>) => Promise<void>;
+  ajouterVersement: (factureId: string, v: Omit<Versement, 'id' | 'factureId' | 'creePar'>) => Promise<Versement>;
   /** Directeur seulement (vérifié par la base). */
   supprimerVersement: (id: string) => Promise<void>;
   creerRapport: (d: DonneesRapport) => Promise<Rapport>;
@@ -251,7 +253,8 @@ export const FinancementsProvider = ({ children }: { children: ReactNode }) => {
   const priseEnCharge = useCallback((enrollmentId: string) => {
     if (!actif) return undefined;
     const d = dossiers.find(x => x.studentEnrollmentId === enrollmentId);
-    const o = d ? reglages.organismes.find(x => x.id === d.organismeId) : undefined;
+    // Dossier pas encore validé : l'apprenant paie tout (priseEnChargeEffective).
+    const o = d && priseEnChargeEffective(d) ? reglages.organismes.find(x => x.id === d.organismeId) : undefined;
     return o ? priseEnChargeDe(o) : undefined;
   }, [actif, dossiers, reglages]);
 
@@ -333,7 +336,7 @@ export const FinancementsProvider = ({ children }: { children: ReactNode }) => {
         return {
           school_id: schoolId, organisme_id: b.organismeId, numero, annee,
           tranche_id: b.trancheId, tranche_libelle: b.trancheLibelle, tranche_pourcentage: b.tranchePourcentage,
-          portee: b.portee, class_id: b.classId, date_emission: b.dateEmission, date_echeance: b.dateEcheance || null,
+          portee: b.portee, class_id: b.classId ?? null, date_emission: b.dateEmission, date_echeance: b.dateEcheance || null,
           lignes: b.lignes.map(l => ({ dossier_id: l.dossierId, student_enrollment_id: l.studentEnrollmentId, nom: l.nom, matricule: l.matricule, finance: l.finance, montant: l.montant })),
           total: b.lignes.reduce((s, l) => s + l.montant, 0), note: b.note?.trim() || null, cree_par: parNom ?? null,
         };
@@ -364,8 +367,10 @@ export const FinancementsProvider = ({ children }: { children: ReactNode }) => {
       reference: v.reference?.trim() || null, note: v.note?.trim() || null, cree_par: parNom ?? null,
     }).select().single();
     if (error) throw error;
-    setVersements(prev => [...prev, mapVersement(data)]);
+    const verse = mapVersement(data);
+    setVersements(prev => [...prev, verse]);
     void journaliser('facture', factureId, 'Versement reçu', `${new Intl.NumberFormat('fr-FR').format(v.montant)} F le ${dateFr(v.date)}${v.reference ? ` (réf. ${v.reference})` : ''}`);
+    return verse;
   }, [schoolId, parNom, journaliser]);
 
   const supprimerVersement = useCallback(async (id: string) => {

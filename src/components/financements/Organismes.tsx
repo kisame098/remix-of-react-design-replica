@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Landmark, Loader2, Plus, Save, Trash2, X } from 'lucide-react';
+import { Landmark, Loader2, Plus, Save, X } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { usePayment } from '@/contexts/PaymentContext';
 import { Button } from '@/components/ui/button';
@@ -12,13 +12,13 @@ import { Switch } from '@/components/ui/switch';
 import { toast } from '@/hooks/use-toast';
 import {
   CLE_FINANCEMENTS, erreurOrganisme, lireReglagesFinancements, nouvelId, organisme3FPT, organismeVierge,
-  type Organisme, type ReglagesFinancements as Reglages,
+  type Organisme,
 } from '@/lib/financements';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Financements (formation professionnelle) : l'interrupteur du module
-// (Paramètres) et les organismes qui prennent en charge des apprenants (3FPT…)
-// avec leurs règles (dans le module, bouton « Organismes »).
+// (Paramètres) et la fiche d'un organisme qui prend en charge des apprenants
+// (3FPT…) avec ses règles — créée et modifiée depuis le module.
 // ═══════════════════════════════════════════════════════════════════════════
 
 const pct = (n: number) => String(n).replace('.', ',');
@@ -48,9 +48,7 @@ const ChampPourcent = ({ valeur, onChange, entier, label, className }: {
   );
 };
 
-const EditeurOrganisme = ({ o, onChange, onSupprimer, supprimable }: {
-  o: Organisme; onChange: (o: Organisme) => void; onSupprimer: () => void; supprimable: boolean;
-}) => {
+const EditeurOrganisme = ({ o, onChange }: { o: Organisme; onChange: (o: Organisme) => void }) => {
   const { annexServices } = usePayment();
   const [nouvellePiece, setNouvellePiece] = useState('');
   const totalTranches = Math.round(o.tranches.reduce((s, t) => s + t.pourcentage, 0) * 100) / 100;
@@ -65,25 +63,20 @@ const EditeurOrganisme = ({ o, onChange, onSupprimer, supprimable }: {
   });
 
   return (
-    <div className="rounded-xl border p-4 space-y-5">
-      <div className="flex flex-wrap items-end gap-3">
-        <div className="space-y-1.5 flex-1 min-w-[180px]">
-          <Label>Organisme</Label>
-          <Input value={o.nom} placeholder="3FPT, ONFP, entreprise…" onChange={e => onChange({ ...o, nom: e.target.value })} />
+    <div className="space-y-5">
+      <div className="grid gap-3 sm:grid-cols-[1fr_160px]">
+        <div className="space-y-1.5">
+          <Label htmlFor="org-nom">Nom</Label>
+          <Input id="org-nom" value={o.nom} placeholder="3FPT, ONFP, entreprise…" onChange={e => onChange({ ...o, nom: e.target.value })} />
         </div>
-        <div className="space-y-1.5 w-40">
+        <div className="space-y-1.5">
           <Label>Part prise en charge</Label>
           <ChampPourcent entier label="Part prise en charge" valeur={o.partFinancee} onChange={n => onChange({ ...o, partFinancee: n })} />
         </div>
-        {supprimable && (
-          <Button type="button" variant="ghost" size="icon" className="text-destructive" onClick={onSupprimer} aria-label={`Retirer ${o.nom || "l'organisme"}`}>
-            <Trash2 className="h-4 w-4" />
-          </Button>
-        )}
       </div>
       <p className="text-xs text-muted-foreground -mt-3">
-        Les frais restent dus en entier à l'école. L'apprenant en paie {pct(Math.max(0, 100 - o.partFinancee))} % à la caisse ;
-        les {pct(o.partFinancee)} % de l'organisme lui sont facturés dans l'onglet Finances.
+        Les frais restent dus en entier à l'école : l'apprenant en paie {pct(Math.max(0, 100 - o.partFinancee))} % à la caisse,
+        l'organisme {pct(o.partFinancee)} % sur facture — une fois le dossier de l'apprenant validé.
       </p>
 
       <div className="space-y-2">
@@ -169,8 +162,8 @@ const EditeurOrganisme = ({ o, onChange, onSupprimer, supprimable }: {
 
 /**
  * Paramètres → Financements : seulement l'interrupteur du module. Les
- * organismes et leurs règles se gèrent DANS le module (Financements →
- * Organismes), là où on s'en sert — comme les entreprises dans Stages.
+ * organismes et leurs règles se gèrent DANS le module (Financements), là
+ * où on s'en sert — comme les entreprises dans Stages.
  */
 export const ActivationFinancements = () => {
   const { school, updateSchoolSettings } = useAuth();
@@ -185,7 +178,7 @@ export const ActivationFinancements = () => {
       await updateSchoolSettings({ [CLE_FINANCEMENTS]: { actif, organismes } });
       toast({
         title: actif ? 'Module Financements activé' : 'Module Financements désactivé',
-        description: actif ? 'Il apparaît dans le menu. Ses organismes se règlent depuis le module (bouton « Organismes »).' : 'Les dossiers déjà saisis sont gardés.',
+        description: actif ? 'Il apparaît dans le menu. Ses organismes se créent et se règlent depuis le module.' : 'Les dossiers déjà saisis sont gardés.',
       });
     } catch (e) {
       toast({ title: 'Réglage non enregistré', description: (e as { message?: string })?.message, variant: 'destructive' });
@@ -217,30 +210,43 @@ export const ActivationFinancements = () => {
 };
 
 /**
- * Financements → Organismes : les organismes financeurs et leurs règles
- * (part prise en charge, frais concernés, tranches, pièces). Le directeur
- * règle ; les autres consultent.
+ * Créer ou modifier UN organisme financeur (part prise en charge, frais
+ * concernés, tranches, pièces du dossier). Le directeur seul enregistre.
  */
-export const DialogOrganismes = ({ open, onOpenChange }: { open: boolean; onOpenChange: (v: boolean) => void }) => {
+export const DialogOrganisme = ({ organisme, open, onOpenChange, onEnregistre }: {
+  /** Absent : création. */
+  organisme?: Organisme;
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  onEnregistre?: (o: Organisme) => void;
+}) => {
   const { school, updateSchoolSettings, accountRole } = useAuth();
   const modifiable = accountRole === 'admin';
-  const enregistres = useMemo(() => lireReglagesFinancements(school?.settings), [school?.settings]);
-  const [brouillon, setBrouillon] = useState<Reglages>(enregistres);
-  const cleEnregistree = JSON.stringify(enregistres);
-  useEffect(() => { if (open) setBrouillon(JSON.parse(cleEnregistree) as Reglages); }, [cleEnregistree, open]);
+  const reglages = useMemo(() => lireReglagesFinancements(school?.settings), [school?.settings]);
+  const [brouillon, setBrouillon] = useState<Organisme>(() => organisme ?? organismeVierge());
   const [saving, setSaving] = useState(false);
-  const modifie = JSON.stringify(brouillon) !== cleEnregistree;
+  const cle = organisme ? JSON.stringify(organisme) : '';
+  useEffect(() => {
+    if (open) setBrouillon(cle ? (JSON.parse(cle) as Organisme) : organismeVierge());
+  }, [open, cle]);
 
   const enregistrer = async () => {
-    const erreur = brouillon.organismes.length === 0 ? 'Gardez au moins un organisme.' : brouillon.organismes.map(erreurOrganisme).find(Boolean);
-    if (erreur) { toast({ title: 'Réglages incomplets', description: erreur, variant: 'destructive' }); return; }
+    const o = { ...brouillon, nom: brouillon.nom.trim() };
+    const erreur = erreurOrganisme(o);
+    if (erreur) { toast({ title: 'Organisme incomplet', description: erreur, variant: 'destructive' }); return; }
+    if (reglages.organismes.some(x => x.id !== o.id && x.nom.toLowerCase() === o.nom.toLowerCase())) {
+      toast({ title: 'Nom déjà pris', description: `Un organisme s'appelle déjà « ${o.nom} ».`, variant: 'destructive' });
+      return;
+    }
     setSaving(true);
     try {
-      await updateSchoolSettings({ [CLE_FINANCEMENTS]: { ...brouillon, organismes: brouillon.organismes.map(o => ({ ...o, nom: o.nom.trim() })) } });
-      toast({ title: 'Organismes enregistrés' });
+      const organismes = organisme ? reglages.organismes.map(x => (x.id === o.id ? o : x)) : [...reglages.organismes, o];
+      await updateSchoolSettings({ [CLE_FINANCEMENTS]: { actif: true, organismes } });
+      toast({ title: organisme ? 'Organisme modifié' : 'Organisme créé', description: o.nom });
+      onEnregistre?.(o);
       onOpenChange(false);
     } catch (e) {
-      toast({ title: 'Réglages non enregistrés', description: (e as { message?: string })?.message, variant: 'destructive' });
+      toast({ title: 'Organisme non enregistré', description: (e as { message?: string })?.message, variant: 'destructive' });
     } finally {
       setSaving(false);
     }
@@ -248,36 +254,21 @@ export const DialogOrganismes = ({ open, onOpenChange }: { open: boolean; onOpen
 
   return (
     <Dialog open={open} onOpenChange={v => { if (!saving) onOpenChange(v); }}>
-      <DialogContent className="max-w-3xl max-h-[92vh] flex flex-col">
+      <DialogContent className="max-w-2xl max-h-[92vh] flex flex-col">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2"><Landmark className="h-5 w-5 text-primary" />Organismes financeurs</DialogTitle>
-          <DialogDescription>
-            {modifiable ? 'Part prise en charge, frais concernés, tranches de versement et pièces du dossier, pour chaque organisme.' : 'Seul le directeur peut modifier ces règles.'}
-          </DialogDescription>
+          <DialogTitle className="flex items-center gap-2">
+            <Landmark className="h-5 w-5 text-primary" />{organisme ? `Modifier ${organisme.nom}` : 'Nouvel organisme financeur'}
+          </DialogTitle>
+          {!modifiable && <DialogDescription>Seul le directeur peut modifier ces règles.</DialogDescription>}
         </DialogHeader>
-        <fieldset disabled={!modifiable} className="flex-1 overflow-y-auto space-y-4 -mx-1 px-1">
-          {brouillon.organismes.map(o => (
-            <EditeurOrganisme
-              key={o.id} o={o} supprimable={modifiable && brouillon.organismes.length > 1}
-              onChange={n => setBrouillon(b => ({ ...b, organismes: b.organismes.map(x => x.id === o.id ? n : x) }))}
-              onSupprimer={() => setBrouillon(b => ({ ...b, organismes: b.organismes.filter(x => x.id !== o.id) }))}
-            />
-          ))}
-          {modifiable && (
-            <Button type="button" variant="outline" className="gap-2" onClick={() => setBrouillon(b => ({ ...b, organismes: [...b.organismes, organismeVierge()] }))}>
-              <Plus className="h-4 w-4" /> Ajouter un organisme
-            </Button>
-          )}
-          <p className="text-xs text-muted-foreground">
-            Changer la part prise en charge ne touche pas les apprenants déjà activés : ouvrez leur dossier et cliquez sur
-            « Réappliquer la part » pour mettre leurs frais à jour.
-          </p>
+        <fieldset disabled={!modifiable} className="flex-1 overflow-y-auto -mx-1 px-1">
+          <EditeurOrganisme o={brouillon} onChange={setBrouillon} />
         </fieldset>
         {modifiable && (
           <DialogFooter>
-            <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>Fermer</Button>
-            <Button onClick={() => void enregistrer()} disabled={!modifie || saving} className="gap-2">
-              {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />} Enregistrer
+            <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>Annuler</Button>
+            <Button onClick={() => void enregistrer()} disabled={saving} className="gap-2">
+              {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}{organisme ? 'Enregistrer' : 'Créer'}
             </Button>
           </DialogFooter>
         )}

@@ -83,7 +83,8 @@ const Caisse = () => {
   const financeur = (s: Student) => {
     const d = financements.actif ? financements.dossierDe(s.id) : undefined;
     const o = d ? financements.organisme(d.organismeId) : undefined;
-    return o ? <p className="text-xs font-medium text-primary">Financé {o.nom} · paie {100 - o.partFinancee} %</p> : null;
+    if (!o || !d) return null;
+    return <p className="text-xs font-medium text-primary">{d.statut === 'valide' ? `Financé ${o.nom} · paie ${100 - o.partFinancee} %` : `${o.nom} : dossier à valider · paie tout`}</p>;
   };
   // Exactement la liste de Gestion paiements (acomptes, tarif personnalisé, mois
   // dans l'ordre) : ce qui reste à payer, sans sauter un mois impayé.

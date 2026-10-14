@@ -12,7 +12,7 @@ const AUCUN = '__aucun';
  */
 export const ChoixFinancement = ({ valeur, onChange, disabled }: { valeur: string; onChange: (id: string) => void; disabled?: boolean }) => {
   const { actif, reglages } = useFinancements();
-  if (!actif) return null;
+  if (!actif || reglages.organismes.length === 0) return null;
   return (
     <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 pt-3 border-t">
       <Label className="flex items-center gap-1.5 text-sm text-muted-foreground font-normal">

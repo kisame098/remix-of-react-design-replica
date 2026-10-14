@@ -512,7 +512,9 @@ const PaymentEntry = ({ initialMode = 'search' }: { initialMode?: 'search' | 'sc
                   {selectedClass && <Badge variant="outline" className="text-xs mt-0.5">{selectedClass.name}</Badge>}
                   {organismeFinanceur && (
                     <Badge className="text-xs mt-0.5 ml-1 gap-1 bg-primary/15 text-primary hover:bg-primary/15 border-0">
-                      <Landmark className="h-3 w-3" />Financé {organismeFinanceur.nom} · paie {100 - organismeFinanceur.partFinancee} %
+                      <Landmark className="h-3 w-3" />{dossierFinancement?.statut === 'valide'
+                        ? `Financé ${organismeFinanceur.nom} · paie ${100 - organismeFinanceur.partFinancee} %`
+                        : `${organismeFinanceur.nom} : dossier à valider · paie tout`}
                     </Badge>
                   )}
                 </div>
