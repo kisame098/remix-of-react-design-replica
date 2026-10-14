@@ -17,7 +17,7 @@ vi.mock('@/hooks/useElementsAPayer', () => ({
 
 import { EncadreFinancementsPaiements } from './EncadreFinancementsPaiements';
 
-const dossier = (id: string, e: string) => ({ id, studentEnrollmentId: e, organismeId: 'fpt' });
+const dossier = (id: string, e: string, statut = 'valide') => ({ id, studentEnrollmentId: e, organismeId: 'fpt', statut });
 beforeEach(() => {
   fin = {
     actif: true, suiviDisponible: true, dossiers: [dossier('d1', 'e1'), dossier('d2', 'e2')], organisme: () => organisme,
@@ -38,6 +38,13 @@ describe('Vue d\'ensemble des paiements → Financements', () => {
     expect(valeur('Reçu')).toBe('90000FCFA');
     expect(valeur('Reste à encaisser')).toBe('90000FCFA');
     expect(screen.getByRole('link', { name: /Ouvrir Financements/ })).toHaveAttribute('href', '/formation/financements');
+  });
+
+  it('un dossier pas encore validé n\'attend rien de l\'organisme', () => {
+    fin = { ...fin, dossiers: [dossier('d1', 'e1'), dossier('d2', 'e2', 'en_attente')] };
+    render(<MemoryRouter><EncadreFinancementsPaiements /></MemoryRouter>);
+    const valeur = (titre: string) => screen.getByText(titre).nextElementSibling?.textContent?.replace(/\s/g, '');
+    expect(valeur("Attendu de l'organisme")).toBe('90000FCFA');
   });
 
   it('rien quand le module est éteint ou sans apprenant financé', () => {

@@ -124,7 +124,8 @@ export const lireReglagesFinancements = (settings: Record<string, unknown> | nul
   if (!brut || typeof brut !== 'object') return { actif: false, organismes: [] };
   const r = brut as Record<string, unknown>;
   const organismes = (Array.isArray(r.organismes) ? r.organismes : []).map(lireOrganisme).filter((o): o is Organisme => o !== null);
-  return { actif: r.actif === true && organismes.length > 0, organismes };
+  // Allumé même sans organisme : la page du module propose alors d'en créer un.
+  return { actif: r.actif === true, organismes };
 };
 
 /** Ce qui empêche d'enregistrer un organisme ; null s'il est valide. */
@@ -223,6 +224,13 @@ export const manquesDuDossier = (d: Pick<Dossier, 'contratSigne' | 'engagementSi
   }
   return manques;
 };
+
+/**
+ * La prise en charge ne compte qu'une fois le dossier VALIDÉ : tant qu'il est
+ * en attente, complet ou à régulariser, l'apprenant paie ses frais en entier
+ * et rien n'est facturé à l'organisme.
+ */
+export const priseEnChargeEffective = (d: Pick<Dossier, 'statut'> | undefined): boolean => d?.statut === 'valide';
 
 // ─── La part de l'apprenant (prise en charge, PAS une réduction) ────────────
 

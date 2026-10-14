@@ -281,48 +281,58 @@ export const assiduite = (attendances: Pick<StudentAttendance, 'studentId' | 'st
 
 export interface Alerte { niveau: 'rouge' | 'orange'; texte: string }
 
+/** Une promotion où l'organisme a des apprenants : ce qu'il faut pour les alertes de fin de formation. */
+export interface PromotionFinancee { classId: string; nom: string; finFormation?: string }
+
 /**
- * Ce qui demande l'attention sur une cohorte financée : dossiers à traiter,
- * factures en retard, tranches pas encore facturées, rapport final non
- * transmis alors que la formation est finie. Aucune ne bloque rien.
+ * Ce qui demande l'attention chez UN organisme : dossiers pas encore validés
+ * (la prise en charge ne s'applique pas tant qu'ils ne le sont pas),
+ * factures en retard ou en attente, première tranche pas encore facturée,
+ * promotion terminée sans rapport de fin transmis. Aucune ne bloque rien.
  */
-export const alertesCohorte = (p: {
+export const alertesOrganisme = (p: {
+  organisme: Organisme;
   dossiers: Dossier[];
-  organismes: Organisme[];
   factures: FactureFinanceur[];
   versements: Versement[];
   rapports: Rapport[];
-  classId: string;
-  /** Date de fin de la promotion, si connue. */
-  finFormation?: string;
+  /** Pour chaque dossier, la classe de sa promotion. */
+  classeDe: (d: Dossier) => string | undefined;
+  promotions: PromotionFinancee[];
   aujourdhui: string;
 }): Alerte[] => {
   const alertes: Alerte[] = [];
-  const aRegulariser = p.dossiers.filter(d => d.statut === 'a_regulariser').length;
-  const enAttente = p.dossiers.filter(d => d.statut === 'en_attente').length;
-  if (aRegulariser) alertes.push({ niveau: 'rouge', texte: `${aRegulariser} dossier${aRegulariser > 1 ? 's' : ''} à régulariser` });
-  if (enAttente) alertes.push({ niveau: 'orange', texte: `${enAttente} dossier${enAttente > 1 ? 's' : ''} en attente` });
+  const s = (n: number) => (n > 1 ? 's' : '');
+  const dossiers = p.dossiers.filter(d => d.organismeId === p.organisme.id);
+  const aRegulariser = dossiers.filter(d => d.statut === 'a_regulariser').length;
+  const aValider = dossiers.filter(d => d.statut === 'en_attente' || d.statut === 'complet').length;
+  if (aRegulariser) alertes.push({ niveau: 'rouge', texte: `${aRegulariser} dossier${s(aRegulariser)} à régulariser` });
+  if (aValider) alertes.push({ niveau: 'orange', texte: `${aValider} dossier${s(aValider)} à valider : d'ici là, l'apprenant paie tout` });
 
-  const siennes = p.factures.filter(f => f.classId === p.classId);
-  const retard = siennes.filter(f => statutFacture(f, p.versements, p.aujourdhui) === 'en_retard').length;
-  if (retard) alertes.push({ niveau: 'rouge', texte: `${retard} facture${retard > 1 ? 's' : ''} en retard de paiement` });
-  const attente = siennes.filter(f => ['en_attente', 'partielle'].includes(statutFacture(f, p.versements, p.aujourdhui))).length;
-  if (attente) alertes.push({ niveau: 'orange', texte: `${attente} facture${attente > 1 ? 's' : ''} en attente de paiement` });
+  const factures = p.factures.filter(f => f.organismeId === p.organisme.id);
+  const retard = factures.filter(f => statutFacture(f, p.versements, p.aujourdhui) === 'en_retard').length;
+  if (retard) alertes.push({ niveau: 'rouge', texte: `${retard} facture${s(retard)} en retard de paiement` });
+  const attente = factures.filter(f => ['en_attente', 'partielle'].includes(statutFacture(f, p.versements, p.aujourdhui))).length;
+  if (attente) alertes.push({ niveau: 'orange', texte: `${attente} facture${s(attente)} en attente de paiement` });
 
-  // Première tranche (acompte) pas encore facturée pour des dossiers validés.
-  for (const o of p.organismes) {
-    const premiere = o.tranches[0];
-    if (!premiere) continue;
-    const sansAcompte = p.dossiers.filter(d => d.organismeId === o.id && d.statut === 'valide' && !factureDeLaTranche(p.factures, d.id, premiere.id)).length;
-    if (sansAcompte) alertes.push({ niveau: 'orange', texte: `${o.nom} : ${premiere.libelle.toLowerCase()} pas encore facturé pour ${sansAcompte} dossier${sansAcompte > 1 ? 's' : ''} validé${sansAcompte > 1 ? 's' : ''}` });
+  const premiere = p.organisme.tranches[0];
+  if (premiere) {
+    const sans = dossiers.filter(d => d.statut === 'valide' && !factureDeLaTranche(factures, d.id, premiere.id)).length;
+    if (sans) alertes.push({ niveau: 'orange', texte: `${premiere.libelle} pas encore facturé pour ${sans} dossier${s(sans)} validé${s(sans)}` });
   }
 
-  const finie = !!p.finFormation && p.finFormation < p.aujourdhui;
-  if (finie && p.dossiers.length > 0 && !p.dossiers.every(d => rapportTransmis(p.rapports, p.classId, d.id))) {
-    alertes.push({ niveau: 'orange', texte: 'Formation terminée : rapport de fin de formation pas encore transmis' });
+  for (const promo of p.promotions) {
+    if (!promo.finFormation || promo.finFormation >= p.aujourdhui) continue;
+    const siens = dossiers.filter(d => p.classeDe(d) === promo.classId);
+    if (siens.length > 0 && !siens.every(d => rapportTransmis(p.rapports, promo.classId, d.id))) {
+      alertes.push({ niveau: 'orange', texte: `${promo.nom} : formation terminée, rapport de fin pas encore transmis` });
+    }
   }
   return alertes;
 };
+
+/** N° du reçu remis à l'organisme : celui de la facture suivi du rang du versement (3FPT-2026-0001-2). */
+export const numeroRecuFinanceur = (numeroDeLaFacture: string, rang: number): string => `${numeroDeLaFacture}-${rang}`;
 
 /** Aujourd'hui à Dakar, AAAA-MM-JJ. */
 export const aujourdhuiIso = (): string => new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Dakar' }).format(new Date());

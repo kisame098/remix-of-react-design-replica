@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { FileCheck2, History, Loader2, Plus, Trash2, Users, User } from 'lucide-react';
 import { useFinancements } from '@/contexts/FinancementsContext';
 import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
@@ -9,62 +10,75 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { toast } from '@/hooks/use-toast';
 import { dateDakar } from '@/lib/documentsEcole';
+import type { Organisme } from '@/lib/financements';
 import {
   COULEUR_STATUT_RAPPORT, LIBELLES_STATUT_RAPPORT, STATUTS_RAPPORT, aujourdhuiIso,
   type PorteeFacture, type Rapport, type StatutRapport,
 } from '@/lib/financementsSuivi';
 import { FichierJoint } from '@/components/financements/FichierJoint';
-import type { LigneFinancee } from '@/components/financements/OngletFinances';
+import { messageDe, nomComplet, promotionsDe, type ApprenantFinance } from '@/components/financements/donneesOrganisme';
 
 // ═══════════════════════════════════════════════════════════════════════════
-// Onglet « Rapports » : les rapports de fin de formation à remettre à
-// l'organisme — un pour la cohorte, ou un par apprenant (les deux pratiques
-// existent) —, leur état, leur fichier et l'historique des transmissions.
+// Rubrique « Rapports » d'un organisme : les rapports de fin de formation à
+// lui remettre — un par promotion, ou un par apprenant (les deux pratiques
+// existent) —, leur état (à produire, en cours, transmis, validé), leur
+// fichier, et l'historique des transmissions.
 // ═══════════════════════════════════════════════════════════════════════════
 
 const jour = (iso?: string) => (iso ? dateDakar(`${iso}T12:00:00Z`) : '');
-const messageDe = (e: unknown) => (e as { message?: string })?.message ?? String(e);
+type Filtre = 'tous' | StatutRapport;
 
-export const OngletRapports = ({ lignes, classId, nomPromotion }: { lignes: LigneFinancee[]; classId: string; nomPromotion: string }) => {
+export const RapportsOrganisme = ({ organisme, apprenants }: { organisme: Organisme; apprenants: ApprenantFinance[] }) => {
   const fin = useFinancements();
-  const rapports = fin.rapports.filter(r => r.classId === classId)
-    .sort((a, b) => (a.portee === b.portee ? a.titre.localeCompare(b.titre, 'fr') : a.portee === 'cohorte' ? -1 : 1));
+  const promotions = promotionsDe(apprenants);
+  const [filtre, setFiltre] = useState<Filtre>('tous');
   const [nouveau, setNouveau] = useState(false);
   const [ouvert, setOuvert] = useState<Rapport | null>(null);
-  const organismes = [...new Map(lignes.filter(l => l.organisme).map(l => [l.organisme!.id, l.organisme!])).values()];
 
   if (!fin.suiviDisponible) {
-    return <div className="rounded-md border border-dashed p-4 text-sm text-muted-foreground">Les rapports ne sont pas encore activés pour la base de données de l'école. Contactez l'assistance SenClass.</div>;
+    return <div className="p-5"><div className="rounded-md border border-dashed p-4 text-sm text-muted-foreground">Les rapports ne sont pas encore activés pour la base de données de l'école. Contactez l'assistance SenClass.</div></div>;
   }
+  const rapports = fin.rapports.filter(r => r.organismeId === organisme.id)
+    .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+  const visibles = rapports.filter(r => filtre === 'tous' || r.statut === filtre);
+  const nomPromotion = (classId: string) => promotions.find(p => p.classId === classId)?.name ?? 'Promotion';
   const nomApprenant = (r: Rapport) => {
-    const l = lignes.find(x => x.dossier.id === r.dossierId);
-    return l ? `${l.eleve.lastName} ${l.eleve.firstName}` : 'Apprenant';
+    const a = apprenants.find(x => x.dossier.id === r.dossierId);
+    return a ? nomComplet(a.eleve) : 'Apprenant';
   };
+  const ids = new Set(rapports.map(r => r.id));
+  const historique = fin.journal.filter(j => j.objet === 'rapport' && ids.has(j.objetId))
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, 15);
 
   return (
-    <div className="space-y-4">
+    <div className="p-5 space-y-5">
       <div className="flex items-center justify-between gap-2 flex-wrap">
         <div className="flex flex-wrap gap-1.5">
-          {STATUTS_RAPPORT.map(s => {
-            const n = rapports.filter(r => r.statut === s).length;
-            return <span key={s} className={`text-xs font-medium px-2.5 py-1 rounded-full ${COULEUR_STATUT_RAPPORT[s]}`}>{LIBELLES_STATUT_RAPPORT[s]} {n}</span>;
+          {(['tous', ...STATUTS_RAPPORT] as Filtre[]).map(s => {
+            const n = s === 'tous' ? rapports.length : rapports.filter(r => r.statut === s).length;
+            return (
+              <button key={s} onClick={() => setFiltre(s)}
+                className={`text-xs font-medium px-3 py-1.5 rounded-full transition-all ${filtre === s ? 'bg-primary text-primary-foreground shadow-sm' : 'bg-muted hover:bg-muted/70 text-foreground'}`}>
+                {s === 'tous' ? 'Tous' : LIBELLES_STATUT_RAPPORT[s]} <span className="opacity-70">{n}</span>
+              </button>
+            );
           })}
         </div>
-        <Button size="sm" className="gap-1.5" onClick={() => setNouveau(true)} disabled={lignes.length === 0}><Plus className="h-3.5 w-3.5" />Nouveau rapport</Button>
+        <Button size="sm" className="gap-1.5" onClick={() => setNouveau(true)} disabled={promotions.length === 0}><Plus className="h-3.5 w-3.5" />Nouveau rapport</Button>
       </div>
 
       {rapports.length === 0 ? (
         <div className="rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">
-          Aucun rapport pour cette promotion. Créez celui de la cohorte, ou un par apprenant, selon ce que demande l'organisme.
+          Aucun rapport pour {organisme.nom}. Créez celui d'une promotion, ou un par apprenant, selon ce que demande l'organisme.
         </div>
       ) : (
         <div className="rounded-lg border divide-y">
-          {rapports.map(r => (
+          {visibles.length === 0 ? <p className="p-5 text-center text-sm text-muted-foreground">Aucun rapport dans cet état.</p> : visibles.map(r => (
             <button key={r.id} onClick={() => setOuvert(r)} className="w-full text-left px-3 py-2.5 flex flex-wrap items-center gap-x-4 gap-y-1 hover:bg-muted/30">
               {r.portee === 'cohorte' ? <Users className="h-4 w-4 text-primary" /> : <User className="h-4 w-4 text-muted-foreground" />}
               <span className="flex-1 min-w-[180px]">
                 <span className="text-sm font-medium">{r.titre}</span>
-                <span className="text-xs text-muted-foreground"> · {r.portee === 'cohorte' ? 'cohorte' : nomApprenant(r)} · {fin.organisme(r.organismeId)?.nom ?? ''}</span>
+                <span className="text-xs text-muted-foreground"> · {nomPromotion(r.classId)}{r.portee === 'apprenant' ? ` · ${nomApprenant(r)}` : ''}</span>
               </span>
               {r.fichier && <FileCheck2 className="h-4 w-4 text-green-600" aria-label="Fichier joint" />}
               <span className="text-xs text-muted-foreground">
@@ -76,33 +90,55 @@ export const OngletRapports = ({ lignes, classId, nomPromotion }: { lignes: Lign
         </div>
       )}
 
-      <DialogNouveauRapport ouvert={nouveau} onFermer={() => setNouveau(false)} lignes={lignes} classId={classId}
-        organismes={organismes.map(o => ({ id: o.id, nom: o.nom }))} nomPromotion={nomPromotion} onCree={r => { setNouveau(false); setOuvert(r); }} />
+      {historique.length > 0 && (
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base flex items-center gap-2"><History className="h-4 w-4 text-primary" />Historique des transmissions</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ul className="text-sm space-y-1.5">
+              {historique.map(h => (
+                <li key={h.id} className="flex flex-wrap gap-x-2">
+                  <span className="text-muted-foreground w-36">{new Date(h.createdAt).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' })}</span>
+                  <span className="font-medium">{h.action}</span>
+                  <span className="text-muted-foreground">— {rapports.find(r => r.id === h.objetId)?.titre}{h.parNom ? ` · ${h.parNom}` : ''}</span>
+                </li>
+              ))}
+            </ul>
+          </CardContent>
+        </Card>
+      )}
+
+      <DialogNouveauRapport ouvert={nouveau} onFermer={() => setNouveau(false)} organisme={organisme} apprenants={apprenants}
+        onCree={r => { setNouveau(false); setOuvert(r); }} />
       <DialogRapport rapport={ouvert} onFermer={() => setOuvert(null)} titreApprenant={ouvert?.portee === 'apprenant' ? nomApprenant(ouvert) : undefined} />
     </div>
   );
 };
 
-const DialogNouveauRapport = ({ ouvert, onFermer, lignes, classId, organismes, nomPromotion, onCree }: {
-  ouvert: boolean; onFermer: () => void; lignes: LigneFinancee[]; classId: string; organismes: { id: string; nom: string }[];
-  nomPromotion: string; onCree: (r: Rapport) => void;
+const DialogNouveauRapport = ({ ouvert, onFermer, organisme, apprenants, onCree }: {
+  ouvert: boolean; onFermer: () => void; organisme: Organisme; apprenants: ApprenantFinance[]; onCree: (r: Rapport) => void;
 }) => {
   const fin = useFinancements();
+  const promotions = promotionsDe(apprenants);
   const [portee, setPortee] = useState<PorteeFacture>('cohorte');
-  const [organismeId, setOrganismeId] = useState('');
+  const [promotionId, setPromotionId] = useState('');
   const [dossierId, setDossierId] = useState('');
   const [titre, setTitre] = useState('');
   const [enCours, setEnCours] = useState(false);
-  const o = organismes.find(x => x.id === organismeId) ?? organismes[0];
-  const apprenants = lignes.filter(l => l.organisme?.id === o?.id);
-  const titreParDefaut = portee === 'cohorte' ? `Rapport de fin de formation — ${nomPromotion}` : 'Rapport de fin de formation';
+  const promotion = promotions.find(p => p.id === promotionId) ?? promotions[0];
+  const siens = apprenants.filter(a => a.promotion?.id === promotion?.id);
+  const titreParDefaut = portee === 'cohorte' ? `Rapport de fin de formation — ${promotion?.name ?? ''}` : 'Rapport de fin de formation';
 
   const creer = async () => {
-    if (!o) return;
+    if (!promotion) return;
     if (portee === 'apprenant' && !dossierId) { toast({ title: "Choisissez l'apprenant", variant: 'destructive' }); return; }
     setEnCours(true);
     try {
-      const r = await fin.creerRapport({ organismeId: o.id, portee, classId, dossierId: portee === 'apprenant' ? dossierId : undefined, titre: titre.trim() || titreParDefaut });
+      const r = await fin.creerRapport({
+        organismeId: organisme.id, portee, classId: promotion.classId,
+        dossierId: portee === 'apprenant' ? dossierId : undefined, titre: titre.trim() || titreParDefaut,
+      });
       setTitre(''); setDossierId('');
       onCree(r);
     } catch (e) { toast({ title: 'Rapport non créé', description: messageDe(e), variant: 'destructive' }); } finally { setEnCours(false); }
@@ -113,32 +149,32 @@ const DialogNouveauRapport = ({ ouvert, onFermer, lignes, classId, organismes, n
       <DialogContent className="max-w-lg">
         <DialogHeader>
           <DialogTitle>Nouveau rapport de fin de formation</DialogTitle>
-          <DialogDescription>Pour toute la cohorte, ou pour un apprenant.</DialogDescription>
+          <DialogDescription>Pour une promotion entière, ou pour un apprenant.</DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
           <div className="flex flex-wrap gap-2">
-            {([['cohorte', 'La cohorte', Users], ['apprenant', 'Un apprenant', User]] as const).map(([v, libelle, Icone]) => (
+            {([['cohorte', 'La promotion', Users], ['apprenant', 'Un apprenant', User]] as const).map(([v, libelle, Icone]) => (
               <button key={v} type="button" onClick={() => setPortee(v)} aria-pressed={portee === v}
                 className={`text-sm px-3 py-1.5 rounded-lg border flex items-center gap-1.5 ${portee === v ? 'border-primary bg-primary/5 text-primary font-medium' : 'hover:bg-muted'}`}>
                 <Icone className="h-4 w-4" />{libelle}
               </button>
             ))}
           </div>
-          {organismes.length > 1 && (
-            <div className="space-y-1.5"><Label>Organisme</Label>
-              <Select value={o?.id ?? ''} onValueChange={setOrganismeId}><SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>{organismes.map(x => <SelectItem key={x.id} value={x.id}>{x.nom}</SelectItem>)}</SelectContent></Select></div>
-          )}
+          <div className="space-y-1.5"><Label>Promotion</Label>
+            <Select value={promotion?.id ?? ''} onValueChange={v => { setPromotionId(v); setDossierId(''); }}>
+              <SelectTrigger aria-label="Promotion"><SelectValue /></SelectTrigger>
+              <SelectContent>{promotions.map(p => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}</SelectContent>
+            </Select></div>
           {portee === 'apprenant' && (
             <div className="space-y-1.5"><Label>Apprenant</Label>
               <Select value={dossierId} onValueChange={setDossierId}><SelectTrigger aria-label="Apprenant"><SelectValue placeholder="Choisir" /></SelectTrigger>
-                <SelectContent>{apprenants.map(l => <SelectItem key={l.dossier.id} value={l.dossier.id}>{l.eleve.lastName} {l.eleve.firstName}</SelectItem>)}</SelectContent></Select></div>
+                <SelectContent>{siens.map(a => <SelectItem key={a.dossier.id} value={a.dossier.id}>{nomComplet(a.eleve)}</SelectItem>)}</SelectContent></Select></div>
           )}
           <div className="space-y-1.5"><Label htmlFor="rap-titre">Titre</Label>
             <Input id="rap-titre" value={titre} placeholder={titreParDefaut} onChange={e => setTitre(e.target.value)} /></div>
           <div className="flex justify-end gap-2">
             <Button variant="outline" onClick={onFermer} disabled={enCours}>Annuler</Button>
-            <Button onClick={() => void creer()} disabled={enCours || !o}>{enCours && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}Créer</Button>
+            <Button onClick={() => void creer()} disabled={enCours || !promotion}>{enCours && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}Créer</Button>
           </div>
         </div>
       </DialogContent>

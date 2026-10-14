@@ -23,7 +23,7 @@ export const useAppliquerChoixFinancement = () => {
         const o = fin.organisme(organismeId);
         toast({
           title: `Financement ${o?.nom ?? ''} activé`,
-          description: o ? `À la caisse, il ne paie plus que ${100 - o.partFinancee} % des frais concernés ; son dossier est dans Financements.` : undefined,
+          description: o ? `Son dossier est ouvert dans Financements → ${o.nom}. Une fois le dossier validé, il ne paiera plus que ${100 - o.partFinancee} % des frais concernés.` : undefined,
         });
       } else if (organismeId && actuel && actuel.organismeId !== organismeId) {
         await fin.changerOrganisme(eleve, organismeId);

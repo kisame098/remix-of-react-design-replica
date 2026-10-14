@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-  alertesCohorte, assiduite, estInsere, factureDeLaTranche, insertionActuelle, montantTranche, numeroFacture, prochainNumero,
+  alertesOrganisme, assiduite, numeroRecuFinanceur, estInsere, factureDeLaTranche, insertionActuelle, montantTranche, numeroFacture, prochainNumero,
   rapportTransmis, repartirVersement, situationFinanciere, sommeSituations, statutFacture, tranchesNonFacturees,
   type FactureFinanceur, type LigneFactureFinanceur, type PointInsertion, type Rapport, type Versement,
 } from './financementsSuivi';
@@ -115,18 +115,26 @@ describe('assiduité', () => {
   });
 });
 
-describe('alertes', () => {
-  it('signale dossiers, factures en retard, acompte non facturé et rapport manquant, sans rien bloquer', () => {
+describe('alertes d\'un organisme', () => {
+  it('signale dossiers à valider ou régulariser, factures en retard, acompte non facturé et rapport manquant, sans rien bloquer', () => {
     const f = facture({ lignes: [ligne('a', 302400)], total: 302400, dateEcheance: '2026-11-01' });
-    const textes = alertesCohorte({
-      dossiers: [dossier('a'), dossier('b'), dossier('c', { statut: 'a_regulariser' })], organismes: [fpt],
-      factures: [f], versements: [], rapports: [], classId: 'c1', finFormation: '2027-06-30', aujourdhui: '2027-07-10',
+    const textes = alertesOrganisme({
+      organisme: fpt,
+      dossiers: [dossier('a'), dossier('b'), dossier('c', { statut: 'a_regulariser' }), dossier('d', { statut: 'complet' }), dossier('x', { organismeId: 'autre', statut: 'en_attente' })],
+      factures: [f], versements: [], rapports: [], classeDe: () => 'c1',
+      promotions: [{ classId: 'c1', nom: 'CAP 1 — 2026', finFormation: '2027-06-30' }, { classId: 'c2', nom: 'Vide', finFormation: '2027-06-30' }],
+      aujourdhui: '2027-07-10',
     }).map(a => a.texte);
     expect(textes).toEqual([
       '1 dossier à régulariser',
+      "1 dossier à valider : d'ici là, l'apprenant paie tout",
       '1 facture en retard de paiement',
-      '3FPT : acompte pas encore facturé pour 1 dossier validé',
-      'Formation terminée : rapport de fin de formation pas encore transmis',
+      'Acompte pas encore facturé pour 1 dossier validé',
+      'CAP 1 — 2026 : formation terminée, rapport de fin pas encore transmis',
     ]);
+  });
+
+  it('reçu numéroté d\'après la facture et le rang du versement', () => {
+    expect(numeroRecuFinanceur('3FPT-2026-0001', 2)).toBe('3FPT-2026-0001-2');
   });
 });

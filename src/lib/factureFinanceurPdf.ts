@@ -5,7 +5,7 @@ import {
   ENCRE, FILET, GRIS, blocFort, dessinerBandeau, dessinerTitre, ecrireAjuste, etiquette, filigrane, signatureSenClass,
 } from '@/lib/documentsDesign';
 import { formaterMontant, montantEnLettres } from '@/lib/montantEnLettres';
-import { numeroFacture, type FactureFinanceur } from '@/lib/financementsSuivi';
+import { numeroFacture, numeroRecuFinanceur, type FactureFinanceur, type Versement } from '@/lib/financementsSuivi';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // FACTURE À L'ORGANISME FINANCEUR (3FPT…) — A4 portrait, même charte que les
@@ -168,5 +168,101 @@ export async function genererFacturesFinanceurPdf(
     if (i > 0) doc.addPage('a4', 'portrait');
     dessinerPage({ doc, c, ecole, d });
   });
+  return doc;
+}
+
+// ─── Reçu remis à l'organisme pour un versement ─────────────────────────────
+
+export interface DonneesRecuFinanceur {
+  facture: FactureFinanceur;
+  organisme: string;
+  formation: string;
+  versement: Versement;
+  /** Rang du versement sur la facture (1, 2…) : il numérote le reçu. */
+  rang: number;
+  /** Reçu sur la facture, ce versement compris. */
+  recuTotal: number;
+}
+
+/** A5 portrait : la preuve que l'école a bien reçu le versement de l'organisme. */
+export async function genererRecuFinanceurPdf(
+  ecole: InfosEcole, d: DonneesRecuFinanceur, options: { economique?: boolean } = {},
+): Promise<jsPDF> {
+  const LA = 148;
+  const HA = 210;
+  const MA = 12;
+  const UA = LA - 2 * MA;
+  const doc = new jsPDF({ unit: 'mm', format: 'a5', orientation: 'portrait' });
+  const c = options.economique ? PALETTE_ECONOMIQUE : paletteDepuis(await couleurDominanteDuLogo(ecole.logo));
+  const nFacture = numeroFacture(d.organisme, d.facture.annee, d.facture.numero);
+  const nRecu = numeroRecuFinanceur(nFacture, d.rang);
+  doc.setProperties({ title: `Reçu ${nRecu}`, subject: d.organisme, author: ecole.nom, creator: 'SenClass' });
+
+  filigrane(doc, ecole, LA, HA, 84, c.fonce);
+  dessinerBandeau(doc, ecole, c, { largeurPage: LA, marge: MA, hauteur: 30, k: 0.8 });
+
+  let y = 42;
+  dessinerTitre(doc, c, 'REÇU', MA, y, 15);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(9.5);
+  doc.setTextColor(ENCRE);
+  doc.text(`N° ${nRecu}`, LA - MA, y - 4, { align: 'right' });
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8);
+  doc.setTextColor(GRIS);
+  doc.text(`Reçu le ${dateDakar(`${d.versement.date}T12:00:00Z`)}`, LA - MA, y + 1, { align: 'right' });
+
+  y += 10;
+  const ligne = (titre: string, valeur: string) => {
+    etiquette(doc, titre, MA, y, GRIS);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(ENCRE);
+    ecrireAjuste(doc, valeur, MA + 40, y, UA - 40, { taille: 9.4, tailleMin: 6.8 });
+    doc.setDrawColor(FILET);
+    doc.setLineWidth(0.2);
+    doc.line(MA, y + 3, LA - MA, y + 3);
+    y += 9;
+  };
+  ligne('REÇU DE', d.organisme);
+  ligne('POUR', `Facture ${nFacture} — ${d.facture.trancheLibelle}`);
+  ligne('FORMATION', d.formation);
+  ligne('APPRENANTS', `${d.facture.lignes.length} apprenant${d.facture.lignes.length > 1 ? 's' : ''}`);
+  if (d.versement.reference) ligne('RÉFÉRENCE', d.versement.reference);
+
+  y += 2;
+  const couleurTexte = blocFort(doc, c, MA, y, UA, 14);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(8);
+  doc.setTextColor(couleurTexte);
+  doc.text('MONTANT REÇU', MA + 4, y + 5.6);
+  doc.setFontSize(14);
+  doc.text(fmt(d.versement.montant), LA - MA - 4, y + 10, { align: 'right' });
+  y += 20;
+  doc.setFont('helvetica', 'italic');
+  doc.setFontSize(8.2);
+  doc.setTextColor(ENCRE);
+  ecrireAjuste(doc, `Arrêté à la somme de ${montantEnLettres(d.versement.montant).toLowerCase()}.`, MA, y, UA, { taille: 8.2, tailleMin: 6.8, lignesMax: 3, interligne: 3.8 });
+
+  y += 12;
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8.4);
+  doc.setTextColor(GRIS);
+  const reste = Math.max(0, d.facture.total - d.recuTotal);
+  doc.text(`Facture : ${fmt(d.facture.total)} · reçu à ce jour : ${fmt(d.recuTotal)} · ${reste > 0 ? `reste ${fmt(reste)}` : 'soldée'}`, MA, y);
+
+  y += 10;
+  etiquette(doc, 'LA DIRECTION — SIGNATURE ET CACHET', LA - MA - 26, y, GRIS, 'center');
+  doc.setDrawColor(GRIS);
+  doc.setLineWidth(0.3);
+  doc.setLineDashPattern([1.2, 1.2], 0);
+  doc.line(LA - MA - 52, y + 22, LA - MA, y + 22);
+  doc.setLineDashPattern([], 0);
+  if (ecole.directeurGeneral) {
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(8);
+    doc.setTextColor(ENCRE);
+    doc.text(ecole.directeurGeneral, LA - MA - 26, y + 26, { align: 'center' });
+  }
+  signatureSenClass(doc, c, LA - MA, HA - 8);
   return doc;
 }

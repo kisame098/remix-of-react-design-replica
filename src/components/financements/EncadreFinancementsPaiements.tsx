@@ -6,7 +6,7 @@ import { useSchool } from '@/contexts/SchoolContext';
 import { useElementsAPayer } from '@/hooks/useElementsAPayer';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-import { montantFinance } from '@/lib/financements';
+import { montantFinance, priseEnChargeEffective } from '@/lib/financements';
 import { situationFinanciere, sommeSituations } from '@/lib/financementsSuivi';
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -28,7 +28,8 @@ export const EncadreFinancementsPaiements = () => {
     return sommeSituations(fin.dossiers.flatMap(d => {
       const e = parId.get(d.studentEnrollmentId);
       const o = fin.organisme(d.organismeId);
-      if (!e || !o) return [];
+      // Seuls les dossiers validés : avant, l'apprenant paie tout.
+      if (!e || !o || !priseEnChargeEffective(d)) return [];
       return [situationFinanciere(d.id, montantFinance(o, elementsDe(e)).finance, fin.factures, fin.versements)];
     }));
   }, [fin, students, elementsDe]);
@@ -45,7 +46,7 @@ export const EncadreFinancementsPaiements = () => {
             <div>
               <p className="text-sm font-semibold">Financements ({noms})</p>
               <p className="text-xs text-muted-foreground">
-                {fin.dossiers.length} apprenant{fin.dossiers.length > 1 ? 's' : ''} financé{fin.dossiers.length > 1 ? 's' : ''} : leur part est encaissée ici ; celle de l'organisme se suit dans le module.
+                {fin.dossiers.length} apprenant{fin.dossiers.length > 1 ? 's' : ''} financé{fin.dossiers.length > 1 ? 's' : ''} : leur part est encaissée ici (dossier validé) ; celle de l'organisme se suit dans le module.
               </p>
             </div>
           </div>

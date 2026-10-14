@@ -75,7 +75,7 @@ const ExamensPromotion = lazy(() => import("./pages/formation/ExamensPromotion")
 const Stages = lazy(() => import("./pages/formation/Stages"));
 const StagesPromotion = lazy(() => import("./pages/formation/StagesPromotion"));
 const Financements = lazy(() => import("./pages/formation/Financements"));
-const FinancementsPromotion = lazy(() => import("./pages/formation/FinancementsPromotion"));
+const FinancementsOrganisme = lazy(() => import("./pages/formation/FinancementsOrganisme"));
 const Documents = lazy(() => import("./pages/formation/Documents"));
 const DocumentsEcole = lazy(() => import("./pages/DocumentsEcole"));
 const FormationDetail = lazy(() => import("./pages/formation/FormationDetail"));
@@ -226,14 +226,15 @@ const App = () => (
                         <Route path="/formation/documents" element={
                           <ModeRoute mode="formation_pro"><RequirePermission permission="grades"><Documents /></RequirePermission></ModeRoute>
                         } />
+                        {/* Financements : le suivi d'un apprenant reprend ses stages et ses examens. */}
+                        <Route path="/formation/financements" element={
+                          <ModeRoute mode="formation_pro"><RequirePermission permission="financements"><Financements /></RequirePermission></ModeRoute>
+                        } />
+                        <Route path="/formation/financements/:organismeId" element={
+                          <ModeRoute mode="formation_pro"><RequirePermission permission="financements"><FinancementsOrganisme /></RequirePermission></ModeRoute>
+                        } />
                     </Route>
                     </Route>
-                    <Route path="/formation/financements" element={
-                      <ModeRoute mode="formation_pro"><RequirePermission permission="financements"><Financements /></RequirePermission></ModeRoute>
-                    } />
-                    <Route path="/formation/financements/:promotionId" element={
-                      <ModeRoute mode="formation_pro"><RequirePermission permission="financements"><FinancementsPromotion /></RequirePermission></ModeRoute>
-                    } />
                     {["/formation"].map(chemin => (
                       <Route key={chemin} path={chemin} element={
                         <ModeRoute mode="formation_pro"><RequirePermission permission="grades"><FormationEnDeveloppement /></RequirePermission></ModeRoute>

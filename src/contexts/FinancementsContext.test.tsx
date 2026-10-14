@@ -100,7 +100,18 @@ describe('activer un financement', () => {
     });
     // Aucune réduction : seule la table des dossiers est écrite.
     expect(appels.filter(a => ['insert', 'update', 'delete'].includes(a.op)).every(a => a.table === 'fin_dossiers' || a.table === 'fin_journal')).toBe(true);
-    // La caisse lit le partage dans le dossier.
+    // Dossier en attente : la prise en charge ne s'applique pas encore.
+    expect(result.current.priseEnChargeDe('enr-1')).toBeUndefined();
+  });
+
+  it('la prise en charge ne s\'applique qu\'une fois le dossier validé', async () => {
+    const { result } = renderHook(() => useFinancements(), { wrapper: enveloppe });
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    await act(async () => { await result.current.activer(eleve, 'fpt'); });
+    await act(async () => { await result.current.modifier('dos-1', { statut: 'complet' }); });
+    expect(result.current.priseEnChargeDe('enr-1')).toBeUndefined();
+    await act(async () => { await result.current.modifier('dos-1', { statut: 'valide' }); });
+    // La caisse lit alors le partage dans le dossier.
     expect(result.current.priseEnChargeDe('enr-1')).toEqual({ organisme: '3FPT', pourcentage: 90, frais: organisme.frais });
   });
 
