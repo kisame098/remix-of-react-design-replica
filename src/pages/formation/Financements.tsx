@@ -3,6 +3,7 @@ import { AlertTriangle, Landmark } from 'lucide-react';
 import { useFinancements } from '@/contexts/FinancementsContext';
 import { useSchool } from '@/contexts/SchoolContext';
 import { GrillePromotions } from '@/components/formation/GrillePromotions';
+import { TableauBordFinancements } from '@/components/financements/TableauBordFinancements';
 import { Card, CardContent } from '@/components/ui/card';
 
 /** Page 1 du module Financements : choisir une promotion (même grille que Stages et Examens). */
@@ -34,6 +35,8 @@ const Financements = () => {
   return (
     <GrillePromotions
       titre="Financements"
+      sousTitre="Apprenants pris en charge par un organisme : l'état d'ensemble, puis une promotion"
+      entete={<TableauBordFinancements />}
       chargement={loading}
       lien={p => `/formation/financements/${p.id}`}
       details={p => {

@@ -11,6 +11,9 @@ import type { AjustementTarif } from '@/lib/tarifsEleve';
 
 const appels: { table: string; op: string; args: unknown[] }[] = [];
 let lignesEnBase: Record<string, unknown>[] = [];
+let facturesEnBase: Record<string, unknown>[] = [];
+/** Simule un numéro déjà pris par quelqu'un d'autre au premier essai. */
+let conflitAuPremierEssai = false;
 const retireFichiers = vi.fn().mockResolvedValue({ error: null });
 
 const chaine = (table: string) => {
@@ -20,11 +23,27 @@ const chaine = (table: string) => {
   for (const m of ['select', 'eq', 'order', 'single', 'insert', 'update', 'delete']) {
     c[m] = (...args: unknown[]) => {
       if (m === 'insert' || m === 'update' || m === 'delete') { op = m; charge = (args[0] ?? {}) as Record<string, unknown>; }
+      if (m === 'insert' && Array.isArray(args[0])) charge = args[0] as unknown as Record<string, unknown>;
       appels.push({ table, op: m, args });
       return c;
     };
   }
   c.then = (ok: (v: unknown) => unknown, ko: (e: unknown) => unknown) => Promise.resolve((() => {
+    if (table === 'fin_factures') {
+      if (op === 'insert') {
+        if (conflitAuPremierEssai) {
+          conflitAuPremierEssai = false;
+          facturesEnBase.push({ id: 'autre', organisme_id: 'fpt', numero: 1, annee: 2026, lignes: [], total: 0, created_at: '0' });
+          return { data: null, error: { code: '23505', message: 'doublon' } };
+        }
+        const lignes = (Array.isArray(charge) ? charge : [charge]).map((l, i) => ({ id: `f-${facturesEnBase.length + i + 1}`, created_at: 'x', annulee: false, ...l }));
+        facturesEnBase.push(...lignes);
+        return { data: lignes, error: null };
+      }
+      return { data: facturesEnBase, error: null };
+    }
+    if (table === 'fin_journal' && op === 'insert') return { data: { id: 'j', created_at: 'x', ...charge }, error: null };
+    if (table !== 'fin_dossiers') return { data: [], error: null };
     if (op === 'insert') {
       const ligne = { id: 'dos-1', created_at: 'x', updated_at: 'x', statut: 'en_attente', situation: 'en_formation', ajustement_ids: [], ...charge };
       lignesEnBase.push(ligne);
@@ -84,7 +103,7 @@ const element = (p: Partial<PayableItem> & Pick<PayableItem, 'id' | 'type'>): Pa
 });
 
 beforeEach(() => {
-  appels.length = 0; lignesEnBase = []; compteur = 0; mode = 'formation_pro';
+  appels.length = 0; lignesEnBase = []; facturesEnBase = []; conflitAuPremierEssai = false; compteur = 0; mode = 'formation_pro';
   appliquer.mockClear(); retirer.mockClear(); retireFichiers.mockClear();
   index = new Map(); payes = new Set();
   elements = [
@@ -143,6 +162,22 @@ describe('activer un financement', () => {
     expect(retirer).toHaveBeenCalledWith(['aj-2']);
     expect(appels.some(a => a.op === 'delete')).toBe(true);
     expect(r2.current.dossierDe('enr-1')).toBeUndefined();
+  });
+
+  it('factures au financeur : numérotées par organisme et par année ; un numéro pris entre-temps est renuméroté', async () => {
+    const { result } = renderHook(() => useFinancements(), { wrapper: enveloppe });
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    const brouillon = (nom: string) => ({
+      organismeId: 'fpt', trancheId: 'a', trancheLibelle: 'Acompte', tranchePourcentage: 70, portee: 'apprenant' as const,
+      classId: 'c1', dateEmission: '2026-10-14', lignes: [{ dossierId: nom, studentEnrollmentId: nom, nom, matricule: nom, finance: 432000, montant: 302400 }],
+    });
+    conflitAuPremierEssai = true;
+    let creees: { numero: number; total: number }[] = [];
+    await act(async () => { creees = await result.current.emettreFactures([brouillon('a'), brouillon('b')]); });
+    // Le n° 1 a été pris par un autre poste : on relit et on repart de 2.
+    expect(creees.map(f => f.numero)).toEqual([2, 3]);
+    expect(creees.every(f => f.total === 302400)).toBe(true);
+    expect(result.current.factures.map(f => f.numero).sort()).toEqual([1, 2, 3]);
   });
 
   it('école classique : rien n\'est chargé', async () => {

@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
-  AlertTriangle, CheckCircle2, ExternalLink, FileSignature, FileText, Landmark, Loader2, Paperclip, RefreshCw, Trash2, UserX, X,
+  AlertTriangle, CheckCircle2, FileSignature, Landmark, Loader2, RefreshCw, Trash2, UserX,
 } from 'lucide-react';
 import { useFinancements, type ModifDossier } from '@/contexts/FinancementsContext';
 import { usePayment } from '@/contexts/PaymentContext';
@@ -24,6 +24,13 @@ import {
   type Dossier, type PieceDossier, type Situation, type StatutDossier,
 } from '@/lib/financements';
 import { cleElement } from '@/lib/tarifsEleve';
+import { FichierJoint } from '@/components/financements/FichierJoint';
+import { Link } from 'react-router-dom';
+import { useAttendance } from '@/contexts/AttendanceContext';
+import { useFormationPro } from '@/contexts/FormationProContext';
+import {
+  COULEUR_INSERTION, LIBELLES_INSERTION, assiduite as calculerAssiduite, insertionActuelle, situationFinanciere,
+} from '@/lib/financementsSuivi';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Fiche du dossier d'un apprenant financé : ce que l'organisme prend en
@@ -33,65 +40,6 @@ import { cleElement } from '@/lib/tarifsEleve';
 // ═══════════════════════════════════════════════════════════════════════════
 
 const fmt = (n: number) => `${new Intl.NumberFormat('fr-FR').format(n)} F`;
-const nomFichier = (chemin: string) => chemin.split('/').pop()?.replace(/-[a-z0-9]{6,}(\.[a-z0-9]+)?$/, '$1') ?? chemin;
-
-/** Un fichier joint : ouvrir, retirer, ou en joindre un. Enregistré aussitôt. */
-const FichierJoint = ({ dossierId, chemin, onChange, libelle }: {
-  dossierId: string; chemin?: string; onChange: (chemin: string | undefined) => Promise<void>; libelle: string;
-}) => {
-  const { televerser, lienFichier, supprimerFichier } = useFinancements();
-  const entree = useRef<HTMLInputElement>(null);
-  const [occupe, setOccupe] = useState(false);
-  const erreur = (titre: string, e: unknown) => toast({ title: titre, description: (e as { message?: string })?.message ?? String(e), variant: 'destructive' });
-
-  const joindre = async (f: File | undefined) => {
-    if (!f) return;
-    setOccupe(true);
-    try {
-      const nouveau = await televerser(dossierId, f);
-      await onChange(nouveau);
-      // L'ancien fichier, remplacé, ne sert plus.
-      if (chemin) await supprimerFichier(chemin).catch(() => undefined);
-    } catch (e) { erreur('Fichier non joint', e); } finally { setOccupe(false); }
-  };
-  const ouvrir = async () => {
-    if (!chemin) return;
-    // Fenêtre ouverte AVANT l'attente : sinon le navigateur la bloque.
-    const fenetre = window.open('', '_blank');
-    try {
-      const lien = await lienFichier(chemin);
-      if (fenetre) fenetre.location.href = lien; else window.location.assign(lien);
-    } catch (e) { fenetre?.close(); erreur('Fichier introuvable', e); }
-  };
-  const retirer = async () => {
-    if (!chemin) return;
-    setOccupe(true);
-    try { await onChange(undefined); await supprimerFichier(chemin).catch(() => undefined); }
-    catch (e) { erreur('Fichier non retiré', e); } finally { setOccupe(false); }
-  };
-
-  return (
-    <div className="flex items-center gap-1.5 min-w-0">
-      <input ref={entree} type="file" className="hidden" accept=".pdf,.jpg,.jpeg,.png,.webp,.doc,.docx"
-        onChange={e => { void joindre(e.target.files?.[0]); e.target.value = ''; }} />
-      {chemin ? (
-        <>
-          <button type="button" onClick={() => void ouvrir()} className="text-xs text-primary hover:underline flex items-center gap-1 min-w-0" title={`Ouvrir ${libelle}`}>
-            <FileText className="h-3.5 w-3.5 flex-shrink-0" /><span className="truncate max-w-[160px]">{nomFichier(chemin)}</span><ExternalLink className="h-3 w-3 flex-shrink-0" />
-          </button>
-          <Button type="button" variant="ghost" size="icon" className="h-6 w-6" disabled={occupe} onClick={() => void retirer()} aria-label={`Retirer le fichier : ${libelle}`}>
-            {occupe ? <Loader2 className="h-3 w-3 animate-spin" /> : <X className="h-3 w-3" />}
-          </Button>
-        </>
-      ) : (
-        <Button type="button" variant="outline" size="sm" className="h-7 gap-1 text-xs" disabled={occupe} onClick={() => entree.current?.click()} aria-label={`Joindre un fichier : ${libelle}`}>
-          {occupe ? <Loader2 className="h-3 w-3 animate-spin" /> : <Paperclip className="h-3 w-3" />} Joindre
-        </Button>
-      )}
-    </div>
-  );
-};
-
 interface Formulaire {
   statut: StatutDossier;
   contratNumero: string; contratDate: string; contratSigne: boolean;
@@ -128,6 +76,13 @@ export const DialogDossier = ({ eleve, onFermer }: { eleve: Student | null; onFe
   const elements = useMemo(() => (eleve ? elementsDe(eleve) : []), [eleve, elementsDe]);
   const montants = organisme ? montantFinance(organisme, elements) : null;
   const tranches = organisme && montants ? montantsDesTranches(organisme, montants.finance) : [];
+  // Suivi : présences, argent reçu de l'organisme, insertion.
+  const { studentAttendances } = useAttendance();
+  const { promotions } = useFormationPro();
+  const promotion = eleve ? promotions.find(p => p.classId === eleve.classId) : undefined;
+  const presence = eleve ? calculerAssiduite(studentAttendances, eleve.id) : null;
+  const insertion = dossier ? insertionActuelle(fin.insertions, dossier.id) : undefined;
+
   // Les frais qui portent déjà une réduction de CE financement.
   const { getAjustementsEleve } = usePayment();
   const propres = useMemo(() => new Set(eleve && dossier
@@ -241,6 +196,39 @@ export const DialogDossier = ({ eleve, onFermer }: { eleve: Student | null; onFe
                 <p className="text-xs text-amber-700 flex items-start gap-1.5"><AlertTriangle className="h-3.5 w-3.5 mt-0.5 flex-shrink-0" />
                   {autres.length} frais gardent une réduction accordée à la main ({autres.slice(0, 3).map(e => e.label).join(', ')}{autres.length > 3 ? '…' : ''}) : vérifiez-la dans Paiements → Réductions.</p>
               )}
+            </section>
+
+            {/* Suivi */}
+            <section className="grid gap-3 sm:grid-cols-3">
+              <div className="rounded-lg border p-3">
+                <p className="text-xs text-muted-foreground">Assiduité</p>
+                {presence && presence.taux !== null ? (
+                  <>
+                    <p className={`font-bold ${presence.taux < 80 ? 'text-amber-700' : ''}`}>{presence.taux} %</p>
+                    <p className="text-xs text-muted-foreground">{presence.absences} absence{presence.absences > 1 ? 's' : ''} · {presence.retards} retard{presence.retards > 1 ? 's' : ''} sur {presence.seances} séance{presence.seances > 1 ? 's' : ''}</p>
+                  </>
+                ) : <p className="text-sm text-muted-foreground">Aucune séance pointée</p>}
+                {promotion && <Link to={`/formation/evaluations/${promotion.id}`} className="text-xs text-primary hover:underline">Voir ses notes →</Link>}
+              </div>
+              <div className="rounded-lg border p-3">
+                <p className="text-xs text-muted-foreground">Reçu de l'organisme</p>
+                {fin.suiviDisponible && montants ? (() => {
+                  const s = situationFinanciere(dossier.id, montants.finance, fin.factures, fin.versements);
+                  return (<>
+                    <p className="font-bold text-green-700 dark:text-green-400">{fmt(s.recu)}</p>
+                    <p className="text-xs text-muted-foreground">facturé {fmt(s.facture)} · reste {fmt(s.finance - s.recu)}</p>
+                  </>);
+                })() : <p className="text-sm text-muted-foreground">—</p>}
+              </div>
+              <div className="rounded-lg border p-3">
+                <p className="text-xs text-muted-foreground">Insertion</p>
+                {insertion ? (
+                  <>
+                    <span className={`inline-block mt-1 text-xs font-medium px-2 py-0.5 rounded-full ${COULEUR_INSERTION[insertion.situation]}`}>{LIBELLES_INSERTION[insertion.situation]}</span>
+                    {insertion.structure && <p className="text-xs text-muted-foreground mt-1">{insertion.structure}</p>}
+                  </>
+                ) : <p className="text-sm text-muted-foreground">Pas encore saisie</p>}
+              </div>
             </section>
 
             {/* Statut */}

@@ -15,6 +15,10 @@ interface Props {
   details?: (promotion: Promotion) => ReactNode;
   /** Chargement propre au module (ex. les examens), en plus du catalogue. */
   chargement?: boolean;
+  /** Affiché au-dessus des promotions (ex. le tableau de bord des Financements). */
+  entete?: ReactNode;
+  /** Sous-titre de la page (« Choisissez une promotion » par défaut). */
+  sousTitre?: string;
 }
 
 /**
@@ -22,7 +26,7 @@ interface Props {
  * Examens…) : les promotions groupées par formation puis niveau, en cartes —
  * le même geste que « choisir une classe » dans Gestion des Notes.
  */
-export const GrillePromotions = ({ titre, lien, details, chargement }: Props) => {
+export const GrillePromotions = ({ titre, lien, details, chargement, entete, sousTitre }: Props) => {
   const navigate = useNavigate();
   const { loading, promotions, formations, niveaux } = useFormationPro();
   const { getStudentCountByClass } = useSchool();
@@ -36,9 +40,10 @@ export const GrillePromotions = ({ titre, lien, details, chargement }: Props) =>
     <div className="h-full flex flex-col">
       <div className="px-6 py-4 border-b flex-shrink-0">
         <h1 className="text-2xl font-bold text-foreground">{titre}</h1>
-        <p className="text-sm text-muted-foreground mt-0.5">Choisissez une promotion</p>
+        <p className="text-sm text-muted-foreground mt-0.5">{sousTitre ?? 'Choisissez une promotion'}</p>
       </div>
       <div className="flex-1 overflow-y-auto p-6">
+        {entete && <div className="mb-8">{entete}</div>}
         {promotions.length === 0 ? (
           <Card className="border-dashed">
             <CardContent className="py-16 text-center">
