@@ -3,7 +3,8 @@ import { Landmark, Loader2, Plus, Save, Trash2, X } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { usePayment } from '@/contexts/PaymentContext';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -15,10 +16,9 @@ import {
 } from '@/lib/financements';
 
 // ═══════════════════════════════════════════════════════════════════════════
-// Paramètres → Financements (formation professionnelle) : les organismes qui
-// prennent en charge des apprenants (3FPT…), et leurs règles. Le directeur
-// règle ; le personnel n'utilise que le résultat (activation à l'inscription,
-// dossiers).
+// Financements (formation professionnelle) : l'interrupteur du module
+// (Paramètres) et les organismes qui prennent en charge des apprenants (3FPT…)
+// avec leurs règles (dans le module, bouton « Organismes »).
 // ═══════════════════════════════════════════════════════════════════════════
 
 const pct = (n: number) => String(n).replace('.', ',');
@@ -167,30 +167,28 @@ const EditeurOrganisme = ({ o, onChange, onSupprimer, supprimable }: {
   );
 };
 
-export const ReglagesFinancements = () => {
+/**
+ * Paramètres → Financements : seulement l'interrupteur du module. Les
+ * organismes et leurs règles se gèrent DANS le module (Financements →
+ * Organismes), là où on s'en sert — comme les entreprises dans Stages.
+ */
+export const ActivationFinancements = () => {
   const { school, updateSchoolSettings } = useAuth();
-  const enregistres = useMemo(() => lireReglagesFinancements(school?.settings), [school?.settings]);
-  const [brouillon, setBrouillon] = useState<Reglages>(enregistres);
-  const cleEnregistree = JSON.stringify(enregistres);
-  useEffect(() => { setBrouillon(JSON.parse(cleEnregistree) as Reglages); }, [cleEnregistree]);
+  const reglages = useMemo(() => lireReglagesFinancements(school?.settings), [school?.settings]);
   const [saving, setSaving] = useState(false);
-  const modifie = JSON.stringify(brouillon) !== cleEnregistree;
 
-  const activer = (actif: boolean) => setBrouillon(b => ({
-    actif,
-    // Première activation : le 3FPT est proposé, avec les règles de la demande.
-    organismes: actif && b.organismes.length === 0 ? [organisme3FPT()] : b.organismes,
-  }));
-
-  const enregistrer = async () => {
-    const erreur = brouillon.actif ? brouillon.organismes.map(erreurOrganisme).find(Boolean) : null;
-    if (erreur) { toast({ title: 'Réglages incomplets', description: erreur, variant: 'destructive' }); return; }
+  const basculer = async (actif: boolean) => {
     setSaving(true);
     try {
-      await updateSchoolSettings({ [CLE_FINANCEMENTS]: { ...brouillon, organismes: brouillon.organismes.map(o => ({ ...o, nom: o.nom.trim() })) } });
-      toast({ title: 'Financements enregistrés' });
+      // Première activation : le 3FPT est proposé, avec les règles de la demande.
+      const organismes = actif && reglages.organismes.length === 0 ? [organisme3FPT()] : reglages.organismes;
+      await updateSchoolSettings({ [CLE_FINANCEMENTS]: { actif, organismes } });
+      toast({
+        title: actif ? 'Module Financements activé' : 'Module Financements désactivé',
+        description: actif ? 'Il apparaît dans le menu. Ses organismes se règlent depuis le module (bouton « Organismes »).' : 'Les dossiers déjà saisis sont gardés.',
+      });
     } catch (e) {
-      toast({ title: 'Réglages non enregistrés', description: (e as { message?: string })?.message, variant: 'destructive' });
+      toast({ title: 'Réglage non enregistré', description: (e as { message?: string })?.message, variant: 'destructive' });
     } finally {
       setSaving(false);
     }
@@ -203,39 +201,87 @@ export const ReglagesFinancements = () => {
           <div>
             <CardTitle className="flex items-center gap-2"><Landmark className="h-5 w-5 text-primary" /> Apprenants financés</CardTitle>
             <CardDescription className="mt-1.5">
-              Pour les organismes qui prennent en charge une partie de la formation (3FPT…) : dossiers, contrats, pièces,
-              et la part payée par l'apprenant. L'activation se fait ensuite, discrètement, à l'inscription ou dans Gestion des élèves.
+              Le module Financements suit les apprenants pris en charge par un organisme (3FPT…) : dossiers, factures,
+              rapports de fin de formation, insertion. Une fois activé, il apparaît dans le menu ; ses organismes et
+              leurs règles se gèrent depuis le module lui-même.
             </CardDescription>
           </div>
-          <Switch checked={brouillon.actif} onCheckedChange={activer} aria-label="Activer les financements" />
+          <div className="flex items-center gap-2 flex-shrink-0">
+            {saving && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
+            <Switch checked={reglages.actif} onCheckedChange={v => void basculer(v)} disabled={saving} aria-label="Activer les financements" />
+          </div>
         </div>
       </CardHeader>
-      {brouillon.actif && (
-        <CardContent className="space-y-4">
+    </Card>
+  );
+};
+
+/**
+ * Financements → Organismes : les organismes financeurs et leurs règles
+ * (part prise en charge, frais concernés, tranches, pièces). Le directeur
+ * règle ; les autres consultent.
+ */
+export const DialogOrganismes = ({ open, onOpenChange }: { open: boolean; onOpenChange: (v: boolean) => void }) => {
+  const { school, updateSchoolSettings, accountRole } = useAuth();
+  const modifiable = accountRole === 'admin';
+  const enregistres = useMemo(() => lireReglagesFinancements(school?.settings), [school?.settings]);
+  const [brouillon, setBrouillon] = useState<Reglages>(enregistres);
+  const cleEnregistree = JSON.stringify(enregistres);
+  useEffect(() => { if (open) setBrouillon(JSON.parse(cleEnregistree) as Reglages); }, [cleEnregistree, open]);
+  const [saving, setSaving] = useState(false);
+  const modifie = JSON.stringify(brouillon) !== cleEnregistree;
+
+  const enregistrer = async () => {
+    const erreur = brouillon.organismes.length === 0 ? 'Gardez au moins un organisme.' : brouillon.organismes.map(erreurOrganisme).find(Boolean);
+    if (erreur) { toast({ title: 'Réglages incomplets', description: erreur, variant: 'destructive' }); return; }
+    setSaving(true);
+    try {
+      await updateSchoolSettings({ [CLE_FINANCEMENTS]: { ...brouillon, organismes: brouillon.organismes.map(o => ({ ...o, nom: o.nom.trim() })) } });
+      toast({ title: 'Organismes enregistrés' });
+      onOpenChange(false);
+    } catch (e) {
+      toast({ title: 'Réglages non enregistrés', description: (e as { message?: string })?.message, variant: 'destructive' });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={v => { if (!saving) onOpenChange(v); }}>
+      <DialogContent className="max-w-3xl max-h-[92vh] flex flex-col">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2"><Landmark className="h-5 w-5 text-primary" />Organismes financeurs</DialogTitle>
+          <DialogDescription>
+            {modifiable ? 'Part prise en charge, frais concernés, tranches de versement et pièces du dossier, pour chaque organisme.' : 'Seul le directeur peut modifier ces règles.'}
+          </DialogDescription>
+        </DialogHeader>
+        <fieldset disabled={!modifiable} className="flex-1 overflow-y-auto space-y-4 -mx-1 px-1">
           {brouillon.organismes.map(o => (
             <EditeurOrganisme
-              key={o.id} o={o} supprimable={brouillon.organismes.length > 1}
+              key={o.id} o={o} supprimable={modifiable && brouillon.organismes.length > 1}
               onChange={n => setBrouillon(b => ({ ...b, organismes: b.organismes.map(x => x.id === o.id ? n : x) }))}
               onSupprimer={() => setBrouillon(b => ({ ...b, organismes: b.organismes.filter(x => x.id !== o.id) }))}
             />
           ))}
-          <Button type="button" variant="outline" className="gap-2" onClick={() => setBrouillon(b => ({ ...b, organismes: [...b.organismes, organismeVierge()] }))}>
-            <Plus className="h-4 w-4" /> Ajouter un organisme
-          </Button>
+          {modifiable && (
+            <Button type="button" variant="outline" className="gap-2" onClick={() => setBrouillon(b => ({ ...b, organismes: [...b.organismes, organismeVierge()] }))}>
+              <Plus className="h-4 w-4" /> Ajouter un organisme
+            </Button>
+          )}
           <p className="text-xs text-muted-foreground">
             Changer la part prise en charge ne touche pas les apprenants déjà activés : ouvrez leur dossier et cliquez sur
-            « Réappliquer » pour mettre leurs frais à jour.
+            « Réappliquer la part » pour mettre leurs frais à jour.
           </p>
-        </CardContent>
-      )}
-      <CardContent className={brouillon.actif ? 'pt-0' : ''}>
-        <div className="flex gap-2">
-          <Button onClick={enregistrer} disabled={!modifie || saving} className="gap-2">
-            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />} Enregistrer
-          </Button>
-          {modifie && <Button variant="ghost" onClick={() => setBrouillon(enregistres)} disabled={saving}>Annuler</Button>}
-        </div>
-      </CardContent>
-    </Card>
+        </fieldset>
+        {modifiable && (
+          <DialogFooter>
+            <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>Fermer</Button>
+            <Button onClick={() => void enregistrer()} disabled={!modifie || saving} className="gap-2">
+              {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />} Enregistrer
+            </Button>
+          </DialogFooter>
+        )}
+      </DialogContent>
+    </Dialog>
   );
 };

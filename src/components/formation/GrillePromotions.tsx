@@ -19,6 +19,8 @@ interface Props {
   entete?: ReactNode;
   /** Sous-titre de la page (« Choisissez une promotion » par défaut). */
   sousTitre?: string;
+  /** Boutons à droite du titre (ex. « Organismes » des Financements). */
+  actions?: ReactNode;
 }
 
 /**
@@ -26,7 +28,7 @@ interface Props {
  * Examens…) : les promotions groupées par formation puis niveau, en cartes —
  * le même geste que « choisir une classe » dans Gestion des Notes.
  */
-export const GrillePromotions = ({ titre, lien, details, chargement, entete, sousTitre }: Props) => {
+export const GrillePromotions = ({ titre, lien, details, chargement, entete, sousTitre, actions }: Props) => {
   const navigate = useNavigate();
   const { loading, promotions, formations, niveaux } = useFormationPro();
   const { getStudentCountByClass } = useSchool();
@@ -38,9 +40,12 @@ export const GrillePromotions = ({ titre, lien, details, chargement, entete, sou
 
   return (
     <div className="h-full flex flex-col">
-      <div className="px-6 py-4 border-b flex-shrink-0">
-        <h1 className="text-2xl font-bold text-foreground">{titre}</h1>
-        <p className="text-sm text-muted-foreground mt-0.5">{sousTitre ?? 'Choisissez une promotion'}</p>
+      <div className="px-6 py-4 border-b flex-shrink-0 flex items-start justify-between gap-3 flex-wrap">
+        <div>
+          <h1 className="text-2xl font-bold text-foreground">{titre}</h1>
+          <p className="text-sm text-muted-foreground mt-0.5">{sousTitre ?? 'Choisissez une promotion'}</p>
+        </div>
+        {actions && <div className="flex items-center gap-2">{actions}</div>}
       </div>
       <div className="flex-1 overflow-y-auto p-6">
         {entete && <div className="mb-8">{entete}</div>}
