@@ -7,8 +7,28 @@ import { VitePWA } from "vite-plugin-pwa";
 /** Couleur de la marque (--primary, hsl(38 92% 50%)) : barre d'état, écran de lancement. */
 const ORANGE_SENCLASS = "#F59E0B";
 
+/**
+ * Chaque mise en ligne donne aux fichiers des noms NEUFS (empreinte du
+ * contenu + commit). Pendant qu'un déploiement se propage, Cloudflare peut
+ * répondre la page HTML à la place d'un fichier pas encore arrivé, et garder
+ * cette réponse un an (/assets/* est immuable) : l'écran devenait blanc
+ * (14/10/2026, icône « printer »). Avec un nom propre à chaque déploiement,
+ * une telle réponse ne peut plus jamais être resservie au déploiement suivant.
+ */
+const DEPLOIEMENT = (process.env.CF_PAGES_COMMIT_SHA ?? "").slice(0, 7);
+const suffixe = DEPLOIEMENT ? `-${DEPLOIEMENT}` : "";
+
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => ({
+  build: {
+    rollupOptions: {
+      output: {
+        entryFileNames: `assets/[name]-[hash]${suffixe}.js`,
+        chunkFileNames: `assets/[name]-[hash]${suffixe}.js`,
+        assetFileNames: `assets/[name]-[hash]${suffixe}[extname]`,
+      },
+    },
+  },
   server: {
     host: "::",
     port: 8080,
