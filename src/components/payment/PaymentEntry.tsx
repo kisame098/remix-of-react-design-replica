@@ -12,7 +12,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
   Search, CreditCard, CheckCircle2, Circle, User, Lock,
-  AlertCircle, Loader2, QrCode, ScanLine, LockOpen,
+  AlertCircle, Loader2, QrCode, ScanLine, LockOpen, Landmark,
 } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import { useRecus } from '@/hooks/useRecus';
@@ -25,6 +25,8 @@ import {
   getBillableMonthsFor, readBillingRules,
 } from '@/types/payment';
 import { QrScanner } from '@/components/payment/QrScanner';
+import { useFinancements } from '@/contexts/FinancementsContext';
+import { cleElement } from '@/lib/tarifsEleve';
 import { buildPayableItems, type PayableItem } from '@/lib/dueItems';
 import { deciderVersement } from '@/lib/paiementPartiel';
 import { cn } from '@/lib/utils';
@@ -49,9 +51,11 @@ const MethodButton = ({ method, selected, onSelect }: { method: PaymentMethod; s
 );
 
 
-const PaymentRow = ({ item, selected, deverrouille, onToggle }: {
+const PaymentRow = ({ item, selected, deverrouille, onToggle, motif }: {
   item: PayableItem;
   selected: boolean;
+  /** Motif du tarif personnalisé (« Financement 3FPT (90 % pris en charge) », bourse…). */
+  motif?: string;
   /** Le verrou levé (sélection libre) rend cette ligne cochable. */
   deverrouille: boolean;
   onToggle: () => void;
@@ -98,8 +102,8 @@ const PaymentRow = ({ item, selected, deverrouille, onToggle }: {
         <p className="text-sm font-medium">{item.label}</p>
         {item.sublabel && <p className="text-xs text-muted-foreground">{item.sublabel}</p>}
         {item.personnalise && (
-          <p className="text-xs font-medium text-violet-600">
-            Tarif personnalisé · normal <span className="line-through">{fmt(item.tarifNormal)}</span>
+          <p className={`text-xs font-medium ${motif?.startsWith('Financement') ? 'text-primary' : 'text-violet-600'}`}>
+            {motif?.startsWith('Financement') ? motif : 'Tarif personnalisé'} · normal <span className="line-through">{fmt(item.tarifNormal)}</span>
           </p>
         )}
         {item.dejaVerse > 0 && (
@@ -170,6 +174,11 @@ const PaymentEntry = ({ initialMode = 'search' }: { initialMode?: 'search' | 'sc
 
   const selectedStudent = students.find(s => s.id === selectedStudentId);
   const selectedClass   = selectedStudent?.classId ? classes.find(c => c.id === selectedStudent.classId) : null;
+  // Apprenant financé (3FPT…) : le caissier doit le voir, il n'encaisse que sa part.
+  const financements = useFinancements();
+  const dossierFinancement = selectedStudent && financements.actif ? financements.dossierDe(selectedStudent.id) : undefined;
+  const organismeFinanceur = dossierFinancement ? financements.organisme(dossierFinancement.organismeId) : undefined;
+  const ajustementsEleve = useMemo(() => (selectedStudent ? getAjustementsEleve(selectedStudent.id) : new Map()), [selectedStudent, getAjustementsEleve]);
   const tuitionConfig   = selectedStudent?.classId ? getTuitionConfig(selectedStudent.classId) : undefined;
 
   // Only services the student is actually part of (enrolled optional + obligatory)
@@ -485,6 +494,11 @@ const PaymentEntry = ({ initialMode = 'search' }: { initialMode?: 'search' | 'sc
                   <p className="font-semibold text-sm truncate">{selectedStudent.firstName} {selectedStudent.lastName}</p>
                   <p className="text-xs text-muted-foreground">{selectedStudent.studentId}</p>
                   {selectedClass && <Badge variant="outline" className="text-xs mt-0.5">{selectedClass.name}</Badge>}
+                  {organismeFinanceur && (
+                    <Badge className="text-xs mt-0.5 ml-1 gap-1 bg-primary/15 text-primary hover:bg-primary/15 border-0">
+                      <Landmark className="h-3 w-3" />Financé {organismeFinanceur.nom} · paie {100 - organismeFinanceur.partFinancee} %
+                    </Badge>
+                  )}
                 </div>
               </div>
               <button
@@ -567,6 +581,7 @@ const PaymentEntry = ({ initialMode = 'search' }: { initialMode?: 'search' | 'sc
                   <PaymentRow
                     key={item.id}
                     item={item}
+                    motif={ajustementsEleve.get(cleElement(item))?.motif}
                     selected={selectedItems.has(item.id)}
                     deverrouille={verrouLeve && item.blocked}
                     onToggle={() => !item.paid && (verrouLeve || !item.blocked) && toggleItem(item.id)}

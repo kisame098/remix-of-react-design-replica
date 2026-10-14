@@ -21,6 +21,7 @@ import {
 import { Student } from '@/contexts/SchoolContext';
 import { useRecus } from '@/hooks/useRecus';
 import { useElementsAPayer } from '@/hooks/useElementsAPayer';
+import { useFinancements } from '@/contexts/FinancementsContext';
 import { useAnnulerPaiement } from '@/hooks/useAnnulerPaiement';
 import { resteAPayer } from '@/lib/paiementPartiel';
 import { montantEleve } from '@/lib/tarifsEleve';
@@ -76,6 +77,13 @@ const Caisse = () => {
   // Carte scolaire scannée : l'élève est trouvé, le caissier choisit ce qu'il encaisse.
   const [carte, setCarte]     = useState<Student | null>(null);
   const { elementsDe } = useElementsAPayer();
+  // Apprenant financé (3FPT…) : le caissier n'encaisse que sa part.
+  const financements = useFinancements();
+  const financeur = (s: Student) => {
+    const d = financements.actif ? financements.dossierDe(s.id) : undefined;
+    const o = d ? financements.organisme(d.organismeId) : undefined;
+    return o ? <p className="text-xs font-medium text-primary">Financé {o.nom} · paie {100 - o.partFinancee} %</p> : null;
+  };
   // Exactement la liste de Gestion paiements (acomptes, tarif personnalisé, mois
   // dans l'ordre) : ce qui reste à payer, sans sauter un mois impayé.
   const aEncaisser = useMemo(() => (carte ? elementsDe(carte).filter(i => !i.paid && !i.blocked) : []), [carte, elementsDe]);
@@ -241,6 +249,7 @@ const Caisse = () => {
                   <div className="min-w-0">
                     <p className="font-bold text-slate-800 truncate">{carte.firstName} {carte.lastName}</p>
                     <p className="text-xs text-slate-400 font-mono">{carte.studentId}</p>
+                    {financeur(carte)}
                   </div>
                 </div>
                 {aEncaisser.length === 0 ? (
@@ -305,6 +314,7 @@ const Caisse = () => {
                   <div className="min-w-0">
                     <p className="font-bold text-slate-800 truncate">{matched.student.firstName} {matched.student.lastName}</p>
                     <p className="text-xs text-slate-400 font-mono">{matched.student.studentId}</p>
+                    {financeur(matched.student)}
                   </div>
                 </div>
 

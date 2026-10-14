@@ -7,6 +7,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
+import { EncadreFinancementsPaiements } from '@/components/financements/EncadreFinancementsPaiements';
 import {
   Banknote, TrendingUp, Users, School, CheckCircle2, AlertTriangle,
   CreditCard, ArrowUpRight
@@ -177,6 +178,9 @@ const PaymentOverview = () => {
           </CardContent>
         </Card>
       </div>
+
+      {/* Organismes financeurs (3FPT…) : leur part, à côté de celle des familles. */}
+      <EncadreFinancementsPaiements />
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
         {/* By class */}
