@@ -1,5 +1,7 @@
 import { useState } from 'react';
-import { LayoutDashboard, CreditCard, BarChart3, Settings2, Wallet, UsersRound, ScanLine, History, BadgePercent, FileText } from 'lucide-react';
+import { LayoutDashboard, CreditCard, BarChart3, Settings2, Wallet, UsersRound, ScanLine, History, BadgePercent, FileText, Eye, EyeOff } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { useMontantsMasques } from '@/hooks/useMontantsMasques';
 import PaymentOverview from '@/components/payment/PaymentOverview';
 import PaymentEntry from '@/components/payment/PaymentEntry';
 import PaymentTracking from '@/components/payment/PaymentTracking';
@@ -32,6 +34,7 @@ const TABS: NavTab[] = [
 
 const PaymentManagement = () => {
   const [activeTab, setActiveTab] = useState<Tab>('overview');
+  const [masques, basculerMasques] = useMontantsMasques();
 
   return (
     <div className="h-full flex flex-col">
@@ -40,10 +43,17 @@ const PaymentManagement = () => {
         <div className="p-2.5 rounded-xl bg-primary/10">
           <Wallet className="h-5 w-5 text-primary" />
         </div>
-        <div>
+        <div className="flex-1">
           <h1 className="text-2xl font-bold text-foreground">Gestion des Paiements</h1>
           <p className="text-sm text-muted-foreground mt-0.5">Inscriptions, scolarité, services annexes</p>
         </div>
+        <Button
+          variant="ghost" size="icon" onClick={basculerMasques}
+          title={masques ? 'Afficher les montants encaissés' : 'Masquer les montants encaissés'}
+          aria-label={masques ? 'Afficher les montants encaissés' : 'Masquer les montants encaissés'}
+        >
+          {masques ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5 text-muted-foreground" />}
+        </Button>
       </div>
 
       {/* Body: left nav + content */}

@@ -1,5 +1,6 @@
 import { motion } from 'framer-motion';
-import { Users, School, GraduationCap, Banknote, Inbox } from 'lucide-react';
+import { Users, School, GraduationCap, Banknote, Inbox, Eye, EyeOff } from 'lucide-react';
+import { MONTANT_MASQUE, useMontantsMasques } from '@/hooks/useMontantsMasques';
 import { formatDistanceToNow } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { useAuth } from '@/contexts/AuthContext';
@@ -12,6 +13,7 @@ const Dashboard = () => {
   const { profile, school } = useAuth();
   const { students, classes, teachers } = useSchool();
   const { getTotalCollectedForYear } = usePayment();
+  const [masques, basculerMasques] = useMontantsMasques();
 
   const stats = [
     {
@@ -34,9 +36,10 @@ const Dashboard = () => {
     },
     {
       title: 'Total encaissé (année)',
-      value: `${fmt(getTotalCollectedForYear())} FCFA`,
+      value: masques ? `${MONTANT_MASQUE} FCFA` : `${fmt(getTotalCollectedForYear())} FCFA`,
       icon: Banknote,
       color: 'bg-emerald-500',
+      masquable: true,
     },
   ];
 
@@ -87,8 +90,19 @@ const Dashboard = () => {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5, delay: index * 0.1 }}
-            className="bg-card rounded-2xl p-6 border border-border shadow-sm hover:shadow-md transition-shadow"
+            className="group relative bg-card rounded-2xl p-6 border border-border shadow-sm hover:shadow-md transition-shadow"
           >
+            {'masquable' in stat && (
+              // N'apparaît qu'au survol de la carte : discret pour qui regarde derrière.
+              <button
+                type="button" onClick={basculerMasques}
+                className={`absolute top-4 right-4 p-1.5 rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-opacity opacity-0 group-hover:opacity-100 focus:opacity-100`}
+                title={masques ? 'Afficher le montant' : 'Masquer le montant'}
+                aria-label={masques ? 'Afficher le montant' : 'Masquer le montant'}
+              >
+                {masques ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
+            )}
             <div className={`${stat.color} w-12 h-12 rounded-xl flex items-center justify-center mb-4`}>
               <stat.icon className="w-6 h-6 text-primary-foreground" />
             </div>
