@@ -28,7 +28,7 @@ export const estFormationPro = (school: { management_mode?: string | null } | nu
 export type IconeMenu =
   | 'dashboard' | 'inscription' | 'eleves' | 'profs' | 'classes' | 'notes' | 'cursus' | 'emploi'
   | 'presences' | 'paiements' | 'salaires' | 'identifiants'
-  | 'apercu' | 'formations' | 'promotions' | 'evaluations' | 'examens' | 'stages' | 'documents';
+  | 'apercu' | 'formations' | 'promotions' | 'evaluations' | 'examens' | 'stages' | 'documents' | 'financements';
 
 export interface ItemMenu {
   title: string;
@@ -82,11 +82,20 @@ export const RUBRIQUES_FORMATION_PRO: (ItemMenu & { description: string })[] = [
 /** Pages du mode classique qui n'existent plus dans le mode formation professionnelle. */
 export const URLS_CLASSIQUES_MASQUEES = ['/classes', '/notes', '/filieres', '/documents'] as const;
 
-export const menuPourMode = (mode: ModeGestion): ItemMenu[] => {
+/**
+ * Apprenants financés (3FPT…) : la rubrique n'apparaît que si l'école a
+ * activé les financements (Paramètres → Financements).
+ */
+export const RUBRIQUE_FINANCEMENTS: ItemMenu = {
+  title: 'Financements', url: '/formation/financements', icon: 'financements', permission: 'financements', groupe: 'formation_pro',
+};
+
+export const menuPourMode = (mode: ModeGestion, options: { financements?: boolean } = {}): ItemMenu[] => {
   if (mode === 'formation_pro') {
     return [
       DASHBOARD, INSCRIPTION_ELEVES, GESTION_ELEVES, INSCRIPTION_PROFS, GESTION_PROFS,
       ...RUBRIQUES_FORMATION_PRO,
+      ...(options.financements ? [RUBRIQUE_FINANCEMENTS] : []),
       EMPLOIS, PRESENCES, PAIEMENTS, SALAIRES, IDENTIFIANTS,
     ];
   }

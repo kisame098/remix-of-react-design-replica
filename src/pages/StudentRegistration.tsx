@@ -17,6 +17,8 @@ import { useToast } from '@/hooks/use-toast';
 import { useFicheInscription } from '@/hooks/useFicheInscription';
 import BulkImportStudents from '@/components/student/BulkImportStudents';
 import { PhotoPicker } from '@/components/student/PhotoPicker';
+import { ChoixFinancement } from '@/components/financements/ChoixFinancement';
+import { useAppliquerChoixFinancement } from '@/hooks/useChoixFinancement';
 import AcademicChoicesFields, { useAcademicChoicesRequirement } from '@/components/student/AcademicChoicesFields';
 
 // ─── Page principale ──────────────────────────────────────────────────────────
@@ -31,6 +33,9 @@ const StudentRegistration = () => {
   } = useSchool();
   const { school } = useAuth();
   const modeFormationPro = estFormationPro(school);
+  // Financement (3FPT…) : '' = aucun. N'apparaît que si l'école l'a activé.
+  const [financement, setFinancement] = useState('');
+  const appliquerFinancement = useAppliquerChoixFinancement();
   const { currentYear } = useSchoolYear();
   const { toast } = useToast();
   const { montrerFiche, dialogueFiche } = useFicheInscription();
@@ -140,6 +145,7 @@ const StudentRegistration = () => {
         title: 'Réinscription réussie !',
         description: `${student.firstName} ${student.lastName} réinscrit pour ${currentYear?.name || 'cette année'}.`,
       });
+      if (financement) await appliquerFinancement(student, financement);
       // La fiche s'ouvre APRÈS le succès : l'inscription est déjà enregistrée.
       montrerFiche(student, { reinscription: true });
       resetAll();
@@ -151,6 +157,7 @@ const StudentRegistration = () => {
   };
 
   const resetAll = () => {
+    setFinancement('');
     setReEnrollId('');
     setIsReEnrolling(false);
     setPhotoUrl('');
@@ -239,6 +246,7 @@ const StudentRegistration = () => {
         title: 'Inscription réussie !',
         description: `${student.firstName} ${student.lastName} — ID : ${student.studentId}`,
       });
+      if (financement) await appliquerFinancement(student, financement);
       // La fiche s'ouvre APRÈS le succès : l'inscription est déjà enregistrée.
       montrerFiche(student, { reinscription: false });
       resetAll();
@@ -567,6 +575,11 @@ const StudentRegistration = () => {
                     })}
                   </SelectContent>
                 </Select>
+              )}
+              {modeFormationPro && (
+                <div className="mt-4">
+                  <ChoixFinancement valeur={financement} onChange={setFinancement} disabled={isSubmitting} />
+                </div>
               )}
             </CardContent>
           </Card>

@@ -8,6 +8,7 @@ import { useSchoolYear } from '@/contexts/SchoolYearContext';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { ReglagesFinancements } from '@/components/financements/ReglagesFinancements';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
@@ -18,7 +19,7 @@ import {
 import { Badge } from '@/components/ui/badge';
 import {
   School, User, Calendar, Clock, GraduationCap,
-  Camera, Loader2, Save, ShieldAlert, AlertCircle, CheckCircle2,
+  Camera, Loader2, Save, ShieldAlert, AlertCircle, CheckCircle2, Landmark,
 } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import { compressImage } from '@/lib/imageCompress';
@@ -383,12 +384,14 @@ const SettingsPage = () => {
       </div>
 
       <Tabs defaultValue="ecole" className="space-y-6">
-        <TabsList className={`grid w-full ${avecScolarite ? 'grid-cols-5' : 'grid-cols-4'}`}>
+        {/* Formation pro : « Financements » prend la place de « Scolarité ». */}
+        <TabsList className="grid w-full grid-cols-5">
           <TabsTrigger value="ecole" className="gap-2" title="École" aria-label="École"><School className="h-4 w-4" /> <span className="hidden md:inline">École</span></TabsTrigger>
           <TabsTrigger value="compte" className="gap-2" title="Mon compte" aria-label="Mon compte"><User className="h-4 w-4" /> <span className="hidden md:inline">Mon compte</span></TabsTrigger>
           <TabsTrigger value="annee" className="gap-2" title="Année scolaire" aria-label="Année scolaire"><Calendar className="h-4 w-4" /> <span className="hidden md:inline">Année scolaire</span></TabsTrigger>
           <TabsTrigger value="horaires" className="gap-2" title="Emploi du temps" aria-label="Emploi du temps"><Clock className="h-4 w-4" /> <span className="hidden md:inline">Emploi du temps</span></TabsTrigger>
           {avecScolarite && <TabsTrigger value="scolarite" className="gap-2" title="Scolarité" aria-label="Scolarité"><GraduationCap className="h-4 w-4" /> <span className="hidden md:inline">Scolarité</span></TabsTrigger>}
+          {!avecScolarite && <TabsTrigger value="financements" className="gap-2" title="Financements" aria-label="Financements"><Landmark className="h-4 w-4" /> <span className="hidden md:inline">Financements</span></TabsTrigger>}
         </TabsList>
 
         {/* École */}
@@ -712,6 +715,12 @@ const SettingsPage = () => {
             </CardFooter>
           </Card>
         </TabsContent>
+
+        {!avecScolarite && (
+          <TabsContent value="financements">
+            <ReglagesFinancements />
+          </TabsContent>
+        )}
 
         {avecScolarite && (
           <TabsContent value="scolarite">

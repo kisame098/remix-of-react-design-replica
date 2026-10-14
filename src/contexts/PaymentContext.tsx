@@ -155,7 +155,7 @@ interface PaymentContextType {
   /** Tarifs personnalisés d'UN élève, indexés par frais. */
   getAjustementsEleve: (studentId: string) => Map<string, AjustementTarif>;
   /** Accorde ou modifie (directeur / permission « reductions » ; vérifié par la base). */
-  appliquerTarifsEleve: (studentId: string, lignes: AjustementTarif[]) => Promise<void>;
+  appliquerTarifsEleve: (studentId: string, lignes: AjustementTarif[]) => Promise<AjustementTarif[]>;
   /** Retire : l'élève repaie le tarif normal sur ces frais. */
   retirerTarifsEleve:  (ids: string[]) => Promise<void>;
 
@@ -643,6 +643,8 @@ export const PaymentProvider = ({ children }: { children: ReactNode }) => {
     if (error) throw error;
     const nouveaux = ((data ?? []) as unknown[]).map(mapAjustement);
     setAjustements(prev => [...prev.filter(a => !nouveaux.some(n => n.id === a.id)), ...nouveaux]);
+    // Les lignes enregistrées (avec leur identifiant) : un financement garde la trace de ce qu'il a posé.
+    return nouveaux;
   }, []);
 
   const retirerTarifsEleve = useCallback(async (ids: string[]) => {

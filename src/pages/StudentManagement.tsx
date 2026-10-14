@@ -7,6 +7,9 @@ import {
 import StudentExportDialog from '@/components/student/StudentExportDialog';
 import { BoutonRetirer, ListeRetires } from '@/components/retrait/Retraits';
 import { PhotoPicker } from '@/components/student/PhotoPicker';
+import { ChoixFinancement } from '@/components/financements/ChoixFinancement';
+import { useAppliquerChoixFinancement } from '@/hooks/useChoixFinancement';
+import { useFinancements } from '@/contexts/FinancementsContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -53,7 +56,7 @@ import { useToast } from '@/hooks/use-toast';
 import { resolveAcademicProfile } from '@/lib/academicProfile';
 import AcademicChoicesFields, { useAcademicChoicesRequirement } from '@/components/student/AcademicChoicesFields';
 import { mergeFiliereChoiceGroups, mergeFiliereFacultativeSubjects } from '@/contexts/SchoolContext';
-import { ListChecks, FileText } from 'lucide-react';
+import { ListChecks, FileText, Landmark } from 'lucide-react';
 import { useFicheInscription } from '@/hooks/useFicheInscription';
 import { libelleSexe } from '@/lib/ficheInscription';
 import { ProfilMatieres } from '@/components/student/ProfilMatieres';
@@ -106,6 +109,10 @@ const StudentManagement = () => {
     { value: 'tante', label: 'Tante' },
     { value: 'autre', label: 'Autre' },
   ];
+  // Financement (3FPT…) : '' = aucun. Visible seulement si l'école l'a activé.
+  const financements = useFinancements();
+  const [editFinancement, setEditFinancement] = useState('');
+  const appliquerFinancement = useAppliquerChoixFinancement();
   const [editForm, setEditForm] = useState<EditFormData>({
     firstName: '',
     lastName: '',
@@ -203,6 +210,7 @@ const StudentManagement = () => {
       },
       photoUrl: student.photoUrl || '',
     });
+    setEditFinancement(financements.dossierDe(student.id)?.organismeId ?? '');
 
     // Pré-remplir les choix déjà résolus pour la classe actuelle de l'élève,
     // pour que l'admin les voie et puisse les corriger si besoin. Calculé
@@ -276,6 +284,8 @@ const StudentManagement = () => {
         tutor2: editForm.tutor2.phone ? editForm.tutor2 as Tutor : undefined,
         photoUrl: editForm.photoUrl,
       });
+      // Après l'enregistrement (la classe a pu changer : ses frais aussi).
+      await appliquerFinancement({ ...selectedStudent, classId: editForm.classId }, editFinancement);
     } catch (e) {
       toast({
         title: 'Modifications non enregistrées',
@@ -734,6 +744,12 @@ const StudentManagement = () => {
                       </p>
                       <div className="flex items-center gap-2 mt-2 flex-wrap">
                         <Badge>{getClassName(selectedStudent.classId)}</Badge>
+                        {financements.actif && financements.dossierDe(selectedStudent.id) && (
+                          <Badge variant="outline" className="gap-1 border-primary/30 text-primary">
+                            <Landmark className="w-3 h-3" />
+                            {financements.organisme(financements.dossierDe(selectedStudent.id)!.organismeId)?.nom ?? 'Financé'}
+                          </Badge>
+                        )}
                         {unresolvedGroups.length > 0 && (
                           <Badge variant="destructive" className="gap-1">
                             <ListChecks className="w-3 h-3" />
@@ -1189,6 +1205,9 @@ const StudentManagement = () => {
                         ))}
                       </SelectContent>
                     </Select>
+                    <div className="mt-4 empty:hidden">
+                      <ChoixFinancement valeur={editFinancement} onChange={setEditFinancement} />
+                    </div>
                   </CardContent>
                 </Card>
 
