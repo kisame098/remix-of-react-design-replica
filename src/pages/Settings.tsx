@@ -8,7 +8,7 @@ import { useSchoolYear } from '@/contexts/SchoolYearContext';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { ReglagesFinancements } from '@/components/financements/ReglagesFinancements';
+import { ActivationFinancements } from '@/components/financements/Organismes';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
@@ -718,7 +718,7 @@ const SettingsPage = () => {
 
         {!avecScolarite && (
           <TabsContent value="financements">
-            <ReglagesFinancements />
+            <ActivationFinancements />
           </TabsContent>
         )}
 
