@@ -27,6 +27,7 @@ import {
 import { QrScanner } from '@/components/payment/QrScanner';
 import { useFinancements } from '@/contexts/FinancementsContext';
 import { cleElement } from '@/lib/tarifsEleve';
+import { fraisNonCouverts } from '@/lib/financements';
 import { buildPayableItems, type PayableItem } from '@/lib/dueItems';
 import { deciderVersement } from '@/lib/paiementPartiel';
 import { cn } from '@/lib/utils';
@@ -178,6 +179,7 @@ const PaymentEntry = ({ initialMode = 'search' }: { initialMode?: 'search' | 'sc
   const financements = useFinancements();
   const dossierFinancement = selectedStudent && financements.actif ? financements.dossierDe(selectedStudent.id) : undefined;
   const organismeFinanceur = dossierFinancement ? financements.organisme(dossierFinancement.organismeId) : undefined;
+  const [application, setApplication] = useState(false);
   const ajustementsEleve = useMemo(() => (selectedStudent ? getAjustementsEleve(selectedStudent.id) : new Map()), [selectedStudent, getAjustementsEleve]);
   const tuitionConfig   = selectedStudent?.classId ? getTuitionConfig(selectedStudent.classId) : undefined;
 
@@ -191,6 +193,20 @@ const PaymentEntry = ({ initialMode = 'search' }: { initialMode?: 'search' | 'sc
   // ── Build payable items ─────────────────────────────────────────────────────
   // Le calcul lui-même vit dans src/lib/dueItems.ts (fonction pure, couverte
   // par dueItems.test.ts) — ici on ne fait que lui brancher le contexte.
+  /** Réapplique la part de l'apprenant (réductions retirées à la main, frais nouveaux). */
+  const appliquerPart = async () => {
+    if (!selectedStudent) return;
+    setApplication(true);
+    try {
+      const n = await financements.reappliquer(selectedStudent);
+      toast({ title: `Part de l'apprenant appliquée sur ${n} frais` });
+    } catch (e) {
+      toast({ title: 'Part non appliquée', description: `${(e as { message?: string })?.message ?? ''} — il faut être directeur ou avoir la permission « Réductions ».`, variant: 'destructive' });
+    } finally {
+      setApplication(false);
+    }
+  };
+
   const payableItems = useMemo((): PayableItem[] => {
     if (!selectedStudent) return [];
     return buildPayableItems({
@@ -210,6 +226,8 @@ const PaymentEntry = ({ initialMode = 'search' }: { initialMode?: 'search' | 'sc
       ajustements: getAjustementsEleve(selectedStudent.id),
     });
   }, [selectedStudent, tuitionConfig, studentServices, hasPaidInscription, hasPaidTuitionMonth, hasPaidService, getAcomptes, getAjustementsEleve, isEnrolledInService, selectedClass, academicMonths, billingRules]);
+  // Frais pris en charge restés au tarif plein : la part n'est pas appliquée.
+  const nonCouverts = organismeFinanceur ? fraisNonCouverts(organismeFinanceur, payableItems) : [];
 
   // Éléments cochables : verrou fermé, le verrou séquentiel masque les mois
   // bloqués ; verrou levé, tout ce qui n'est pas payé devient cochable.
@@ -494,11 +512,21 @@ const PaymentEntry = ({ initialMode = 'search' }: { initialMode?: 'search' | 'sc
                   <p className="font-semibold text-sm truncate">{selectedStudent.firstName} {selectedStudent.lastName}</p>
                   <p className="text-xs text-muted-foreground">{selectedStudent.studentId}</p>
                   {selectedClass && <Badge variant="outline" className="text-xs mt-0.5">{selectedClass.name}</Badge>}
-                  {organismeFinanceur && (
+                  {organismeFinanceur && (nonCouverts.length === 0 ? (
                     <Badge className="text-xs mt-0.5 ml-1 gap-1 bg-primary/15 text-primary hover:bg-primary/15 border-0">
                       <Landmark className="h-3 w-3" />Financé {organismeFinanceur.nom} · paie {100 - organismeFinanceur.partFinancee} %
                     </Badge>
-                  )}
+                  ) : (
+                    <div className="mt-1.5 rounded-md border border-amber-300 bg-amber-50 dark:bg-amber-950/30 px-2 py-1.5 text-xs text-amber-900 dark:text-amber-200 space-y-1">
+                      <p className="flex items-center gap-1 font-medium">
+                        <AlertCircle className="h-3.5 w-3.5 flex-shrink-0" />Financé {organismeFinanceur.nom}, mais sa part n'est pas appliquée sur {nonCouverts.length} frais : ils sont au tarif plein.
+                      </p>
+                      <button type="button" disabled={application} onClick={() => void appliquerPart()}
+                        className="font-semibold text-primary hover:underline disabled:opacity-50">
+                        {application ? 'Application…' : `Appliquer la part (${100 - organismeFinanceur.partFinancee} %)`}
+                      </button>
+                    </div>
+                  ))}
                 </div>
               </div>
               <button

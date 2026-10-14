@@ -13,7 +13,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import {
   Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog';
-import { BadgePercent, Loader2, Search, Trash2, UserCog, Lock } from 'lucide-react';
+import { BadgePercent, Loader2, Search, Trash2, UserCog, Lock, Landmark } from 'lucide-react';
+import { useFinancements } from '@/contexts/FinancementsContext';
 import { toast } from '@/hooks/use-toast';
 import {
   getAcademicMonths, getBillableMonthsFor, readBillingRules,
@@ -21,7 +22,7 @@ import {
 } from '@/types/payment';
 import { buildPayableItems, type PayableItem } from '@/lib/dueItems';
 import {
-  LIBELLES_MODE, appliquerAjustement, decrireAjustement, developperAjustement,
+  LIBELLES_MODE, appliquerAjustement, cleElement, decrireAjustement, developperAjustement,
   manqueAGagner, montantEleve, tarifNormalDe, verifierAjustement,
   type AjustementTarif, type ElementFrais, type ModeAjustement,
 } from '@/lib/tarifsEleve';
@@ -78,6 +79,14 @@ const EditeurTarifEleve = ({ eleve, onFermer }: { eleve: Student; onFermer: () =
   const peutAccorder = usePeutAccorder();
   const frais = useFraisEleve(eleve);
   const index = getAjustementsEleve(eleve.id);
+  // Réductions posées par un financement (3FPT…) : elles appartiennent au
+  // dossier de financement et ne se retirent pas d'ici — sinon la caisse
+  // réclamerait le tarif plein à un apprenant financé.
+  const financements = useFinancements();
+  const dossier = financements.dossierDe(eleve.id);
+  const organismeFinanceur = dossier ? financements.organisme(dossier.organismeId) : undefined;
+  const idsFinancement = new Set(dossier?.ajustementIds ?? []);
+  const duFinancement = (a?: { id?: string; motif: string }) => !!a && ((!!a.id && idsFinancement.has(a.id)) || (!!dossier && a.motif.startsWith('Financement ')));
 
   const [mode, setMode] = useState<ModeAjustement>('pourcentage');
   const [valeur, setValeur] = useState('');
@@ -85,7 +94,7 @@ const EditeurTarifEleve = ({ eleve, onFermer }: { eleve: Student; onFermer: () =
   const [coches, setCoches] = useState<Set<string>>(new Set());
   const [enCours, setEnCours] = useState(false);
 
-  const modifiables = frais.filter(i => !i.paid);
+  const modifiables = frais.filter(i => !i.paid && !duFinancement(index.get(cleElement(elementDe(i)))));
   const moisModifiables = modifiables.filter(i => i.type === 'tuition');
   const basculer = (id: string) => setCoches(prev => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n; });
   const cocherTous = (ids: string[], oui: boolean) => setCoches(prev => {
@@ -125,6 +134,7 @@ const EditeurTarifEleve = ({ eleve, onFermer }: { eleve: Student; onFermer: () =
 
   const lignes = frais.map(i => ({ item: i, ...montantEleve(i.tarifNormal, elementDe(i), index) }));
   const personnalises = lignes.filter(l => l.ajustement);
+  const retirables = personnalises.filter(l => !duFinancement(l.ajustement));
 
   return (
     <Dialog open onOpenChange={o => !o && onFermer()}>
@@ -136,6 +146,16 @@ const EditeurTarifEleve = ({ eleve, onFermer }: { eleve: Student; onFermer: () =
             Les frais déjà payés ne changent pas.
           </DialogDescription>
         </DialogHeader>
+
+        {organismeFinanceur && (
+          <div className="rounded-lg border border-primary/30 bg-primary/5 p-3 text-sm flex items-start gap-2">
+            <Landmark className="h-4 w-4 text-primary mt-0.5 flex-shrink-0" />
+            <p>
+              Financé par <b>{organismeFinanceur.nom}</b> : sa part sur les frais pris en charge est gérée par son dossier
+              (Financements). Ces réductions sont verrouillées ici ; les autres frais restent modifiables.
+            </p>
+          </div>
+        )}
 
         {peutAccorder ? (
           <div className="space-y-3 rounded-lg border p-3 bg-muted/20">
@@ -173,9 +193,13 @@ const EditeurTarifEleve = ({ eleve, onFermer }: { eleve: Student; onFermer: () =
                   <li key={item.id} className="flex items-center gap-3 px-3 py-2 text-sm">
                     {item.paid
                       ? <Lock className="h-4 w-4 text-muted-foreground" aria-label="Déjà payé" />
-                      : <Checkbox checked={coches.has(item.id)} onCheckedChange={() => basculer(item.id)} aria-label={item.label} />}
+                      : duFinancement(ajustement)
+                        ? <Landmark className="h-4 w-4 text-primary" aria-label="Part du financement" />
+                        : <Checkbox checked={coches.has(item.id)} onCheckedChange={() => basculer(item.id)} aria-label={item.label} />}
                     <span className={`flex-1 min-w-0 truncate ${item.paid ? 'text-muted-foreground' : ''}`}>{item.label}</span>
-                    {ajustement && <Badge variant="outline" className="text-[10px] text-violet-700 border-violet-300">{decrireAjustement(ajustement)}</Badge>}
+                    {ajustement && (duFinancement(ajustement)
+                      ? <Badge variant="outline" className="text-[10px] text-primary border-primary/40">{organismeFinanceur?.nom ?? 'Financement'} · {decrireAjustement(ajustement)}</Badge>
+                      : <Badge variant="outline" className="text-[10px] text-violet-700 border-violet-300">{decrireAjustement(ajustement)}</Badge>)}
                     <span className="w-40 text-right tabular-nums">
                       {item.paid ? <span className="text-xs text-green-700">payé</span> : apercu !== null ? (
                         <><span className="line-through text-muted-foreground mr-1">{fmt(du)}</span><span className="font-semibold text-primary">{fmt(apercu)}</span></>
@@ -202,10 +226,10 @@ const EditeurTarifEleve = ({ eleve, onFermer }: { eleve: Student; onFermer: () =
         <div className="space-y-2">
           <div className="flex items-center justify-between">
             <p className="text-sm font-semibold">Tarifs personnalisés en place ({personnalises.length})</p>
-            {peutAccorder && personnalises.length > 0 && (
+            {peutAccorder && retirables.length > 0 && (
               <Button size="sm" variant="ghost" className="text-destructive h-7 text-xs gap-1" disabled={enCours}
-                onClick={() => retirer(personnalises.map(l => l.ajustement!.id!).filter(Boolean))}>
-                <Trash2 className="h-3.5 w-3.5" /> Tout retirer
+                onClick={() => retirer(retirables.map(l => l.ajustement!.id!).filter(Boolean))}>
+                <Trash2 className="h-3.5 w-3.5" /> {retirables.length < personnalises.length ? 'Retirer les autres réductions' : 'Tout retirer'}
               </Button>
             )}
           </div>
@@ -222,7 +246,9 @@ const EditeurTarifEleve = ({ eleve, onFermer }: { eleve: Student; onFermer: () =
                     </p>
                   </div>
                   <span className="text-right tabular-nums text-xs"><span className="line-through text-muted-foreground mr-1">{fmt(tarifNormal)}</span>{fmt(du)}</span>
-                  {peutAccorder && ajustement!.id && (
+                  {duFinancement(ajustement) ? (
+                    <span className="text-[11px] text-primary whitespace-nowrap flex items-center gap-1"><Lock className="h-3 w-3" />financement</span>
+                  ) : peutAccorder && ajustement!.id && (
                     <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive" disabled={enCours}
                       onClick={() => retirer([ajustement!.id!])} aria-label={`Retirer le tarif personnalisé de ${item.label}`}>
                       <Trash2 className="h-3.5 w-3.5" />

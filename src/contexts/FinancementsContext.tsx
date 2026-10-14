@@ -350,11 +350,13 @@ export const FinancementsProvider = ({ children }: { children: ReactNode }) => {
     const d = dossiers.find(x => x.studentEnrollmentId === eleve.id);
     const o = d ? reglages.organismes.find(x => x.id === d.organismeId) : undefined;
     if (!d || !o) return 0;
-    // Met à jour celles déjà posées (part modifiée dans les réglages) et couvre les nouveaux frais.
+    // Met à jour celles déjà posées (part modifiée dans les réglages) et couvre
+    // les frais au tarif plein (nouveaux, ou réduction retirée à la main).
     const posees = await poserReductions(eleve, o, d.ajustementIds);
-    await enregistrerAjustements(d.id, [...new Set([...d.ajustementIds, ...posees])]);
+    const encore = new Set([...getAjustementsEleve(eleve.id).values()].map(a => a.id));
+    await enregistrerAjustements(d.id, [...new Set([...d.ajustementIds.filter(id => encore.has(id)), ...posees])]);
     return posees.length;
-  }, [dossiers, reglages, poserReductions, enregistrerAjustements]);
+  }, [dossiers, reglages, poserReductions, enregistrerAjustements, getAjustementsEleve]);
 
   const televerser = useCallback(async (dossierId: string, fichier: File) => {
     if (!schoolId) throw new Error('Non connecté à une école');

@@ -261,6 +261,14 @@ export const lignesDeFinancement = (
 export const fraisDejaPersonnalises = (o: Organisme, elements: PayableItem[], propres: Set<string> = new Set()): PayableItem[] =>
   elements.filter(e => !e.paid && fraisFinance(o, e) && e.personnalise && !propres.has(cleElement(e)));
 
+/**
+ * Frais pris en charge, pas encore payés, mais au TARIF PLEIN : la part de
+ * l'apprenant n'y est pas appliquée (frais apparus depuis l'activation, ou
+ * réduction retirée à la main). Tant qu'il y en a, la caisse réclame tout.
+ */
+export const fraisNonCouverts = (o: Organisme, elements: PayableItem[]): PayableItem[] =>
+  elements.filter(e => !e.paid && fraisFinance(o, e) && !e.personnalise);
+
 /** La base n'accepte que 60 frais par appel : les longues années partent en plusieurs fois. */
 export const parLots = <T,>(liste: T[], taille = 60): T[][] => {
   const lots: T[][] = [];

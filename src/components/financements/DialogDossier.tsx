@@ -19,7 +19,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { toast } from '@/hooks/use-toast';
 import {
-  COULEUR_STATUT_DOSSIER, LIBELLES_SITUATION, LIBELLES_STATUT_DOSSIER, SITUATIONS, STATUTS_DOSSIER, fraisDejaPersonnalises, fraisFinance, manquesDuDossier,
+  COULEUR_STATUT_DOSSIER, LIBELLES_SITUATION, LIBELLES_STATUT_DOSSIER, SITUATIONS, STATUTS_DOSSIER, fraisDejaPersonnalises, fraisNonCouverts, manquesDuDossier,
   montantFinance, montantsDesTranches, situationAvecMotif,
   type Dossier, type PieceDossier, type Situation, type StatutDossier,
 } from '@/lib/financements';
@@ -91,7 +91,7 @@ export const DialogDossier = ({ eleve, onFermer }: { eleve: Student | null; onFe
   // Frais concernés gardant un tarif personnalisé posé à la main : l'école doit trancher.
   const autres = organisme ? fraisDejaPersonnalises(organisme, elements, propres) : [];
   // Frais concernés encore au tarif plein (apparus depuis l'activation) : à couvrir.
-  const nonCouverts = organisme ? elements.filter(e => !e.paid && !e.personnalise && fraisFinance(organisme, e)) : [];
+  const nonCouverts = organisme ? fraisNonCouverts(organisme, elements) : [];
 
   if (!eleve || !dossier || !f) return null;
   const manques = manquesDuDossier({ contratSigne: f.contratSigne, engagementSigne: f.engagementSigne, pieces: f.pieces }, organisme);
@@ -190,7 +190,7 @@ export const DialogDossier = ({ eleve, onFermer }: { eleve: Student | null; onFe
               )}
               {nonCouverts.length > 0 && (
                 <p className="text-xs text-amber-700 flex items-start gap-1.5"><AlertTriangle className="h-3.5 w-3.5 mt-0.5 flex-shrink-0" />
-                  {nonCouverts.length} frais au tarif plein (nouveaux depuis l'activation) : cliquez sur « Réappliquer la part ».</p>
+                  {nonCouverts.length} frais pris en charge sont au tarif plein (nouveaux depuis l'activation, ou réduction retirée) : la caisse réclame tout. Cliquez sur « Réappliquer la part ».</p>
               )}
               {autres.length > 0 && (
                 <p className="text-xs text-amber-700 flex items-start gap-1.5"><AlertTriangle className="h-3.5 w-3.5 mt-0.5 flex-shrink-0" />

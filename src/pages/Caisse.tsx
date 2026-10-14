@@ -22,6 +22,7 @@ import { Student } from '@/contexts/SchoolContext';
 import { useRecus } from '@/hooks/useRecus';
 import { useElementsAPayer } from '@/hooks/useElementsAPayer';
 import { useFinancements } from '@/contexts/FinancementsContext';
+import { fraisNonCouverts } from '@/lib/financements';
 import { useAnnulerPaiement } from '@/hooks/useAnnulerPaiement';
 import { resteAPayer } from '@/lib/paiementPartiel';
 import { montantEleve } from '@/lib/tarifsEleve';
@@ -82,7 +83,12 @@ const Caisse = () => {
   const financeur = (s: Student) => {
     const d = financements.actif ? financements.dossierDe(s.id) : undefined;
     const o = d ? financements.organisme(d.organismeId) : undefined;
-    return o ? <p className="text-xs font-medium text-primary">Financé {o.nom} · paie {100 - o.partFinancee} %</p> : null;
+    if (!o) return null;
+    // Part non appliquée (réduction retirée, frais nouveaux) : la caisse réclamerait tout.
+    const pleins = fraisNonCouverts(o, elementsDe(s)).length;
+    return pleins === 0
+      ? <p className="text-xs font-medium text-primary">Financé {o.nom} · paie {100 - o.partFinancee} %</p>
+      : <p className="text-xs font-medium text-amber-700">Financé {o.nom}, mais {pleins} frais au tarif plein : prévenez l'administration avant d'encaisser.</p>;
   };
   // Exactement la liste de Gestion paiements (acomptes, tarif personnalisé, mois
   // dans l'ordre) : ce qui reste à payer, sans sauter un mois impayé.

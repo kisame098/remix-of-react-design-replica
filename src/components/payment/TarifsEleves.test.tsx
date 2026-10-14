@@ -32,13 +32,22 @@ vi.mock('@/contexts/PaymentContext', () => ({
     hasPaidTuitionMonth: (_: string, k: string) => k === '2025-10',
     hasPaidService: () => false,
     isEnrolledInService: () => false,
-    getAjustementsEleve: () => new Map(),
+    getAjustementsEleve: () => indexerAjustements(ajustements as AjustementTarif[]),
     appliquerTarifsEleve: appliquer,
     retirerTarifsEleve: retirer,
   }),
 }));
 
+let dossierFinancement: { organismeId: string; ajustementIds: string[] } | undefined;
+vi.mock('@/contexts/FinancementsContext', () => ({
+  useFinancements: () => ({
+    dossierDe: () => dossierFinancement,
+    organisme: () => ({ id: 'fpt', nom: '3FPT', partFinancee: 90 }),
+  }),
+}));
+
 import TarifsEleves from './TarifsEleves';
+import { indexerAjustements, type AjustementTarif } from '@/lib/tarifsEleve';
 
 const ouvrirEleve = () => {
   fireEvent.change(screen.getByLabelText('Chercher un élève'), { target: { value: 'awa' } });
@@ -48,7 +57,8 @@ const ouvrirEleve = () => {
 beforeEach(() => {
   auth = { accountRole: 'admin', staffPermissions: [] };
   ajustements = [];
-  appliquer.mockClear(); toast.mockClear();
+  dossierFinancement = undefined;
+  appliquer.mockClear(); retirer.mockClear(); toast.mockClear();
 });
 
 describe('Réductions', () => {
@@ -109,5 +119,23 @@ describe('Réductions', () => {
     render(<TarifsEleves />);
     ouvrirEleve();
     expect(screen.getByRole('button', { name: /Appliquer/ })).toBeInTheDocument();
+  });
+
+  it('apprenant financé : les réductions du financement sont verrouillées, « Tout retirer » ne les touche pas', async () => {
+    ajustements = [
+      { id: 'f1', studentId: 'enr-1', type: 'tuition', monthKey: '2025-11', mode: 'pourcentage', valeur: 90, motif: 'Financement 3FPT (90 % pris en charge)' },
+      { id: 'b1', studentId: 'enr-1', type: 'tuition', monthKey: '2025-12', mode: 'pourcentage', valeur: 50, motif: 'Bourse' },
+    ];
+    dossierFinancement = { organismeId: 'fpt', ajustementIds: ['f1'] };
+    render(<TarifsEleves />);
+    // L'élève figure déjà dans la liste des tarifs personnalisés : on l'ouvre de là.
+    fireEvent.click(screen.getAllByRole('button', { name: /Awa Diop/ })[0]);
+    expect(screen.getByText(/Financé par/)).toBeInTheDocument();
+    // Le mois financé ne se coche plus ; l'autre reste modifiable.
+    expect(screen.queryByRole('checkbox', { name: /Novembre 2025/ })).toBeNull();
+    expect(screen.getByRole('checkbox', { name: /Décembre 2025/ })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Retirer le tarif personnalisé de Scolarité — Novembre 2025/ })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: /Retirer les autres réductions/ }));
+    await waitFor(() => expect(retirer).toHaveBeenCalledWith(['b1']));
   });
 });

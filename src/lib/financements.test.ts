@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-  CLE_FINANCEMENTS, erreurOrganisme, fraisDejaPersonnalises, lignesDeFinancement, lireReglagesFinancements, manquesDuDossier,
+  CLE_FINANCEMENTS, erreurOrganisme, fraisDejaPersonnalises, fraisNonCouverts, lignesDeFinancement, lireReglagesFinancements, manquesDuDossier,
   montantFinance, montantsDesTranches, motifFinancement, organisme3FPT, parLots, type Organisme,
 } from './financements';
 import type { PayableItem } from './dueItems';
@@ -88,6 +88,16 @@ describe('part de l\'apprenant (réductions)', () => {
   it('seuls les frais cochés comptent : un service non pris en charge reste au tarif plein', () => {
     const sansMois = { ...fpt(), frais: { inscription: true, mensualites: false, services: [] } };
     expect(lignesDeFinancement(sansMois, 'e1', elements).map(l => l.type)).toEqual(['inscription']);
+  });
+
+  it('frais pris en charge restés au tarif plein (réduction retirée à la main) : détectés, pour ne pas encaisser 100 %', () => {
+    const reduits = elements.map(e => ({ ...e, personnalise: true }));
+    expect(fraisNonCouverts(fpt(), reduits)).toEqual([]);
+    const unRetire = reduits.map(e => e.id === 'tuition_2026-11' ? { ...e, personnalise: false } : e);
+    expect(fraisNonCouverts(fpt(), unRetire).map(e => e.id)).toEqual(['tuition_2026-11']);
+    // Un frais payé, ou non pris en charge (tenue), n'est jamais signalé.
+    expect(fraisNonCouverts(fpt(), elements.map(e => ({ ...e, paid: true })))).toEqual([]);
+    expect(fraisNonCouverts(fpt(), elements).map(e => e.id)).not.toContain('service_tenue');
   });
 
   it('les longues listes partent en lots de 60 (limite de la base)', () => {
