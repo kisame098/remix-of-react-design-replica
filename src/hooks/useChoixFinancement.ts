@@ -17,15 +17,13 @@ export const useAppliquerChoixFinancement = () => {
     try {
       if (!organismeId && actuel) {
         await fin.desactiver(eleve);
-        toast({ title: 'Financement retiré', description: `${eleve.lastName} ${eleve.firstName} paie de nouveau le tarif normal sur ce qui reste à payer.` });
+        toast({ title: 'Financement retiré', description: `${eleve.lastName} ${eleve.firstName} redoit la totalité de ce qui n'est pas encore payé.` });
       } else if (organismeId && !actuel) {
-        const { fraisReduits } = await fin.activer(eleve, organismeId);
+        await fin.activer(eleve, organismeId);
         const o = fin.organisme(organismeId);
         toast({
           title: `Financement ${o?.nom ?? ''} activé`,
-          description: fraisReduits > 0
-            ? `Sa part est appliquée sur ${fraisReduits} frais. Son dossier est dans Financements.`
-            : "Aucun frais à réduire pour l'instant (tarifs pas encore réglés ?) : « Réappliquer la part » dans son dossier, plus tard.",
+          description: o ? `À la caisse, il ne paie plus que ${100 - o.partFinancee} % des frais concernés ; son dossier est dans Financements.` : undefined,
         });
       } else if (organismeId && actuel && actuel.organismeId !== organismeId) {
         await fin.changerOrganisme(eleve, organismeId);

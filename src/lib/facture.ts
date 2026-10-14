@@ -11,7 +11,7 @@
 // encaisserait. Fonctions pures, couvertes par facture.test.ts.
 // ═══════════════════════════════════════════════════════════════════════════
 
-import type { PayableItem } from '@/lib/dueItems';
+import { designationFamille, type PayableItem } from '@/lib/dueItems';
 import type { AcademicMonth } from '@/types/payment';
 
 export type TypeFacture = 'facture' | 'rappel';
@@ -73,7 +73,7 @@ export const lignesAFacturer = (
     .filter(e => !e.monthKey || (rang.get(e.monthKey) ?? Infinity) <= limite)
     .map(e => ({
       cle: e.id,
-      designation: e.label,
+      designation: designationFamille(e),
       montant: e.amount + e.dejaVerse,
       deja_verse: e.dejaVerse,
       reste: e.amount,

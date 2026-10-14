@@ -51,7 +51,7 @@ describe('Financements → Organismes', () => {
     expect(screen.getByLabelText('Part prise en charge')).toHaveValue('90');
     expect(screen.getByLabelText('Pourcentage de Acompte')).toHaveValue('70');
     expect(screen.getByLabelText('Pourcentage de Solde')).toHaveValue('30');
-    expect(screen.getByText(/L'apprenant paie le reste \(10 %\)/)).toBeInTheDocument();
+    expect(screen.getByText(/L'apprenant en paie 10 % à la caisse/)).toBeInTheDocument();
   });
 
   it('des tranches qui ne font pas 100 % ne s\'enregistrent pas', async () => {

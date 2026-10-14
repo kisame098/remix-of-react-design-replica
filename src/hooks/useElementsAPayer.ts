@@ -4,6 +4,7 @@ import { useSchool, type Student } from '@/contexts/SchoolContext';
 import { usePayment } from '@/contexts/PaymentContext';
 import { useSchoolYear } from '@/contexts/SchoolYearContext';
 import { buildPayableItems, type PayableItem } from '@/lib/dueItems';
+import { useFinancementsOptionnel } from '@/contexts/FinancementsContext';
 import {
   DEFAULT_TUITION_BILLING_TIMING, getAcademicMonths, getBillableMonthsFor, readBillingRules,
   type AcademicMonth, type TuitionBillingTiming,
@@ -12,7 +13,7 @@ import {
 /**
  * Les éléments à payer de N'IMPORTE QUEL élève, branchés exactement comme à la
  * caisse (PaymentEntry) : mêmes mois facturables, mêmes acomptes, même tarif
- * personnalisé. La facturation ne peut donc rien réclamer que la caisse
+ * personnalisé, même partage avec un organisme financeur (3FPT…). La facturation ne peut donc rien réclamer que la caisse
  * n'encaisserait pas.
  */
 export function useElementsAPayer(): {
@@ -34,6 +35,9 @@ export function useElementsAPayer(): {
     [currentYear, billingTiming],
   );
   const billingRules = useMemo(() => readBillingRules(school?.settings), [school]);
+  // Apprenant financé (3FPT…) : ses frais concernés sont partagés avec l'organisme.
+  const financements = useFinancementsOptionnel();
+  const priseEnChargeDe = financements?.priseEnChargeDe;
 
   const elementsDe = useCallback((eleve: Student): PayableItem[] => buildPayableItems({
     academicMonths: mois,
@@ -47,8 +51,9 @@ export function useElementsAPayer(): {
     isEnrolledInService: (serviceId, monthIndex) => isEnrolledInService(eleve.id, eleve.classId, serviceId, monthIndex),
     acomptes: (e) => getAcomptes(eleve.id, e),
     ajustements: getAjustementsEleve(eleve.id),
+    priseEnCharge: priseEnChargeDe?.(eleve.id),
   }), [mois, billingRules, getTuitionConfig, classes, getStudentActiveServices, hasPaidInscription,
-    hasPaidTuitionMonth, hasPaidService, isEnrolledInService, getAcomptes, getAjustementsEleve]);
+    hasPaidTuitionMonth, hasPaidService, isEnrolledInService, getAcomptes, getAjustementsEleve, priseEnChargeDe]);
 
   return { mois, elementsDe };
 }

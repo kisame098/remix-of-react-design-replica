@@ -1,6 +1,8 @@
 import { useState, useMemo, useEffect, useCallback } from 'react';
 import { mensualiteDuMois } from '@/lib/mensualites';
 import { montantEleve } from '@/lib/tarifsEleve';
+import { partager } from '@/lib/priseEnCharge';
+import { useFinancementsOptionnel } from '@/contexts/FinancementsContext';
 import { useSchool } from '@/contexts/SchoolContext';
 import { usePayment } from '@/contexts/PaymentContext';
 import { useSchoolYear } from '@/contexts/SchoolYearContext';
@@ -38,6 +40,8 @@ const PaymentTracking = () => {
     hasPaidInscription, hasPaidTuitionMonth, hasPaidService,
     isEnrolledInService, getStudentPayments, getAjustementsEleve,
   } = usePayment();
+  // Apprenants financés (3FPT…) : on n'attend d'eux que leur part.
+  const financements = useFinancementsOptionnel();
   const { currentYear } = useSchoolYear();
   const { school } = useAuth();
   const { ficheDe, montrerFiches, dialogueFiches } = useFichesPaiement();
@@ -133,11 +137,13 @@ const PaymentTracking = () => {
         // Tarif personnalisé de l'élève (réduction, bourse) sur ce frais.
         if (!paid && amount > 0) {
           const svcMensuel = annexServices.find(s => s.id === selectedServiceId)?.frequency === 'monthly';
-          amount = montantEleve(amount, {
+          const element = {
             type: viewMode,
             ...(viewMode === 'tuition' || (viewMode === 'service' && svcMensuel) ? { monthKey: selectedMonth } : {}),
             ...(viewMode === 'service' ? { serviceId: selectedServiceId } : {}),
-          }, getAjustementsEleve(student.id)).du;
+          };
+          // Puis la part de l'apprenant, si un organisme (3FPT…) prend ce frais en charge.
+          amount = partager(montantEleve(amount, element, getAjustementsEleve(student.id)).du, financements?.priseEnChargeDe(student.id), element).apprenant;
         }
 
         const overdue = (viewMode === 'tuition' || (viewMode === 'service' && showMonthFilter))
@@ -163,7 +169,7 @@ const PaymentTracking = () => {
     classStudents, viewMode, selectedMonth, selectedMonthIndex, academicMonths,
     selectedServiceId, showMonthFilter, isMonthDueBy, getAjustementsEleve,
     hasPaidInscription, hasPaidTuitionMonth, hasPaidService,
-    isEnrolledInService, getTuitionConfig, annexServices,
+    isEnrolledInService, getTuitionConfig, annexServices, financements,
   ]);
 
   const itemLabel = useMemo(() => {

@@ -10,7 +10,7 @@
 // buildPayableItems (la vue caisse) : la fiche ne peut pas contredire la caisse.
 // ═══════════════════════════════════════════════════════════════════════════
 
-import type { PayableItem } from '@/lib/dueItems';
+import { designationFamille, type PayableItem } from '@/lib/dueItems';
 import type { AcademicMonth } from '@/types/payment';
 
 export type EtatLigneFiche = 'solde' | 'partiel' | 'impaye' | 'a_venir';
@@ -65,7 +65,8 @@ export const lignesDeFiche = (
   aujourdhui: string,
 ): LigneFiche[] => {
   const echeance = new Map(mois.map(m => [m.key, m.dueDate.slice(0, 10)]));
-  return elements.map(e => {
+  // Frais pris en charge en totalité par un organisme : rien à la famille.
+  return elements.filter(e => !e.priseEnChargeTotale).map(e => {
     // Un élément soldé porte son dû dans `amount` ; sinon `amount` est le reste.
     const du = e.paid ? e.amount : e.amount + e.dejaVerse;
     const reste = e.paid ? 0 : e.amount;
@@ -77,7 +78,7 @@ export const lignesDeFiche = (
       .map(p => numeroDuRecu(p.receiptId!))
       .filter((n): n is string => !!n))];
     return {
-      designation: e.label,
+      designation: designationFamille(e),
       du, paye, reste, etat, aVenir, recus,
     };
   });
