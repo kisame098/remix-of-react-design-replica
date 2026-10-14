@@ -112,3 +112,18 @@ describe('urlMenuActive — une seule rubrique allumée, même quand deux URLs s
     expect(urlMenuActive(menuPourMode('classique'), '/autre-chose')).toBeNull();
   });
 });
+
+describe('rubrique Financements (3FPT…)', () => {
+  it('absente tant que l\'école ne l\'a pas activée ; jamais en mode classique', () => {
+    expect(menuPourMode('formation_pro').some(i => i.url === '/formation/financements')).toBe(false);
+    expect(menuPourMode('classique', { financements: true }).some(i => i.url === '/formation/financements')).toBe(false);
+  });
+
+  it('activée : après Documents, dans le groupe formation, avec sa propre permission', () => {
+    const menu = menuPourMode('formation_pro', { financements: true });
+    const i = menu.findIndex(x => x.url === '/formation/financements');
+    expect(menu[i - 1].url).toBe('/formation/documents');
+    expect(menu[i]).toMatchObject({ groupe: 'formation_pro', permission: 'financements' });
+    expect(ALL_PERMISSION_KEYS).toContain('financements');
+  });
+});

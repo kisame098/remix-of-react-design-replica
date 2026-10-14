@@ -17,7 +17,8 @@ export type PermissionKey =
   | 'bulletins'
   | 'cashier'
   | 'payroll'
-  | 'reductions';
+  | 'reductions'
+  | 'financements';
 
 export const PERMISSION_LABELS: Record<PermissionKey, string> = {
   students:    'Élèves (inscription, gestion)',
@@ -32,6 +33,7 @@ export const PERMISSION_LABELS: Record<PermissionKey, string> = {
   cashier:     '📱 Caisse mobile (scanner & confirmer un paiement uniquement)',
   payroll:     'Gestion des salaires',
   reductions:  'Accorder des réductions (tarif personnalisé d\'un élève)',
+  financements: 'Financements (dossiers des apprenants financés : 3FPT…)',
 };
 
 /**

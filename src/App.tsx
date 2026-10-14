@@ -22,6 +22,7 @@ import { MiseAJourApplication } from "./components/MiseAJourApplication";
 import { Referencement } from "./components/Referencement";
 import ModeRoute from "./components/ModeRoute";
 import { FormationProProvider } from "./contexts/FormationProContext";
+import { FinancementsProvider } from "./contexts/FinancementsContext";
 import { ExamensProvider } from "./contexts/ExamensContext";
 import { StagesProvider } from "./contexts/StagesContext";
 import { SuiviActivite } from "@/components/SuiviActivite";
@@ -73,6 +74,8 @@ const Examens = lazy(() => import("./pages/formation/Examens"));
 const ExamensPromotion = lazy(() => import("./pages/formation/ExamensPromotion"));
 const Stages = lazy(() => import("./pages/formation/Stages"));
 const StagesPromotion = lazy(() => import("./pages/formation/StagesPromotion"));
+const Financements = lazy(() => import("./pages/formation/Financements"));
+const FinancementsPromotion = lazy(() => import("./pages/formation/FinancementsPromotion"));
 const Documents = lazy(() => import("./pages/formation/Documents"));
 const DocumentsEcole = lazy(() => import("./pages/DocumentsEcole"));
 const FormationDetail = lazy(() => import("./pages/formation/FormationDetail"));
@@ -105,6 +108,8 @@ const App = () => (
             <PaymentProvider>
             <PayrollProvider>
             <FormationProProvider>
+            {/* Apprenants financés (3FPT…) : ne charge rien tant que l'école ne l'a pas activé. */}
+            <FinancementsProvider>
             <Toaster />
             <Sonner />
             <BandeauHorsConnexion />
@@ -223,6 +228,12 @@ const App = () => (
                         } />
                     </Route>
                     </Route>
+                    <Route path="/formation/financements" element={
+                      <ModeRoute mode="formation_pro"><RequirePermission permission="financements"><Financements /></RequirePermission></ModeRoute>
+                    } />
+                    <Route path="/formation/financements/:promotionId" element={
+                      <ModeRoute mode="formation_pro"><RequirePermission permission="financements"><FinancementsPromotion /></RequirePermission></ModeRoute>
+                    } />
                     {["/formation"].map(chemin => (
                       <Route key={chemin} path={chemin} element={
                         <ModeRoute mode="formation_pro"><RequirePermission permission="grades"><FormationEnDeveloppement /></RequirePermission></ModeRoute>
@@ -243,6 +254,7 @@ const App = () => (
               </Routes>
               </Suspense>
             </BrowserRouter>
+            </FinancementsProvider>
             </FormationProProvider>
             </PayrollProvider>
             </PaymentProvider>

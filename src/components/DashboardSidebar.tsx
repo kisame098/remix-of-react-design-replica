@@ -28,10 +28,11 @@ import {
   UsersRound,
   PenLine,
   FileCheck2,
-  Hotel,
+  Hotel, Landmark,
   FileText,
 } from 'lucide-react';
 import { menuPourMode, modeDeLEcole, urlMenuActive, type IconeMenu } from '@/lib/modeGestion';
+import { lireReglagesFinancements } from '@/lib/financements';
 import { SchoolYearSelector } from './SchoolYearSelector';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {
@@ -44,7 +45,7 @@ const ICONES: Record<IconeMenu, typeof LayoutDashboard> = {
   notes: ClipboardList, cursus: Shuffle, emploi: Calendar, presences: UserCheck, paiements: Wallet,
   salaires: Banknote, identifiants: KeyRound,
   apercu: LayoutGrid, formations: BookOpen, promotions: UsersRound, evaluations: PenLine,
-  examens: FileCheck2, stages: Hotel, documents: FileText,
+  examens: FileCheck2, stages: Hotel, documents: FileText, financements: Landmark,
 };
 
 export const DashboardSidebar = () => {
@@ -54,9 +55,10 @@ export const DashboardSidebar = () => {
   const { profile, school, signOut, accountRole, staffPermissions } = useAuth();
 
   const mode = modeDeLEcole(school);
+  const financements = useMemo(() => lireReglagesFinancements(school?.settings).actif, [school?.settings]);
   const visibleMenuItems = useMemo(
-    () => menuPourMode(mode).filter(item => !item.permission || hasPermission(accountRole, staffPermissions, item.permission)),
-    [mode, accountRole, staffPermissions]
+    () => menuPourMode(mode, { financements }).filter(item => !item.permission || hasPermission(accountRole, staffPermissions, item.permission)),
+    [mode, financements, accountRole, staffPermissions]
   );
   // Une seule rubrique s'allume à la fois — la plus précise, même quand deux
   // URLs se chevauchent par préfixe (ex : /formation et /formation/formations).
