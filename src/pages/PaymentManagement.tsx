@@ -10,8 +10,9 @@ import PaymentHistory from '@/components/payment/PaymentHistory';
 import ServiceRoster from '@/components/payment/ServiceRoster';
 import TarifsEleves from '@/components/payment/TarifsEleves';
 import Facturation from '@/components/payment/Facturation';
+import { DetailEncaissements } from '@/components/payment/DetailEncaissements';
 
-type Tab = 'overview' | 'entry' | 'scan' | 'tracking' | 'facturation' | 'history' | 'roster' | 'reductions' | 'config';
+type Tab = 'detail' | 'overview' | 'entry' | 'scan' | 'tracking' | 'facturation' | 'history' | 'roster' | 'reductions' | 'config';
 
 interface NavTab {
   id: Tab;
@@ -61,7 +62,8 @@ const PaymentManagement = () => {
         {/* Left nav */}
         <nav className="w-56 border-r flex-shrink-0 flex flex-col p-3 gap-1 bg-muted/10">
           {TABS.map(tab => {
-            const isActive = tab.id === activeTab;
+            // Le détail des encaissements s'ouvre depuis la Vue d'ensemble.
+            const isActive = tab.id === activeTab || (tab.id === 'overview' && activeTab === 'detail');
             return (
               <button
                 key={tab.id}
@@ -90,7 +92,8 @@ const PaymentManagement = () => {
 
         {/* Content */}
         <div className="flex-1 min-w-0 min-h-0 overflow-hidden flex flex-col">
-          {activeTab === 'overview'  && <PaymentOverview />}
+          {activeTab === 'overview'  && <PaymentOverview onVoirDetail={() => setActiveTab('detail')} />}
+          {activeTab === 'detail'    && <DetailEncaissements onRetour={() => setActiveTab('overview')} />}
           {activeTab === 'entry'     && <PaymentEntry />}
           {activeTab === 'scan'      && <PaymentEntry initialMode="scan" />}
           {activeTab === 'tracking'  && <PaymentTracking />}

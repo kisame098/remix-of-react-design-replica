@@ -11,15 +11,14 @@ import { EncadreFinancementsPaiements } from '@/components/financements/EncadreF
 import { MONTANT_MASQUE, useMontantsMasques } from '@/hooks/useMontantsMasques';
 import {
   Banknote, TrendingUp, Users, School, CheckCircle2, AlertTriangle,
-  CreditCard, ArrowUpRight
-} from 'lucide-react';
+  CreditCard, ArrowUpRight, ChartNoAxesColumn } from 'lucide-react';
 import {
   getAcademicMonths, getCurrentMonthIndex, PAYMENT_METHOD_LABELS, PaymentMethod,
   TuitionBillingTiming, DEFAULT_TUITION_BILLING_TIMING,
   getBillableMonthsFor, readBillingRules,
 } from '@/types/payment';
 
-const PaymentOverview = () => {
+const PaymentOverview = ({ onVoirDetail }: { onVoirDetail?: () => void }) => {
   const { students, classes, getStudentCountByClass } = useSchool();
   const { payments, tuitionConfigs, annexServices, getTuitionConfig, hasPaidInscription, hasPaidTuitionMonth } = usePayment();
   const { currentYear } = useSchoolYear();
@@ -116,7 +115,17 @@ const PaymentOverview = () => {
     <div className="p-5 space-y-6 overflow-y-auto h-full">
       {/* KPI Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card>
+        <Card className="group relative">
+          {onVoirDetail && (
+            // N'apparaît qu'au survol : ouvre le détail (d'où vient l'argent).
+            <button
+              type="button" onClick={onVoirDetail}
+              className="absolute top-2 right-2 p-1.5 rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity"
+              title="Voir le détail des encaissements" aria-label="Voir le détail des encaissements"
+            >
+              <ChartNoAxesColumn className="h-4 w-4" />
+            </button>
+          )}
           <CardContent className="pt-5">
             <div className="flex items-center justify-between">
               <div>
