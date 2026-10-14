@@ -22,6 +22,7 @@ import { Student } from '@/contexts/SchoolContext';
 import { useRecus } from '@/hooks/useRecus';
 import { useElementsAPayer } from '@/hooks/useElementsAPayer';
 import { useFinancements } from '@/contexts/FinancementsContext';
+import { partager } from '@/lib/priseEnCharge';
 import { useAnnulerPaiement } from '@/hooks/useAnnulerPaiement';
 import { resteAPayer } from '@/lib/paiementPartiel';
 import { montantEleve } from '@/lib/tarifsEleve';
@@ -86,7 +87,7 @@ const Caisse = () => {
   };
   // Exactement la liste de Gestion paiements (acomptes, tarif personnalisé, mois
   // dans l'ordre) : ce qui reste à payer, sans sauter un mois impayé.
-  const aEncaisser = useMemo(() => (carte ? elementsDe(carte).filter(i => !i.paid && !i.blocked) : []), [carte, elementsDe]);
+  const aEncaisser = useMemo(() => (carte ? elementsDe(carte).filter(i => !i.paid && !i.blocked && !i.priseEnChargeTotale) : []), [carte, elementsDe]);
   const [scanError, setScanError]   = useState<string | null>(null);
   const [method, setMethod]         = useState<PaymentMethod>('especes');
   const [confirming, setConfirming] = useState(false);
@@ -103,7 +104,9 @@ const Caisse = () => {
     const element = { type: item.type, monthKey: item.monthKey, serviceId: item.serviceId };
     // Tarif personnalisé de l'élève (réduction, bourse), puis acomptes déjà versés.
     const { du } = montantEleve(item.amount, element, getAjustementsEleve(studentId));
-    return { ...item, amount: resteAPayer(du, getAcomptes(studentId, element)) };
+    // Financé (3FPT…) : seule la part de l'apprenant s'encaisse ici.
+    const { apprenant } = partager(du, financements.priseEnChargeDe(studentId), element);
+    return { ...item, amount: resteAPayer(apprenant, getAcomptes(studentId, element)) };
   };
   const resolveTarif = (studentId: string, classId: string | null, intent: PaymentIntent): ResolvedItem | null => {
     const cfg = classId ? getTuitionConfig(classId) : undefined;
@@ -272,6 +275,9 @@ const Caisse = () => {
                         >
                           <span className="flex-1 min-w-0">
                             <span className="block text-sm font-semibold text-slate-700 truncate">{i.label}</span>
+                            {i.partOrganisme > 0 && (
+                              <span className="block text-xs text-primary">{i.organisme} prend en charge {fmt(i.partOrganisme)} — part de l'apprenant</span>
+                            )}
                             {(i.overdue || i.dejaVerse > 0) && (
                               <span className={`block text-xs ${i.overdue ? 'text-red-500' : 'text-slate-400'}`}>
                                 {[i.overdue && 'En retard', i.dejaVerse > 0 && `Acompte déjà versé : ${fmt(i.dejaVerse)}`].filter(Boolean).join(' · ')}

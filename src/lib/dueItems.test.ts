@@ -3,6 +3,7 @@ import {
   buildPayableItems, computeDueItems, totalExigible, prochainPayable,
   type PayableItemsInput, type DueItem, type DuePayment, type DueService, type DueTuitionConfig,
 } from './dueItems';
+import type { PriseEnCharge } from './priseEnCharge';
 import { getAcademicMonths, getBillableMonthsFor, type AcademicMonth, type AnnexService } from '@/types/payment';
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -388,5 +389,41 @@ describe('computeDueItems — vue élève (portail)', () => {
       [{ serviceId: 'svc-cantine', startMonthIndex: 0 }, { serviceId: 'svc-bus', startMonthIndex: 0 }],
       'cls-1', MONTHS, CURRENT);
     expect(new Set(items.map(i => i.key)).size).toBe(items.length);
+  });
+});
+
+// ── Apprenant financé (3FPT…) : partage, pas réduction ─────────────────────
+describe('prise en charge par un organisme', () => {
+  const fpt: PriseEnCharge = { organisme: '3FPT', pourcentage: 90, frais: { inscription: true, mensualites: true, services: [] } };
+  beforeEach(() => vi.setSystemTime(new Date('2026-01-15T10:00:00Z')));
+  afterEach(() => vi.useRealTimers());
+
+  it('caisse : on encaisse la part de l\'apprenant, la part de l\'organisme est affichée à part', () => {
+    const items = build({ priseEnCharge: fpt, services: [svc()], isEnrolledInService: () => true });
+    expect(items[0]).toMatchObject({ id: 'inscription', amount: 2_500, du: 25_000, partOrganisme: 22_500, organisme: '3FPT', priseEnChargeTotale: false });
+    expect(items[1]).toMatchObject({ type: 'tuition', amount: 1_500, du: 15_000, partOrganisme: 13_500 });
+    // La cantine n'est pas cochée : plein tarif pour l'apprenant.
+    expect(items.find(i => i.type === 'service')).toMatchObject({ amount: 5_000, partOrganisme: 0 });
+  });
+
+  it('un acompte se déduit de la part de l\'apprenant seulement', () => {
+    const items = build({ priseEnCharge: fpt, acomptes: e => e.type === 'inscription' ? 1_000 : 0 });
+    expect(items[0]).toMatchObject({ amount: 1_500, dejaVerse: 1_000, partOrganisme: 22_500 });
+  });
+
+  it('pris en charge à 100 % : rien à encaisser, et les mois suivants restent ouverts', () => {
+    const items = build({ priseEnCharge: { ...fpt, pourcentage: 100 } }).filter(i => i.type === 'tuition');
+    expect(items.every(i => i.priseEnChargeTotale && i.amount === 0 && !i.blocked)).toBe(true);
+  });
+
+  it('portail : la famille ne voit que sa part', () => {
+    const items = computeDueItems([], tuitionCfg, [], [], 'cls-1', MONTHS, CURRENT, undefined, fpt);
+    expect(totalExigible(items)).toBe(2_500 + 4 * 1_500);
+    expect(items.find(i => i.type === 'inscription')).toMatchObject({ amount: 2_500, partOrganisme: 22_500, organisme: '3FPT' });
+  });
+
+  it('portail, 100 % : aucun frais réclamé à la famille', () => {
+    const items = computeDueItems([], tuitionCfg, [], [], 'cls-1', MONTHS, CURRENT, undefined, { ...fpt, pourcentage: 100 });
+    expect(items).toEqual([]);
   });
 });

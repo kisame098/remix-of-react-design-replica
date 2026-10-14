@@ -25,6 +25,7 @@ import {
 import { computeDueItems, totalExigible, type DueItem } from '@/lib/dueItems';
 import { lireMontantsParMois, type MontantsParMois } from '@/lib/mensualites';
 import { indexerAjustements, type AjustementTarif, type ModeAjustement } from '@/lib/tarifsEleve';
+import { lireReglagesFinancements, priseEnChargeDe } from '@/lib/financements';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { chargerRecusEleve, type RecusEleve } from '@/lib/recusFamille';
 import { numeroDeRecu } from '@/lib/recu';
@@ -92,6 +93,7 @@ export default function PortalPaiements() {
     /** Tarif personnalisé de l'élève (réduction, bourse). Absent d'un ancien instantané. */
     ajustements?: AjustementTarif[];
     recus: RecusEleve;
+    organismeFinanceur: string | null;
   }>(
     'portail-paiements',
     async () => {
@@ -127,6 +129,11 @@ export default function PortalPaiements() {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const ajR = await Promise.resolve((supabase as any).from('student_fee_adjustments').select('*')
         .eq('student_enrollment_id', eleveId)).catch(() => ({ data: null }));
+      // Financé par un organisme (3FPT…) : seul l'identifiant de l'organisme est
+      // lisible par l'élève (docs/sql/financements_portail.sql). Une absence
+      // (fonction pas encore créée, réseau) = pas de partage.
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const finR = await Promise.resolve((supabase as any).rpc('fin_mon_organisme')).catch(() => ({ data: null }));
 
       const classeId = seR.data?.class_id ?? null;
       // Le tarif qui correspond à la classe de l'élève.
@@ -181,6 +188,7 @@ export default function PortalPaiements() {
           accordeLe: String(r.updated_at ?? ''),
         })),
         recus,
+        organismeFinanceur: typeof finR?.data === 'string' ? finR.data : null,
       };
     },
     [eleveId, ecoleId],
@@ -221,9 +229,15 @@ export default function PortalPaiements() {
   );
 
   const ajustements = useMemo(() => indexerAjustements(donnees?.ajustements ?? []), [donnees]);
+  // Prise en charge par un organisme : la famille ne voit que SA part.
+  const priseEnCharge = useMemo(() => {
+    const reglages = lireReglagesFinancements(school?.settings);
+    const o = reglages.actif ? reglages.organismes.find(x => x.id === donnees?.organismeFinanceur) : undefined;
+    return o ? priseEnChargeDe(o) : undefined;
+  }, [school, donnees]);
   const dueItems = useMemo(() =>
-    computeDueItems(payments, tuition, services, enrs, classId ?? '', billableMonths, currentIdx, ajustements),
-    [payments, tuition, services, enrs, classId, billableMonths, currentIdx, ajustements],
+    computeDueItems(payments, tuition, services, enrs, classId ?? '', billableMonths, currentIdx, ajustements, priseEnCharge),
+    [payments, tuition, services, enrs, classId, billableMonths, currentIdx, ajustements, priseEnCharge],
   );
 
   // Ce qui est exigible aujourd'hui vs ce que la famille peut régler à
@@ -386,6 +400,9 @@ export default function PortalPaiements() {
                     <p className="text-sm font-semibold text-slate-800 truncate">{item.label}</p>
                     {item.personnalise && (
                       <p className="text-[11px] font-medium text-violet-600">Tarif accordé par l'école (normal {fmtAmount(item.tarifNormal)})</p>
+                    )}
+                    {item.partOrganisme > 0 && (
+                      <p className="text-[11px] font-medium text-primary">{item.organisme} prend en charge {fmtAmount(item.partOrganisme)} · votre part</p>
                     )}
                     {item.dejaVerse > 0 && (
                       <p className="text-[11px] font-medium text-amber-600">Déjà versé : {fmtAmount(item.dejaVerse)} · reste à payer</p>

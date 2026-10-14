@@ -26,7 +26,6 @@ import {
 } from '@/types/payment';
 import { QrScanner } from '@/components/payment/QrScanner';
 import { useFinancements } from '@/contexts/FinancementsContext';
-import { cleElement } from '@/lib/tarifsEleve';
 import { buildPayableItems, type PayableItem } from '@/lib/dueItems';
 import { deciderVersement } from '@/lib/paiementPartiel';
 import { cn } from '@/lib/utils';
@@ -51,11 +50,9 @@ const MethodButton = ({ method, selected, onSelect }: { method: PaymentMethod; s
 );
 
 
-const PaymentRow = ({ item, selected, deverrouille, onToggle, motif }: {
+const PaymentRow = ({ item, selected, deverrouille, onToggle }: {
   item: PayableItem;
   selected: boolean;
-  /** Motif du tarif personnalisé (« Financement 3FPT (90 % pris en charge) », bourse…). */
-  motif?: string;
   /** Le verrou levé (sélection libre) rend cette ligne cochable. */
   deverrouille: boolean;
   onToggle: () => void;
@@ -70,6 +67,19 @@ const PaymentRow = ({ item, selected, deverrouille, onToggle, motif }: {
         </div>
         <span className="text-sm text-green-700 dark:text-green-400 font-medium">{fmt(item.amount)}</span>
         <Badge variant="outline" className="text-xs text-green-700 border-green-300 bg-green-50 dark:bg-green-950/30">Payé</Badge>
+      </div>
+    );
+  }
+  // L'organisme prend TOUT en charge : rien à encaisser auprès de l'apprenant.
+  if (item.priseEnChargeTotale) {
+    return (
+      <div className="flex items-center gap-3 px-3 py-2.5 rounded-lg bg-primary/5">
+        <Landmark className="h-4 w-4 text-primary flex-shrink-0" />
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-medium">{item.label}</p>
+          <p className="text-xs text-primary">Pris en charge en totalité par {item.organisme} ({fmt(item.partOrganisme)}) — facturé à l'organisme</p>
+        </div>
+        <span className="text-sm text-muted-foreground">0 F</span>
       </div>
     );
   }
@@ -102,8 +112,13 @@ const PaymentRow = ({ item, selected, deverrouille, onToggle, motif }: {
         <p className="text-sm font-medium">{item.label}</p>
         {item.sublabel && <p className="text-xs text-muted-foreground">{item.sublabel}</p>}
         {item.personnalise && (
-          <p className={`text-xs font-medium ${motif?.startsWith('Financement') ? 'text-primary' : 'text-violet-600'}`}>
-            {motif?.startsWith('Financement') ? motif : 'Tarif personnalisé'} · normal <span className="line-through">{fmt(item.tarifNormal)}</span>
+          <p className="text-xs font-medium text-violet-600">
+            Tarif personnalisé · normal <span className="line-through">{fmt(item.tarifNormal)}</span>
+          </p>
+        )}
+        {item.partOrganisme > 0 && (
+          <p className="text-xs font-medium text-primary">
+            Frais {fmt(item.du)} · {item.organisme} prend en charge {fmt(item.partOrganisme)} (facturé à l'organisme)
           </p>
         )}
         {item.dejaVerse > 0 && (
@@ -178,7 +193,6 @@ const PaymentEntry = ({ initialMode = 'search' }: { initialMode?: 'search' | 'sc
   const financements = useFinancements();
   const dossierFinancement = selectedStudent && financements.actif ? financements.dossierDe(selectedStudent.id) : undefined;
   const organismeFinanceur = dossierFinancement ? financements.organisme(dossierFinancement.organismeId) : undefined;
-  const ajustementsEleve = useMemo(() => (selectedStudent ? getAjustementsEleve(selectedStudent.id) : new Map()), [selectedStudent, getAjustementsEleve]);
   const tuitionConfig   = selectedStudent?.classId ? getTuitionConfig(selectedStudent.classId) : undefined;
 
   // Only services the student is actually part of (enrolled optional + obligatory)
@@ -208,13 +222,15 @@ const PaymentEntry = ({ initialMode = 'search' }: { initialMode?: 'search' | 'sc
         isEnrolledInService(selectedStudent.id, selectedStudent.classId, serviceId, monthIndex),
       acomptes: (e) => getAcomptes(selectedStudent.id, e),
       ajustements: getAjustementsEleve(selectedStudent.id),
+      // Financé (3FPT…) : l'apprenant ne paie que sa part ; l'organisme est facturé à part.
+      priseEnCharge: financements.priseEnChargeDe(selectedStudent.id),
     });
-  }, [selectedStudent, tuitionConfig, studentServices, hasPaidInscription, hasPaidTuitionMonth, hasPaidService, getAcomptes, getAjustementsEleve, isEnrolledInService, selectedClass, academicMonths, billingRules]);
+  }, [selectedStudent, tuitionConfig, studentServices, hasPaidInscription, hasPaidTuitionMonth, hasPaidService, getAcomptes, getAjustementsEleve, isEnrolledInService, selectedClass, academicMonths, billingRules, financements]);
 
   // Éléments cochables : verrou fermé, le verrou séquentiel masque les mois
   // bloqués ; verrou levé, tout ce qui n'est pas payé devient cochable.
   const selectionnables = useMemo(
-    () => payableItems.filter(i => !i.paid && (verrouLeve || !i.blocked)),
+    () => payableItems.filter(i => !i.paid && !i.priseEnChargeTotale && (verrouLeve || !i.blocked)),
     [payableItems, verrouLeve],
   );
 
@@ -311,7 +327,7 @@ const PaymentEntry = ({ initialMode = 'search' }: { initialMode?: 'search' | 'sc
     if (!pendingItemId) return;
     const target = payableItems.find(i => i.id === pendingItemId);
     if (!target) return; // items pas encore recalculés pour ce student — on attend le prochain rendu
-    if (!target.paid && (verrouLeve || !target.blocked)) {
+    if (!target.paid && !target.priseEnChargeTotale && (verrouLeve || !target.blocked)) {
       setSelectedItems(new Set([pendingItemId]));
     } else if (target.paid) {
       setScanFeedback({ type: 'error', text: 'Cet élément est déjà payé' });
@@ -581,7 +597,6 @@ const PaymentEntry = ({ initialMode = 'search' }: { initialMode?: 'search' | 'sc
                   <PaymentRow
                     key={item.id}
                     item={item}
-                    motif={ajustementsEleve.get(cleElement(item))?.motif}
                     selected={selectedItems.has(item.id)}
                     deverrouille={verrouLeve && item.blocked}
                     onToggle={() => !item.paid && (verrouLeve || !item.blocked) && toggleItem(item.id)}

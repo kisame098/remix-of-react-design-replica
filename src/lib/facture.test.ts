@@ -11,7 +11,7 @@ const mois: AcademicMonth[] = ['2026-09', '2026-10', '2026-11', '2026-12'].map((
 }));
 
 const el = (id: string, amount: number, extra: Partial<PayableItem> = {}): PayableItem => ({
-  id, label: id, amount, dejaVerse: 0, tarifNormal: amount, personnalise: false, paid: false, blocked: false,
+  id, label: id, amount, dejaVerse: 0, tarifNormal: amount, du: amount, partOrganisme: 0, priseEnChargeTotale: false, personnalise: false, paid: false, blocked: false,
   type: 'tuition', ...extra,
 });
 

@@ -1,5 +1,5 @@
 import type { PayableItem } from '@/lib/dueItems';
-import { cleElement, type AjustementTarif } from '@/lib/tarifsEleve';
+import { fraisCouvert, partager, type PriseEnCharge } from '@/lib/priseEnCharge';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // FINANCEMENTS — apprenants pris en charge par un organisme (3FPT…)
@@ -19,10 +19,10 @@ import { cleElement, type AjustementTarif } from '@/lib/tarifsEleve';
 // (90 % / 10 %, acompte 70 % et solde 30 % des 90 %) : ce sont des valeurs PAR
 // DÉFAUT, toutes modifiables.
 //
-// La part de l'apprenant passe par l'outil « Réductions » déjà en place
-// (src/lib/tarifsEleve.ts) : une réduction en % sur chaque frais concerné,
-// avec le motif du financement. Caisse, factures aux familles, reçus et suivi
-// la voient donc sans rien changer au chemin de l'argent.
+// Une prise en charge N'EST PAS une réduction : le frais reste dû en entier
+// à l'école, partagé entre l'apprenant (encaissé à la caisse) et l'organisme
+// (facturé dans le module) — src/lib/priseEnCharge.ts. Caisse, factures aux
+// familles, reçus, suivi et portail calculent ce partage à partir du dossier.
 // ═══════════════════════════════════════════════════════════════════════════
 
 export interface Tranche {
@@ -224,57 +224,29 @@ export const manquesDuDossier = (d: Pick<Dossier, 'contratSigne' | 'engagementSi
   return manques;
 };
 
-// ─── La part de l'apprenant (réductions) ────────────────────────────────────
+// ─── La part de l'apprenant (prise en charge, PAS une réduction) ────────────
 
-/** Le motif écrit sur chaque réduction : visible dans Gestion des paiements → Réductions. */
-export const motifFinancement = (o: Pick<Organisme, 'nom' | 'partFinancee'>): string =>
-  `Financement ${o.nom} (${String(o.partFinancee).replace('.', ',')} % pris en charge)`;
+/** Ce que le calcul des frais a besoin de savoir de l'organisme (src/lib/priseEnCharge.ts). */
+export const priseEnChargeDe = (o: Organisme): PriseEnCharge => ({ organisme: o.nom, pourcentage: o.partFinancee, frais: o.frais });
 
 /** Le frais est-il pris en charge par cet organisme ? */
-export const fraisFinance = (o: Organisme, e: Pick<PayableItem, 'type' | 'serviceId'>): boolean =>
-  e.type === 'inscription' ? o.frais.inscription
-    : e.type === 'tuition' ? o.frais.mensualites
-    : !!e.serviceId && o.frais.services.includes(e.serviceId);
+export const fraisFinance = (o: Organisme, e: Pick<PayableItem, 'type' | 'serviceId'>): boolean => fraisCouvert(priseEnChargeDe(o), e);
 
 /**
- * Les réductions à poser pour qu'un apprenant ne paie que sa part. Un frais
- * déjà soldé n'est jamais touché (règle de tarifsEleve.ts) ; un frais qui a
- * déjà un tarif personnalisé d'un autre motif est laissé tel quel — l'école
- * l'a voulu, on ne l'écrase pas en silence (il est signalé à part).
- *
- * `propres` : clés (cleElement) des réductions déjà posées par CE
- * financement — elles se mettent à jour (nouvelle part, nouvel organisme).
- */
-export const lignesDeFinancement = (
-  o: Organisme, studentId: string, elements: PayableItem[], propres: Set<string> = new Set(),
-): AjustementTarif[] =>
-  elements
-    .filter(e => !e.paid && fraisFinance(o, e) && (!e.personnalise || propres.has(cleElement(e))))
-    .map(e => ({
-      studentId, type: e.type,
-      ...(e.monthKey ? { monthKey: e.monthKey } : {}),
-      ...(e.serviceId ? { serviceId: e.serviceId } : {}),
-      mode: 'pourcentage' as const, valeur: o.partFinancee, motif: motifFinancement(o),
-    }));
-
-/** Frais concernés qui gardent un tarif personnalisé d'un autre motif : à vérifier par l'école. */
-export const fraisDejaPersonnalises = (o: Organisme, elements: PayableItem[], propres: Set<string> = new Set()): PayableItem[] =>
-  elements.filter(e => !e.paid && fraisFinance(o, e) && e.personnalise && !propres.has(cleElement(e)));
-
-/** La base n'accepte que 60 frais par appel : les longues années partent en plusieurs fois. */
-export const parLots = <T,>(liste: T[], taille = 60): T[][] => {
-  const lots: T[][] = [];
-  for (let i = 0; i < liste.length; i += taille) lots.push(liste.slice(i, i + taille));
-  return lots;
-};
-
-/**
- * Ce que l'organisme prend en charge sur l'année, au tarif normal des frais
- * concernés (avant toute réduction) : la base de ses factures.
+ * Ce que l'organisme prend en charge sur l'année : la base de ses factures.
+ * `du` = ce qui est dû à l'école sur les frais concernés (après un éventuel
+ * tarif personnalisé accordé par l'école), partagé comme à la caisse.
  */
 export const montantFinance = (o: Organisme, elements: PayableItem[]): { base: number; finance: number; partApprenant: number } => {
-  const base = elements.filter(e => fraisFinance(o, e)).reduce((s, e) => s + e.tarifNormal, 0);
-  const finance = Math.round((base * o.partFinancee) / 100);
+  const p = priseEnChargeDe(o);
+  let base = 0;
+  let finance = 0;
+  for (const e of elements) {
+    if (!fraisCouvert(p, e)) continue;
+    const du = e.du ?? e.tarifNormal;
+    base += du;
+    finance += partager(du, p, e).organisme;
+  }
   return { base, finance, partApprenant: base - finance };
 };
 

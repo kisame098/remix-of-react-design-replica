@@ -1,15 +1,13 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
-import { usePayment } from '@/contexts/PaymentContext';
 import type { Student } from '@/contexts/SchoolContext';
-import { useElementsAPayer } from '@/hooks/useElementsAPayer';
 import { estFormationPro } from '@/lib/modeGestion';
-import { cleElement } from '@/lib/tarifsEleve';
 import {
-  TAILLE_MAX_FICHIER, lireReglagesFinancements, lignesDeFinancement, parLots,
+  TAILLE_MAX_FICHIER, lireReglagesFinancements, priseEnChargeDe,
   type Dossier, type Organisme, type PieceDossier, type ReglagesFinancements,
 } from '@/lib/financements';
+import type { PriseEnCharge } from '@/lib/priseEnCharge';
 import {
   prochainNumero,
   type EvenementJournal, type FactureFinanceur, type LigneFactureFinanceur, type PointInsertion, type PorteeFacture,
@@ -20,10 +18,11 @@ import {
 // DONNÉES DES FINANCEMENTS (3FPT…) — formation professionnelle
 //
 // Rien n'est chargé tant que l'école n'a pas activé le module (Paramètres →
-// Financements). Activer le financement d'un apprenant fait deux choses :
-// créer son dossier ET poser les réductions qui ramènent ses frais à sa part
-// (src/lib/financements.ts → lignesDeFinancement). Le désactiver retire ces
-// réductions sur ce qui n'est pas encore payé — jamais sur un frais soldé.
+// Financements). Activer le financement d'un apprenant crée son DOSSIER, et
+// c'est tout : aucune réduction n'est posée. La prise en charge n'est pas un
+// rabais — le frais reste dû en entier, partagé entre l'apprenant et
+// l'organisme au moment du calcul (src/lib/priseEnCharge.ts), à partir du
+// dossier. Retirer le dossier, c'est retirer le partage.
 // ═══════════════════════════════════════════════════════════════════════════
 
 // Table et bucket absents des types générés (docs/sql/financements_dossiers.sql).
@@ -150,17 +149,14 @@ interface FinancementsContextType {
   dossierDe: (enrollmentId: string) => Dossier | undefined;
   organisme: (id: string) => Organisme | undefined;
 
-  /**
-   * Crée le dossier et pose les réductions de l'apprenant. Renvoie le nombre
-   * de frais ramenés à sa part. Exige le droit d'accorder des réductions.
-   */
-  activer: (eleve: Student, organismeId: string) => Promise<{ dossier: Dossier; fraisReduits: number }>;
-  /** Supprime le dossier et retire les réductions encore utiles (frais non payés). */
+  /** Le partage des frais de cet apprenant (organisme, part, frais concernés), s'il est financé. */
+  priseEnChargeDe: (enrollmentId: string) => PriseEnCharge | undefined;
+  /** Ouvre son dossier : dès lors, ses frais concernés sont partagés avec l'organisme. */
+  activer: (eleve: Student, organismeId: string) => Promise<Dossier>;
+  /** Supprime le dossier : l'apprenant redoit la totalité de ce qui n'est pas payé. */
   desactiver: (eleve: Student) => Promise<void>;
-  /** Change d'organisme : retire les anciennes réductions, pose les nouvelles. */
+  /** Change d'organisme (les pièces suivent la liste du nouvel organisme). */
   changerOrganisme: (eleve: Student, organismeId: string) => Promise<void>;
-  /** Repose les réductions (frais apparus depuis : nouveau service, nouvelle année…). */
-  reappliquer: (eleve: Student) => Promise<number>;
   modifier: (id: string, d: ModifDossier) => Promise<void>;
 
   /** Envoie un fichier dans le dossier ; renvoie son chemin à enregistrer. */
@@ -195,8 +191,6 @@ const FinancementsContext = createContext<FinancementsContextType | null>(null);
 export const FinancementsProvider = ({ children }: { children: ReactNode }) => {
   const { school, isSchoolAccessBlocked, profile } = useAuth();
   const parNom = profile?.full_name || profile?.email || undefined;
-  const { getAjustementsEleve, appliquerTarifsEleve, retirerTarifsEleve, hasPaidInscription, hasPaidTuitionMonth, hasPaidService } = usePayment();
-  const { elementsDe } = useElementsAPayer();
   const schoolId: string | null = school?.id ?? null;
   const reglages = useMemo(() => lireReglagesFinancements(school?.settings), [school?.settings]);
   const actif = estFormationPro(school) && reglages.actif && !isSchoolAccessBlocked;
@@ -254,42 +248,12 @@ export const FinancementsProvider = ({ children }: { children: ReactNode }) => {
   const organisme = useCallback((id: string) => reglages.organismes.find(o => o.id === id), [reglages]);
   const dossierDe = useCallback((enrollmentId: string) => dossiers.find(d => d.studentEnrollmentId === enrollmentId), [dossiers]);
 
-  /** Les clés des frais qui portent déjà une réduction de CE financement. */
-  const clesPropres = useCallback((eleve: Student, ids: string[]) => new Set(
-    [...getAjustementsEleve(eleve.id).values()].filter(a => a.id && ids.includes(a.id)).map(a => cleElement(a)),
-  ), [getAjustementsEleve]);
-
-  /**
-   * Pose (ou met à jour) les réductions du financement sur les frais concernés
-   * encore à payer. Renvoie les identifiants des réductions posées.
-   */
-  const poserReductions = useCallback(async (eleve: Student, o: Organisme, propres: string[] = []): Promise<string[]> => {
-    const lignes = lignesDeFinancement(o, eleve.id, elementsDe(eleve), clesPropres(eleve, propres));
-    const ids: string[] = [];
-    for (const lot of parLots(lignes)) {
-      const posees = await appliquerTarifsEleve(eleve.id, lot);
-      ids.push(...posees.map(a => a.id).filter((id): id is string => !!id));
-    }
-    return ids;
-  }, [elementsDe, appliquerTarifsEleve, clesPropres]);
-
-  /** Retire les réductions du financement sur les frais pas encore payés (un frais soldé garde sa trace). */
-  const retirerReductions = useCallback(async (eleve: Student, ids: string[]) => {
-    const index = getAjustementsEleve(eleve.id);
-    const aRetirer = [...index.values()].filter(a => a.id && ids.includes(a.id)).filter(a =>
-      a.type === 'inscription' ? !hasPaidInscription(eleve.id)
-        : a.type === 'tuition' ? !hasPaidTuitionMonth(eleve.id, a.monthKey ?? '')
-        : !hasPaidService(eleve.id, a.serviceId ?? '', a.monthKey),
-    ).map(a => a.id as string);
-    if (aRetirer.length > 0) await retirerTarifsEleve(aRetirer);
-  }, [getAjustementsEleve, hasPaidInscription, hasPaidTuitionMonth, hasPaidService, retirerTarifsEleve]);
-
-  const enregistrerAjustements = useCallback(async (id: string, ids: string[]) => {
-    const { error } = await sb.from('fin_dossiers').update({ ajustement_ids: ids, updated_at: new Date().toISOString() })
-      .eq('id', id).eq('school_id', schoolId);
-    if (error) throw error;
-    setDossiers(prev => prev.map(d => d.id === id ? { ...d, ajustementIds: ids } : d));
-  }, [schoolId]);
+  const priseEnCharge = useCallback((enrollmentId: string) => {
+    if (!actif) return undefined;
+    const d = dossiers.find(x => x.studentEnrollmentId === enrollmentId);
+    const o = d ? reglages.organismes.find(x => x.id === d.organismeId) : undefined;
+    return o ? priseEnChargeDe(o) : undefined;
+  }, [actif, dossiers, reglages]);
 
   const activer = useCallback<FinancementsContextType['activer']>(async (eleve, organismeId) => {
     if (!schoolId) throw new Error('Non connecté à une école');
@@ -300,28 +264,20 @@ export const FinancementsProvider = ({ children }: { children: ReactNode }) => {
       pieces: o.pieces.map(p => ({ piece_id: p.id, fournie: false, conforme: false })),
     }).select().single();
     if (error) throw error;
-    let dossier = mapDossier(row);
+    const dossier = mapDossier(row);
     setDossiers(prev => [...prev, dossier]);
-    // Le dossier existe : si les réductions échouent (droit manquant), on le
-    // dit, et « Réappliquer » dans le dossier permettra de les poser plus tard.
-    const ids = await poserReductions(eleve, o);
-    if (ids.length > 0) {
-      await enregistrerAjustements(dossier.id, ids);
-      dossier = { ...dossier, ajustementIds: ids };
-    }
-    return { dossier, fraisReduits: ids.length };
-  }, [schoolId, reglages, poserReductions, enregistrerAjustements]);
+    return dossier;
+  }, [schoolId, reglages]);
 
   const desactiver = useCallback(async (eleve: Student) => {
     const d = dossiers.find(x => x.studentEnrollmentId === eleve.id);
     if (!d || !schoolId) return;
-    await retirerReductions(eleve, d.ajustementIds);
     const fichiers = [d.contratFichier, d.engagementFichier, ...d.pieces.map(p => p.fichier)].filter((f): f is string => !!f);
     const { error } = await sb.from('fin_dossiers').delete().eq('id', d.id).eq('school_id', schoolId);
     if (error) throw error;
     if (fichiers.length > 0) await sb.storage.from(BUCKET_FINANCEMENTS).remove(fichiers);
     setDossiers(prev => prev.filter(x => x.id !== d.id));
-  }, [dossiers, schoolId, retirerReductions]);
+  }, [dossiers, schoolId]);
 
   const modifier = useCallback(async (id: string, d: ModifDossier) => {
     if (!schoolId) throw new Error('Non connecté à une école');
@@ -336,25 +292,10 @@ export const FinancementsProvider = ({ children }: { children: ReactNode }) => {
     const d = dossiers.find(x => x.studentEnrollmentId === eleve.id);
     const o = reglages.organismes.find(x => x.id === organismeId);
     if (!d || !o || d.organismeId === organismeId) return;
-    // Les réductions des frais communs se mettent à jour (nouvelle part) ;
-    // celles des frais que le nouvel organisme ne prend pas en charge partent.
-    const posees = await poserReductions(eleve, o, d.ajustementIds);
-    await retirerReductions(eleve, d.ajustementIds.filter(id => !posees.includes(id)));
     // Les pièces suivent la liste du nouvel organisme ; une pièce commune garde son état.
     const pieces = o.pieces.map(p => d.pieces.find(x => x.pieceId === p.id) ?? { pieceId: p.id, fournie: false, conforme: false });
     await modifier(d.id, { organismeId, pieces });
-    await enregistrerAjustements(d.id, posees);
-  }, [dossiers, reglages, retirerReductions, modifier, enregistrerAjustements, poserReductions]);
-
-  const reappliquer = useCallback(async (eleve: Student) => {
-    const d = dossiers.find(x => x.studentEnrollmentId === eleve.id);
-    const o = d ? reglages.organismes.find(x => x.id === d.organismeId) : undefined;
-    if (!d || !o) return 0;
-    // Met à jour celles déjà posées (part modifiée dans les réglages) et couvre les nouveaux frais.
-    const posees = await poserReductions(eleve, o, d.ajustementIds);
-    await enregistrerAjustements(d.id, [...new Set([...d.ajustementIds, ...posees])]);
-    return posees.length;
-  }, [dossiers, reglages, poserReductions, enregistrerAjustements]);
+  }, [dossiers, reglages, modifier]);
 
   const televerser = useCallback(async (dossierId: string, fichier: File) => {
     if (!schoolId) throw new Error('Non connecté à une école');
@@ -497,7 +438,7 @@ export const FinancementsProvider = ({ children }: { children: ReactNode }) => {
 
   const value = useMemo<FinancementsContextType>(() => ({
     actif, reglages, loading, disponible, dossiers, dossierDe, organisme,
-    activer, desactiver, changerOrganisme, reappliquer, modifier, televerser, lienFichier, supprimerFichier,
+    priseEnChargeDe: priseEnCharge, activer, desactiver, changerOrganisme, modifier, televerser, lienFichier, supprimerFichier,
     suiviDisponible, factures, versements, rapports, journal, insertions,
     emettreFactures, annulerFacture, ajouterVersement, supprimerVersement,
     creerRapport, modifierRapport, supprimerRapport, ajouterInsertion, supprimerInsertion,
@@ -505,7 +446,7 @@ export const FinancementsProvider = ({ children }: { children: ReactNode }) => {
       emettreFactures, annulerFacture, ajouterVersement, supprimerVersement,
       creerRapport, modifierRapport, supprimerRapport, ajouterInsertion, supprimerInsertion,
       actif, reglages, loading, disponible, dossiers, dossierDe, organisme,
-      activer, desactiver, changerOrganisme, reappliquer, modifier, televerser, lienFichier, supprimerFichier]);
+      priseEnCharge, activer, desactiver, changerOrganisme, modifier, televerser, lienFichier, supprimerFichier]);
 
   return <FinancementsContext.Provider value={value}>{children}</FinancementsContext.Provider>;
 };
@@ -515,3 +456,10 @@ export const useFinancements = (): FinancementsContextType => {
   if (!ctx) throw new Error('useFinancements must be used within FinancementsProvider');
   return ctx;
 };
+
+/**
+ * Le même contexte, sans exiger son fournisseur : le calcul des frais
+ * (useElementsAPayer) s'en sert pour partager les frais d'un apprenant financé,
+ * et doit rester utilisable partout, y compris hors de l'application complète.
+ */
+export const useFinancementsOptionnel = (): FinancementsContextType | null => useContext(FinancementsContext);

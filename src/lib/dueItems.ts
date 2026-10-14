@@ -17,6 +17,7 @@ import { AcademicMonth, AnnexService, MonthKey, PaymentType, isMonthOverdue } fr
 import { resteAPayer } from '@/lib/paiementPartiel';
 import { mensualiteDuMois, type MontantsParMois } from '@/lib/mensualites';
 import { montantEleve, type AjustementTarif } from '@/lib/tarifsEleve';
+import { partager, type PriseEnCharge } from '@/lib/priseEnCharge';
 
 // ─── Vue caisse ─────────────────────────────────────────────────────────────
 
@@ -24,12 +25,23 @@ export interface PayableItem {
   id: string;
   label: string;
   sublabel?: string;
-  /** Reste à payer : le tarif moins les acomptes déjà versés. */
+  /**
+   * Reste à payer PAR L'APPRENANT : sa part (tout le frais, ou ce qu'un
+   * organisme ne prend pas en charge) moins ses acomptes.
+   */
   amount: number;
   /** Acomptes déjà versés sur cet élément (0 s'il n'y en a pas). */
   dejaVerse: number;
   /** Tarif normal (classe / mois) avant le tarif personnalisé de l'élève. */
   tarifNormal: number;
+  /** Ce qui est dû à l'école sur ce frais (après tarif personnalisé), toutes parts confondues. */
+  du: number;
+  /** Part prise en charge par un organisme (3FPT…) — facturée à l'organisme, jamais à la caisse. */
+  partOrganisme: number;
+  /** Nom de l'organisme qui prend ce frais en charge. */
+  organisme?: string;
+  /** L'organisme prend TOUT en charge : rien à encaisser auprès de l'apprenant, ne bloque pas la suite. */
+  priseEnChargeTotale: boolean;
   /** L'élève a un tarif personnalisé sur ce frais (src/lib/tarifsEleve.ts). */
   personnalise: boolean;
   paid: boolean;
@@ -58,6 +70,8 @@ export interface PayableItemsInput {
   acomptes?: (e: { type: PaymentType; monthKey?: MonthKey; serviceId?: string }) => number;
   /** Tarif personnalisé de CET élève, indexé par frais (indexerAjustements). */
   ajustements?: Map<string, AjustementTarif>;
+  /** Prise en charge par un organisme (3FPT…) : partage les frais concernés (src/lib/priseEnCharge.ts). */
+  priseEnCharge?: PriseEnCharge;
 }
 
 export const buildPayableItems = (input: PayableItemsInput): PayableItem[] => {
@@ -69,15 +83,20 @@ export const buildPayableItems = (input: PayableItemsInput): PayableItem[] => {
   const ajustements = input.ajustements ?? new Map<string, AjustementTarif>();
 
   const items: PayableItem[] = [];
-  // Ce que CET élève doit (tarif personnalisé éventuel), moins ses acomptes.
-  // Un élément soldé garde son montant, sans acompte ; `rien` = 0 F à payer :
+  // Ce que CET élève doit (tarif personnalisé éventuel), partagé avec
+  // l'organisme qui le prend en charge, moins ses acomptes.
+  // Un élément soldé garde son montant, sans acompte ; `rien` = 0 F dû :
   // l'élément n'apparaît pas et ne bloque pas le suivant.
   const montants = (base: number, paid: boolean, e: { type: PaymentType; monthKey?: MonthKey; serviceId?: string }) => {
     const m = montantEleve(base, e, ajustements);
+    const parts = partager(m.du, input.priseEnCharge, e);
     const dejaVerse = paid ? 0 : acomptes(e);
     return {
-      amount: resteAPayer(m.du, dejaVerse), dejaVerse,
+      amount: resteAPayer(parts.apprenant, dejaVerse), dejaVerse,
       tarifNormal: m.tarifNormal, personnalise: !!m.ajustement,
+      du: m.du, partOrganisme: parts.organisme,
+      ...(parts.organisme > 0 ? { organisme: input.priseEnCharge?.organisme } : {}),
+      priseEnChargeTotale: parts.organisme > 0 && parts.apprenant <= 0,
       rien: m.du <= 0 && !paid,
     };
   };
@@ -117,11 +136,12 @@ export const buildPayableItems = (input: PayableItemsInput): PayableItem[] => {
         ...sansDrapeau(m),
         paid,
         overdue: isMonthOverdue(month, paid),
-        blocked: !prevPaid && !paid,
+        blocked: !prevPaid && !paid && !m.priseEnChargeTotale,
         type: 'tuition',
         monthKey: key,
       });
-      prevPaid = paid;
+      // Un mois que l'organisme prend entièrement en charge n'attend rien de l'apprenant.
+      prevPaid = paid || m.priseEnChargeTotale;
     }
   }
 
@@ -143,12 +163,12 @@ export const buildPayableItems = (input: PayableItemsInput): PayableItem[] => {
           paid,
           // Seul un service obligatoire bloque la suite : on ne verrouille pas
           // la cantine de mars parce que celle de février n'est pas réglée.
-          blocked: svc.isObligatory ? (!prevPaid && !paid) : false,
+          blocked: svc.isObligatory ? (!prevPaid && !paid && !m.priseEnChargeTotale) : false,
           type: 'service',
           monthKey: key,
           serviceId: svc.id,
         });
-        prevPaid = paid;
+        prevPaid = paid || m.priseEnChargeTotale;
       }
     } else {
       const paid = hasPaidService(svc.id);
@@ -183,6 +203,9 @@ export interface DueItem {
   tarifNormal: number;
   /** L'élève a un tarif personnalisé sur ce frais. */
   personnalise: boolean;
+  /** Part prise en charge par un organisme (3FPT…), que la famille n'a pas à payer. */
+  partOrganisme: number;
+  organisme?: string;
   type: 'inscription' | 'tuition' | 'service';
   monthKey?: string;
   serviceId?: string;
@@ -248,6 +271,8 @@ export const computeDueItems = (
   currentIdx: number,
   /** Tarif personnalisé de l'élève, indexé par frais (indexerAjustements). */
   ajustements: Map<string, AjustementTarif> = new Map(),
+  /** Prise en charge par un organisme (3FPT…) : la famille ne voit que SA part. */
+  priseEnCharge?: PriseEnCharge,
 ): DueItem[] => {
   const items: DueItem[] = [];
 
@@ -262,14 +287,21 @@ export const computeDueItems = (
     .filter(p => p.status !== 'cancelled' && p.partiel && pred(p))
     .reduce((s, p) => s + (p.amount ?? 0), 0);
   // Ce que CET élève doit (tarif personnalisé éventuel), moins ses acomptes.
-  const du = (base: number, e: { type: PaymentType; monthKey?: string; serviceId?: string }) => montantEleve(base, e, ajustements);
+  // Puis partagé avec l'organisme qui le prend en charge : `apprenant` est la part de la famille.
+  const du = (base: number, e: { type: PaymentType; monthKey?: string; serviceId?: string }) => {
+    const m = montantEleve(base, e, ajustements);
+    return { ...m, ...partager(m.du, priseEnCharge, e) };
+  };
   const reste = (m: ReturnType<typeof du>, pred: (p: DuePayment) => boolean) => {
     const dejaVerse = verse(pred);
-    return { amount: resteAPayer(m.du, dejaVerse), dejaVerse, tarifNormal: m.tarifNormal, personnalise: !!m.ajustement };
+    return {
+      amount: resteAPayer(m.apprenant, dejaVerse), dejaVerse, tarifNormal: m.tarifNormal, personnalise: !!m.ajustement,
+      partOrganisme: m.organisme, ...(m.organisme > 0 ? { organisme: priseEnCharge?.organisme } : {}),
+    };
   };
 
   const insc = du(tuition.inscriptionFee, { type: 'inscription' });
-  if (insc.du > 0 && !isPaid(p => p.type === 'inscription')) {
+  if (insc.apprenant > 0 && !isPaid(p => p.type === 'inscription')) {
     // L'inscription ne fait pas partie de la chaîne mensuelle : elle se règle
     // quand la famille veut, sans bloquer la scolarité.
     items.push({
@@ -289,7 +321,8 @@ export const computeDueItems = (
       // Montant propre à ce mois, puis tarif de l'élève ; 0 F = rien à payer ni ne bloque.
       const m = du(mensualiteDuMois(tuition, month.key), { type: 'tuition', monthKey: month.key });
       if (m.du <= 0) continue;
-      const paye = isPaid(p => p.type === 'tuition' && p.monthKey === month.key);
+      // Entièrement pris en charge : rien à payer pour la famille, et ça ne bloque pas la suite.
+      const paye = m.apprenant <= 0 || isPaid(p => p.type === 'tuition' && p.monthKey === month.key);
       if (!paye) {
         items.push({
           key: `tuition-${month.key}`, label: `Scolarité ${month.label}`,
@@ -317,7 +350,7 @@ export const computeDueItems = (
         if (month.index < enr.startMonthIndex || month.index > fin) continue;
         const m = du(svc.amount, { type: 'service', serviceId: svc.id, monthKey: month.key });
         if (m.du <= 0) continue;
-        const paye = isPaid(p => p.type === 'service' && p.serviceId === svc.id && p.monthKey === month.key);
+        const paye = m.apprenant <= 0 || isPaid(p => p.type === 'service' && p.serviceId === svc.id && p.monthKey === month.key);
         if (!paye) {
           items.push({
             key: `svc-${svc.id}-${month.key}`, label: `${svc.name} — ${month.label}`,
@@ -332,7 +365,7 @@ export const computeDueItems = (
     } else {
       if (isPaid(p => p.type === 'service' && p.serviceId === svc.id)) continue;
       const m = du(svc.amount, { type: 'service', serviceId: svc.id });
-      if (m.du <= 0) continue;
+      if (m.apprenant <= 0) continue;
       items.push({
         key: `svc-${svc.id}`, label: svc.name,
         ...reste(m, p => p.type === 'service' && p.serviceId === svc.id),
@@ -351,3 +384,7 @@ export const totalExigible = (items: DueItem[]): number =>
 /** Le prochain élément réellement payable : le premier non verrouillé. */
 export const prochainPayable = (items: DueItem[]): DueItem | undefined =>
   items.find(i => !i.verrouille);
+
+/** Libellé sur les documents de la famille : on y précise qu'elle ne règle que sa part. */
+export const designationFamille = (e: Pick<PayableItem, 'label' | 'partOrganisme' | 'organisme'>): string =>
+  e.partOrganisme > 0 ? `${e.label} (part de l'apprenant — ${e.organisme ?? 'organisme'} prend en charge le reste)` : e.label;

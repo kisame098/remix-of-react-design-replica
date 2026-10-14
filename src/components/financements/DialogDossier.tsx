@@ -1,9 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
-  AlertTriangle, CheckCircle2, FileSignature, Landmark, Loader2, RefreshCw, Trash2, UserX,
+  AlertTriangle, CheckCircle2, FileSignature, Landmark, Loader2, Trash2, UserX,
 } from 'lucide-react';
 import { useFinancements, type ModifDossier } from '@/contexts/FinancementsContext';
-import { usePayment } from '@/contexts/PaymentContext';
 import type { Student } from '@/contexts/SchoolContext';
 import { useElementsAPayer } from '@/hooks/useElementsAPayer';
 import { Button } from '@/components/ui/button';
@@ -19,11 +18,10 @@ import {
 } from '@/components/ui/alert-dialog';
 import { toast } from '@/hooks/use-toast';
 import {
-  COULEUR_STATUT_DOSSIER, LIBELLES_SITUATION, LIBELLES_STATUT_DOSSIER, SITUATIONS, STATUTS_DOSSIER, fraisDejaPersonnalises, fraisFinance, manquesDuDossier,
+  COULEUR_STATUT_DOSSIER, LIBELLES_SITUATION, LIBELLES_STATUT_DOSSIER, SITUATIONS, STATUTS_DOSSIER, manquesDuDossier,
   montantFinance, montantsDesTranches, situationAvecMotif,
   type Dossier, type PieceDossier, type Situation, type StatutDossier,
 } from '@/lib/financements';
-import { cleElement } from '@/lib/tarifsEleve';
 import { FichierJoint } from '@/components/financements/FichierJoint';
 import { Link } from 'react-router-dom';
 import { useAttendance } from '@/contexts/AttendanceContext';
@@ -65,7 +63,7 @@ export const DialogDossier = ({ eleve, onFermer }: { eleve: Student | null; onFe
   const organisme = dossier ? fin.organisme(dossier.organismeId) : undefined;
   const [f, setF] = useState<Formulaire | null>(null);
   const [enregistrement, setEnregistrement] = useState(false);
-  const [action, setAction] = useState<'reappliquer' | 'organisme' | null>(null);
+  const [action, setAction] = useState<'organisme' | null>(null);
   const [confirmerRetrait, setConfirmerRetrait] = useState(false);
 
   // Le formulaire repart du dossier à l'ouverture (pas à chaque fichier joint).
@@ -82,16 +80,6 @@ export const DialogDossier = ({ eleve, onFermer }: { eleve: Student | null; onFe
   const promotion = eleve ? promotions.find(p => p.classId === eleve.classId) : undefined;
   const presence = eleve ? calculerAssiduite(studentAttendances, eleve.id) : null;
   const insertion = dossier ? insertionActuelle(fin.insertions, dossier.id) : undefined;
-
-  // Les frais qui portent déjà une réduction de CE financement.
-  const { getAjustementsEleve } = usePayment();
-  const propres = useMemo(() => new Set(eleve && dossier
-    ? [...getAjustementsEleve(eleve.id).values()].filter(a => a.id && dossier.ajustementIds.includes(a.id)).map(a => cleElement(a))
-    : []), [eleve, dossier, getAjustementsEleve]);
-  // Frais concernés gardant un tarif personnalisé posé à la main : l'école doit trancher.
-  const autres = organisme ? fraisDejaPersonnalises(organisme, elements, propres) : [];
-  // Frais concernés encore au tarif plein (apparus depuis l'activation) : à couvrir.
-  const nonCouverts = organisme ? elements.filter(e => !e.paid && !e.personnalise && fraisFinance(organisme, e)) : [];
 
   if (!eleve || !dossier || !f) return null;
   const manques = manquesDuDossier({ contratSigne: f.contratSigne, engagementSigne: f.engagementSigne, pieces: f.pieces }, organisme);
@@ -132,13 +120,6 @@ export const DialogDossier = ({ eleve, onFermer }: { eleve: Student | null; onFe
     } catch (e) { erreur('Dossier non enregistré', e); } finally { setEnregistrement(false); }
   };
 
-  const reappliquer = async () => {
-    setAction('reappliquer');
-    try {
-      const n = await fin.reappliquer(eleve);
-      toast({ title: n > 0 ? `Part de l'apprenant appliquée sur ${n} frais` : 'Rien à mettre à jour' });
-    } catch (e) { erreur('Part non appliquée', e); } finally { setAction(null); }
-  };
   const changerOrganisme = async (id: string) => {
     setAction('organisme');
     try { await fin.changerOrganisme(eleve, id); toast({ title: 'Organisme changé', description: fin.organisme(id)?.nom }); }
@@ -172,10 +153,6 @@ export const DialogDossier = ({ eleve, onFermer }: { eleve: Student | null; onFe
                     <SelectContent>{fin.reglages.organismes.map(o => <SelectItem key={o.id} value={o.id}>{o.nom}</SelectItem>)}</SelectContent>
                   </Select>
                 </div>
-                <Button variant="outline" size="sm" className="gap-1.5" disabled={action !== null || !organisme} onClick={() => void reappliquer()}
-                  title="Met à jour la part de l'apprenant sur ses frais (part modifiée, nouveaux frais…)">
-                  {action === 'reappliquer' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />} Réappliquer la part
-                </Button>
               </div>
               {!organisme ? (
                 <p className="text-sm text-destructive">Cet organisme n'existe plus dans Paramètres → Financements : choisissez-en un autre.</p>
@@ -188,14 +165,10 @@ export const DialogDossier = ({ eleve, onFermer }: { eleve: Student | null; onFe
                     <p className="text-xs text-muted-foreground">payée à la caisse</p></div>
                 </div>
               )}
-              {nonCouverts.length > 0 && (
-                <p className="text-xs text-amber-700 flex items-start gap-1.5"><AlertTriangle className="h-3.5 w-3.5 mt-0.5 flex-shrink-0" />
-                  {nonCouverts.length} frais au tarif plein (nouveaux depuis l'activation) : cliquez sur « Réappliquer la part ».</p>
-              )}
-              {autres.length > 0 && (
-                <p className="text-xs text-amber-700 flex items-start gap-1.5"><AlertTriangle className="h-3.5 w-3.5 mt-0.5 flex-shrink-0" />
-                  {autres.length} frais gardent une réduction accordée à la main ({autres.slice(0, 3).map(e => e.label).join(', ')}{autres.length > 3 ? '…' : ''}) : vérifiez-la dans Paiements → Réductions.</p>
-              )}
+              <p className="text-xs text-muted-foreground">
+                Prise en charge, pas réduction : chaque frais concerné reste dû en entier à l'école ; l'apprenant en paie sa part à la
+                caisse, l'organisme le reste sur facture (onglet Finances).
+              </p>
             </section>
 
             {/* Suivi */}

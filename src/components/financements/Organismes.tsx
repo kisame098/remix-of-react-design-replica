@@ -82,8 +82,8 @@ const EditeurOrganisme = ({ o, onChange, onSupprimer, supprimable }: {
         )}
       </div>
       <p className="text-xs text-muted-foreground -mt-3">
-        L'apprenant paie le reste ({pct(Math.max(0, 100 - o.partFinancee))} %) à la caisse, comme d'habitude : SenClass pose une réduction
-        de {pct(o.partFinancee)} % sur ses frais pris en charge.
+        Les frais restent dus en entier à l'école. L'apprenant en paie {pct(Math.max(0, 100 - o.partFinancee))} % à la caisse ;
+        les {pct(o.partFinancee)} % de l'organisme lui sont facturés dans l'onglet Finances.
       </p>
 
       <div className="space-y-2">

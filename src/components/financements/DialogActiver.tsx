@@ -33,13 +33,11 @@ export const DialogActiver = ({ ouvert, eleves, onFermer }: { ouvert: boolean; e
   const activer = async () => {
     setEnCours(true);
     let reussis = 0;
-    let sansReduction = 0;
     const echecs: string[] = [];
     for (const e of eleves.filter(x => coches.has(x.id))) {
       try {
-        const { fraisReduits } = await fin.activer(e, organismeId);
+        await fin.activer(e, organismeId);
         reussis++;
-        if (fraisReduits === 0) sansReduction++;
       } catch (err) {
         echecs.push(`${e.lastName} ${e.firstName} : ${messageDe(err)}`);
       }
@@ -49,7 +47,7 @@ export const DialogActiver = ({ ouvert, eleves, onFermer }: { ouvert: boolean; e
     if (reussis > 0) {
       toast({
         title: `${reussis} apprenant${reussis > 1 ? 's' : ''} financé${reussis > 1 ? 's' : ''} par ${nom}`,
-        description: sansReduction > 0 ? `${sansReduction} sans frais à réduire pour l'instant (frais pas encore réglés dans Paiements → Configuration ?).` : 'Leur part est appliquée sur leurs frais.',
+        description: "À la caisse, ils ne paient plus que leur part ; celle de l'organisme se facture dans Finances.",
       });
     }
     if (echecs.length > 0) toast({ title: `${echecs.length} activation${echecs.length > 1 ? 's' : ''} impossible${echecs.length > 1 ? 's' : ''}`, description: echecs.slice(0, 3).join(' · '), variant: 'destructive' });
@@ -61,7 +59,7 @@ export const DialogActiver = ({ ouvert, eleves, onFermer }: { ouvert: boolean; e
       <DialogContent className="max-w-lg max-h-[90vh] flex flex-col">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2"><Landmark className="h-5 w-5 text-primary" />Activer un financement</DialogTitle>
-          <DialogDescription>Un dossier est ouvert pour chaque apprenant, et sa part est appliquée sur ses frais.</DialogDescription>
+          <DialogDescription>Un dossier est ouvert pour chaque apprenant ; ses frais sont partagés avec l'organisme.</DialogDescription>
         </DialogHeader>
         <div className="space-y-4 flex-1 min-h-0 flex flex-col">
           <div className="space-y-1.5">
