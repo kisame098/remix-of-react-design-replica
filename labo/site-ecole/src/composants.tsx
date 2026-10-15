@@ -269,7 +269,7 @@ export function FormulaireWhatsApp({ champs, entete, bouton = 'Envoyer sur Whats
         <label key={ch.nom} className={`block ${ch.type === 'textarea' ? 'sm:col-span-2' : ''}`}>
           <span className="block text-sm font-medium text-gray-700 mb-1.5">{ch.libelle}{ch.requis && <span className="text-red-500"> *</span>}</span>
           {ch.type === 'textarea'
-            ? <textarea rows={4} required={ch.requis} className={classeChamp} value={valeurs[ch.nom] ?? ''} onChange={e => setValeurs(v => ({ ...v, [ch.nom]: e.target.value }))} />
+            ? <textarea rows={4} required={ch.requis} className={`${classeChamp} !h-auto py-3`} value={valeurs[ch.nom] ?? ''} onChange={e => setValeurs(v => ({ ...v, [ch.nom]: e.target.value }))} />
             : ch.type === 'select'
               ? <select required={ch.requis} className={classeChamp} value={valeurs[ch.nom] ?? ''} onChange={e => setValeurs(v => ({ ...v, [ch.nom]: e.target.value }))}>
                   <option value="">Choisir…</option>

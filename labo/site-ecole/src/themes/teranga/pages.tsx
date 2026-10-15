@@ -156,9 +156,9 @@ export function GalerieT() {
         <TitreT c="vieScolaire.galerie" centre />
         <Liste c="vieScolaire.galerie.elements" nouveau={{ image: '' }} className="columns-2 md:columns-3 gap-4 [&>*]:mb-4 [&>*]:break-inside-avoid" libelleAjout="Ajouter une photo">
           {(el, i, ce) => (
-            <button type="button" onClick={() => !edition && setAgrandie(el.image)} className={`relative block w-full rounded-[1.75rem] overflow-hidden ${['aspect-[3/4]', 'aspect-square', 'aspect-[4/3]'][i % 3]}`}>
+            <div role="button" tabIndex={0} onClick={() => !edition && setAgrandie(el.image)} onKeyDown={e => e.key === 'Enter' && !edition && setAgrandie(el.image)} className={`relative block w-full rounded-[1.75rem] overflow-hidden ${['aspect-[3/4]', 'aspect-square', 'aspect-[4/3]'][i % 3]}`}>
               <Img c={`${ce}.image`} className="absolute inset-0 w-full h-full object-cover hover:scale-105 transition-transform duration-500" />
-            </button>
+            </div>
           )}
         </Liste>
       </Boite>

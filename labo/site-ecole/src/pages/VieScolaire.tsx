@@ -33,10 +33,10 @@ export function Galerie() {
         <TitreSection c="vieScolaire.galerie" />
         <Liste c="vieScolaire.galerie.elements" colonnes={4} nouveau={{ image: '' }} libelleAjout="Ajouter une photo">
           {(el, _, ce) => (
-            <button type="button" onClick={() => !edition && setAgrandie(el.image)}
+            <div role="button" tabIndex={0} onClick={() => !edition && setAgrandie(el.image)} onKeyDown={e => e.key === 'Enter' && !edition && setAgrandie(el.image)}
               className="relative block w-full overflow-hidden rounded-xl group aspect-square">
               <Img c={`${ce}.image`} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
-            </button>
+            </div>
           )}
         </Liste>
       </Conteneur>

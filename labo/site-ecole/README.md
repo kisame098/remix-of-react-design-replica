@@ -14,7 +14,7 @@ npm run labo:site
 Site sur http://localhost:8090. Tests : `npm run labo:site:test`. Types :
 `npm run labo:site:types`.
 
-## Trois modèles au choix
+## Quatre modèles au choix
 
 Même contenu, même façon de modifier, présentation **complètement
 différente**. Le directeur choisit dans « Identité & couleurs » ; ses textes,
@@ -38,6 +38,21 @@ photos et actualités sont conservés quand il change de modèle.
 
 Couleurs conseillées : Institution vert / or, Teranga terracotta / sarcelle,
 Prestige bleu nuit / or patiné (toujours modifiables).
+
+### Campus — moderne et rassurant (inspiré de univet.rstheme.com/blue)
+
+Le design de la référence, la réalité d'une école sénégalaise. Bleu marine,
+jaune soleil, fond crème, titres Bitter. Ouverture : le nom (ou un mot
+choisi) en lettres géantes derrière la photo qui se fond dans un ciel dégradé,
+bouton rond « Visite en vidéo » (lien YouTube / Facebook). Cartes des cycles
+qui s'ouvrent par le bouton jaune ; grand bloc bleu à onglets avec les
+**communiqués de la direction** (numérotés, téléchargeables) ; grand bandeau
+qui fait défiler les **résultats CFEE / BFEM / Bac** ; **agenda** (portes
+ouvertes, remise des prix, kermesse, réunion parents-professeurs) ;
+préinscription dans une carte bleue bordée de jaune posée sur une photo ;
+anneaux de réussite qui se dessinent ; titres qui se remplissent de couleur
+au défilement ; bouton « remonter » avec anneau de progression ; panneau
+latéral. Propre ordre de pages (`contenu.pagesCampus`).
 
 ### Prestige — pour les établissements d'excellence
 
@@ -108,6 +123,7 @@ Bouton « Modifier le site » en bas de l'écran :
 - `src/EditeurArticle.tsx` — éditeur des articles (TipTap), chargé seulement
   en mode modification.
 - `src/pages/` — les sections du modèle Institution, rangées par page.
+- `src/themes/campus/` — le modèle Campus.
 - `src/themes/prestige/` — le modèle Prestige (gabarit, blason, apparitions,
   compteurs, sections communes et exclusives).
 - `src/themes/teranga/` — le modèle Teranga : gabarit, motifs wax, sections

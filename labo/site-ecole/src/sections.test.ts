@@ -43,4 +43,19 @@ describe('modèles de site', () => {
       for (const id of ids) expect(prestige[id], `${page} → ${id}`).toBeDefined();
     }
   });
+
+  it('Campus présente chaque section à sa façon, a ses sections propres et son propre ordre', () => {
+    const campus = sectionsDuModele('campus');
+    const autres = (['institution', 'teranga', 'prestige'] as ModeleSite[]).map(sectionsDuModele);
+    for (const id of Object.keys(SECTIONS)) {
+      for (const autre of autres) expect(campus[id].Composant, id).not.toBe(autre[id].Composant);
+    }
+    for (const id of ['apropos', 'vie-campus', 'communiques', 'bandeau-resultats', 'agenda', 'bande-photos']) {
+      expect(campus[id], id).toBeDefined();
+      expect(sectionsDuModele('prestige')[id], `${id} ne doit pas apparaître dans Prestige`).toBeUndefined();
+    }
+    for (const [page, ids] of Object.entries(CONTENU_DEFAUT.pagesCampus)) {
+      for (const id of ids) expect(campus[id], `${page} → ${id}`).toBeDefined();
+    }
+  });
 });

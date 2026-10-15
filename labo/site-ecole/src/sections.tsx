@@ -28,6 +28,14 @@ import {
   ActivitesP, CalendrierP, CampusP, CandidatureP, ChapitresP, ContactP, EquipeP, EtapesP, FaqP, FraisP, GalerieP, HistoireP,
   LettreP, ListeActualitesP, PiecesP, VisiteP,
 } from './themes/prestige/pages';
+import { EnteteC } from './themes/campus/GabaritCampus';
+import {
+  ActualitesC, AgendaC, AppelC, AproposC, BandePhotosC, BandeauResultatsC, CartesIconesC, ChiffresC, CommuniquesC, EquipeC, HeroC,
+  MotC, ProgrammesC, ResultatsC, SuivezC, TemoignagesC, VieCampusC, VieScolaireC,
+} from './themes/campus/accueil';
+import {
+  AdmissionC, CalendrierC, ContactC, CyclesDetailC, EtapesC, FaqC, FraisC, GalerieC, HistoireC, InfrastructuresC, ListeActualitesC, PiecesC,
+} from './themes/campus/pages';
 import {
   ActualitesRecentesT, AppelT, ChiffresT, CyclesT, DiaporamaT, ListeEditoriale, MotT, ResultatsT, SuivezNousT, TemoignagesT,
 } from './themes/teranga/accueil';
@@ -125,17 +133,46 @@ const SECTIONS_PRESTIGE_SEULES: typeof SECTIONS = {
   visite: { nom: 'Visite du campus', groupe: 'Prestige', Composant: VisiteP },
 };
 
+/** Le modèle Campus : sa présentation de chaque section… */
+const COMPOSANTS_CAMPUS: Record<string, () => ReactNode> = {
+  diaporama: HeroC, chiffres: ChiffresC, 'mot-directeur': MotC, cycles: ProgrammesC,
+  atouts: () => <CartesIconesC c="accueil.atouts" />, resultats: ResultatsC, temoignages: TemoignagesC,
+  'actualites-recentes': ActualitesC, 'suivez-nous': SuivezC, appel: AppelC,
+  'entete-ecole': () => <EnteteC c="ecole.entete" />, histoire: HistoireC,
+  valeurs: () => <CartesIconesC c="ecole.valeurs" fond />, equipe: EquipeC, infrastructures: InfrastructuresC,
+  'entete-enseignement': () => <EnteteC c="enseignement.entete" />, 'cycles-detail': CyclesDetailC,
+  pedagogie: () => <CartesIconesC c="enseignement.pedagogie" fond />,
+  'entete-vie-scolaire': () => <EnteteC c="vieScolaire.entete" />, activites: VieScolaireC,
+  services: () => <CartesIconesC c="vieScolaire.services" />, galerie: GalerieC, calendrier: CalendrierC,
+  'entete-admissions': () => <EnteteC c="admissions.entete" />, etapes: EtapesC, pieces: PiecesC, frais: FraisC,
+  preinscription: AdmissionC, faq: FaqC,
+  'entete-actualites': () => <EnteteC c="actualites.entete" />, 'liste-actualites': ListeActualitesC,
+  'entete-contact': () => <EnteteC c="contact.entete" />, coordonnees: ContactC,
+};
+
+/** … et ses sections propres. */
+const SECTIONS_CAMPUS_SEULES: typeof SECTIONS = {
+  apropos: { nom: 'À propos (deux photos, distinction)', groupe: 'Campus', Composant: AproposC },
+  'vie-campus': { nom: 'Grand bloc à onglets + communiqués', groupe: 'Campus', Composant: VieCampusC },
+  communiques: { nom: 'Communiqués de la direction', groupe: 'Campus', Composant: CommuniquesC },
+  'bandeau-resultats': { nom: 'Grand bandeau des résultats', groupe: 'Campus', Composant: BandeauResultatsC },
+  agenda: { nom: 'Agenda des rendez-vous', groupe: 'Campus', Composant: AgendaC },
+  'bande-photos': { nom: 'Bande de photos', groupe: 'Campus', Composant: BandePhotosC },
+};
+
 /** Sections du modèle choisi par l'école (noms et groupes communs aux modèles). */
 export function sectionsDuModele(modele: ModeleSite): typeof SECTIONS {
   const remplacer = (composants: Record<string, () => ReactNode>) =>
     Object.fromEntries(Object.entries(SECTIONS).map(([id, s]) => [id, { ...s, Composant: composants[id] ?? s.Composant }]));
   if (modele === 'teranga') return remplacer(COMPOSANTS_TERANGA);
   if (modele === 'prestige') return { ...remplacer(COMPOSANTS_PRESTIGE), ...SECTIONS_PRESTIGE_SEULES };
+  if (modele === 'campus') return { ...remplacer(COMPOSANTS_CAMPUS), ...SECTIONS_CAMPUS_SEULES };
   return SECTIONS;
 }
 
-/** Prestige a son propre ordre de sections ; les deux autres modèles partagent le leur. */
-export const cleOrdre = (modele: ModeleSite) => (modele === 'prestige' ? 'pagesPrestige' : 'pages') as 'pages' | 'pagesPrestige';
+/** Prestige et Campus ont leur propre ordre de sections ; Institution et Teranga partagent le leur. */
+export const cleOrdre = (modele: ModeleSite) =>
+  (modele === 'prestige' ? 'pagesPrestige' : modele === 'campus' ? 'pagesCampus' : 'pages') as 'pages' | 'pagesPrestige' | 'pagesCampus';
 
 const cleDePage = (page: string) => page || 'accueil';
 const nomDePage = (cle: string) => PAGES_INTERNES.find(p => p.lien === (cle === 'accueil' ? '#/' : `#/${cle}`))?.nom ?? cle;

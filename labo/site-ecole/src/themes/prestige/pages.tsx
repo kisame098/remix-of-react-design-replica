@@ -188,9 +188,9 @@ export function GalerieP() {
         <TitreP c="vieScolaire.galerie" />
         <Liste c="vieScolaire.galerie.elements" nouveau={{ image: '' }} className="grid grid-cols-2 md:grid-cols-6 auto-rows-[160px] md:auto-rows-[200px] gap-3" classeElement="[&:nth-child(6n+1)]:md:col-span-4 [&:nth-child(6n+1)]:md:row-span-2 md:col-span-2 [&:nth-child(6n+4)]:md:col-span-3 [&:nth-child(6n+5)]:md:col-span-3" libelleAjout="Ajouter une photo">
           {(_, i, ce) => (
-            <button type="button" onClick={() => !edition && setOuverte(i)} className="relative block w-full h-full overflow-hidden group">
+            <div role="button" tabIndex={0} onClick={() => !edition && setOuverte(i)} onKeyDown={e => e.key === 'Enter' && !edition && setOuverte(i)} className="relative block w-full h-full overflow-hidden group">
               <Img c={`${ce}.image`} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-1000" />
-            </button>
+            </div>
           )}
         </Liste>
       </Cadre>

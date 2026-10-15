@@ -14,6 +14,7 @@ const portrait = (id: string) => `https://images.unsplash.com/${id}?auto=format&
 export const MODELES_SITE = {
   institution: { nom: 'Institution', description: 'Classique et solennel : photos plein écran, titres à empattements.', couleurs: ['#0B5D3B', '#E8A317'] },
   teranga: { nom: 'Teranga', description: 'Moderne et chaleureux : fond crème, grands titres, motifs inspirés du wax.', couleurs: ['#B4441C', '#0E5E5A'] },
+  campus: { nom: 'Campus', description: 'Moderne et rassurant : bleu marine et jaune soleil, cartes nettes, animations soignées.', couleurs: ['#0B3A66', '#F9C23C'] },
   prestige: { nom: 'Prestige', description: 'Pour les établissements d\'excellence : sobre, éditorial, bleu nuit et or.', couleurs: ['#0F1E3D', '#B08D57'] },
 } as const;
 export type ModeleSite = keyof typeof MODELES_SITE;
@@ -430,6 +431,67 @@ export const CONTENU_DEFAUT = {
     },
     appelImage: photo('photo-1567057419565-4349c49d8a04'),
   },
+
+  /** Contenu propre au modèle Campus. */
+  campus: {
+    /** Le grand mot affiché derrière la photo d'ouverture. */
+    motGeant: 'EXCELLENCE',
+    /** Visite en vidéo (lien YouTube, Facebook…) ; vide = pas de bouton. */
+    video: '',
+    videoLibelle: 'Visite en vidéo',
+    /** Photo détourée (PNG transparent) posée devant le grand mot — facultative. */
+    detoure: '',
+    apropos: {
+      surtitre: 'À propos de l\'école',
+      titre: 'Former les bâtisseurs du Sénégal de demain',
+      texte: 'Au-delà des programmes, nous apprenons à nos élèves à réfléchir, à s\'exprimer et à servir. Un encadrement exigeant et bienveillant, des enseignants engagés et un cadre pensé pour réussir.',
+      image1: photo('photo-1632215861513-130b66fe97f4', 1000),
+      image2: photo('photo-1774870292182-d59afbebf09e', 1000),
+      points: ['Programmes officiels renforcés', 'Suivi personnalisé de chaque élève', 'Cadre moderne, sûr et discipliné'],
+      distinction: { valeur: '20 ans', texte: 'd\'excellence au service des familles sénégalaises' },
+      bouton: { texte: 'Découvrir l\'école', lien: '#/ecole' } as LienBouton,
+    },
+    vie: {
+      surtitre: 'Vie à l\'école',
+      titre: 'Au cœur de l\'établissement',
+      inscrits: '1 200+',
+      inscritsTexte: 'élèves nous font confiance',
+      bouton: { texte: 'S\'inscrire', lien: '#/admissions' } as LienBouton,
+    },
+    communiques: {
+      titre: 'Communiqués',
+      elements: [
+        { titre: 'Reprise des cours le lundi 5 octobre', date: '28 septembre 2026', reference: 'N° 2026-014/DG', lien: '' },
+        { titre: 'Calendrier des compositions du 1er trimestre', date: '20 octobre 2026', reference: 'N° 2026-017/DE', lien: '' },
+        { titre: 'Liste des fournitures 2026-2027', date: '15 septembre 2026', reference: 'N° 2026-011/DG', lien: '' },
+      ],
+    },
+    /** Ajoutés aux résultats dans le grand bandeau qui défile. */
+    bandeau: ['20 ans d\'excellence', 'Préscolaire · Élémentaire · Moyen · Secondaire'],
+    agenda: {
+      surtitre: 'Agenda',
+      titre: 'Les prochains rendez-vous',
+      elements: [
+        { image: photo('photo-1632215863479-201029d93143', 700), date: '12 décembre 2026', heure: '9 h – 13 h', titre: 'Journée portes ouvertes', lieu: 'Campus de Sacré-Cœur' },
+        { image: photo('photo-1621352152645-61f4835b081b', 700), date: '18 juillet 2027', heure: '10 h – 13 h', titre: 'Remise des prix d\'excellence', lieu: 'Grande salle polyvalente' },
+        { image: photo('photo-1694286068561-3233c946e9be', 700), date: '20 juin 2027', heure: '9 h – 18 h', titre: 'Kermesse de fin d\'année', lieu: 'Cour de l\'école' },
+        { image: photo('photo-1744809448493-448812255e4d', 700), date: '7 novembre 2026', heure: '15 h – 17 h', titre: 'Réunion parents-professeurs', lieu: 'Salles de classe' },
+      ],
+    },
+    bandePhotos: { bouton: { texte: 'Découvrir la vie scolaire', lien: '#/vie-scolaire' } as LienBouton },
+    appelImage: photo('photo-1744809448493-448812255e4d'),
+  },
+
+  /** Ordre des sections du modèle Campus : il a sa propre structure. */
+  pagesCampus: {
+    accueil: ['diaporama', 'cycles', 'apropos', 'vie-campus', 'bandeau-resultats', 'agenda', 'mot-directeur', 'activites', 'equipe', 'preinscription', 'actualites-recentes', 'bande-photos', 'appel'],
+    ecole: ['entete-ecole', 'histoire', 'valeurs', 'mot-directeur', 'equipe', 'infrastructures', 'appel'],
+    enseignement: ['entete-enseignement', 'cycles-detail', 'pedagogie', 'bandeau-resultats', 'resultats', 'appel'],
+    'vie-scolaire': ['entete-vie-scolaire', 'activites', 'services', 'agenda', 'galerie', 'calendrier'],
+    admissions: ['entete-admissions', 'etapes', 'pieces', 'frais', 'preinscription', 'faq'],
+    actualites: ['entete-actualites', 'communiques', 'liste-actualites', 'suivez-nous'],
+    contact: ['entete-contact', 'coordonnees', 'suivez-nous'],
+  } as Record<string, string[]>,
 
   /** Ordre des sections pour le modèle Prestige : il a sa propre structure. */
   pagesPrestige: {
