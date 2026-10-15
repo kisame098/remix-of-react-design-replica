@@ -75,6 +75,9 @@ export default defineConfig(({ mode }) => ({
         // L'application entière est gardée sur l'appareil : elle s'ouvre
         // ensuite instantanément, et même sans réseau.
         globPatterns: ["**/*.{js,css,html,ico,png,svg,jpg,webp,woff2}"],
+        // Photos des modèles de site d'école : seuls les visiteurs de ces sites
+        // les chargent ; les mettre ici les ferait télécharger à chaque utilisateur.
+        globIgnores: ["site-ecole/**"],
         // Une adresse profonde (/portail/notes, /paiements…) ouverte hors
         // connexion reçoit l'application, qui affiche la bonne page.
         navigateFallback: "/index.html",
