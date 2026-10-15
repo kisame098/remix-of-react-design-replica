@@ -1,0 +1,41 @@
+/* Typographies proposées à l'école (choix dans « Identité & couleurs »). */
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700;800&family=Poppins:wght@500;600;700&family=Cormorant+Garamond:wght@600;700&family=Source+Sans+3:wght@400;600&family=Inter:wght@400;500;600;700&display=swap');
+
+.site {
+  font-family: var(--f-texte); color: #1f2937; background: #fff;
+  /* Teintes claires des couleurs de l'école (Tailwind ne sait pas éclaircir une couleur réglable). */
+  --c1-10: color-mix(in srgb, var(--c1) 10%, transparent);
+  --c1-15: color-mix(in srgb, var(--c1) 15%, transparent);
+  --c1-40: color-mix(in srgb, var(--c1) 40%, transparent);
+  --c2-10: color-mix(in srgb, var(--c2) 10%, transparent);
+  --c2-20: color-mix(in srgb, var(--c2) 20%, transparent);
+  --c2-25: color-mix(in srgb, var(--c2) 25%, transparent);
+  --c2-30: color-mix(in srgb, var(--c2) 30%, transparent);
+}
+.site .titre { font-family: var(--f-titre); letter-spacing: -0.01em; }
+html { scroll-behavior: smooth; }
+
+/* ── Mode modification (couleur SenClass) ── */
+.editable {
+  cursor: text;
+  border-radius: 4px;
+  outline: 1.5px dashed rgba(245, 158, 11, 0.55);
+  outline-offset: 3px;
+  min-width: 2ch;
+  transition: outline-color .15s, background-color .15s;
+}
+.editable:hover { outline-color: #F59E0B; }
+.editable:focus { outline: 2px solid #F59E0B; background: rgba(245, 158, 11, 0.08); }
+.editable:empty::before { content: attr(data-vide); opacity: .45; font-style: italic; }
+
+.outil {
+  display: inline-flex; align-items: center; gap: .375rem;
+  padding: .375rem .625rem; border-radius: .5rem;
+  background: #fff; color: #111827; border: 1px solid #e5e7eb;
+  font: 500 12px/1.2 'Inter', system-ui, sans-serif; letter-spacing: 0;
+  box-shadow: 0 2px 8px rgba(0,0,0,.18); white-space: nowrap;
+}
+.outil:hover { border-color: #F59E0B; }
+
+@keyframes apparition { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+.apparition { animation: apparition .7s ease both; }
