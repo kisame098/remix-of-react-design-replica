@@ -23,6 +23,7 @@ Disallow: /documents
 Disallow: /parametres
 Disallow: /abonnement
 Disallow: /caisse
+Disallow: /site-web
 Disallow: /portail
 Disallow: /platform
 Disallow: /formation

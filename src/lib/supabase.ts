@@ -31,6 +31,8 @@ export interface School {
   subscription_expires_at: string | null;
   /** 'classique' (défaut) ou 'formation_pro' — changé uniquement par le chef du système. */
   management_mode?: 'classique' | 'formation_pro';
+  /** École bêta-testeuse : accès aux nouveautés (site web…). Changé uniquement par le chef du système. */
+  beta_testeur?: boolean;
   created_at: string;
   updated_at: string;
 }

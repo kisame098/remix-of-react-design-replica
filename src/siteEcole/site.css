@@ -1,0 +1,124 @@
+/* Typographies proposées à l'école (choix dans « Identité & couleurs »). */
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700;800&family=Poppins:wght@500;600;700&family=Cormorant+Garamond:wght@600;700&family=Source+Sans+3:wght@400;600&family=Inter:wght@400;500;600;700&family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Fraunces:opsz,wght@9..144,600;9..144,800&family=Syne:wght@600;800&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,700&family=Instrument+Serif:ital@0;1&family=Inter+Tight:wght@300;400;500;600&family=Newsreader:ital,opsz,wght@0,6..72,400;1,6..72,400&family=Mrs+Saint+Delafield&family=Bitter:wght@500;600;700;800&family=Roboto+Slab:wght@500;700&family=Lora:wght@500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Outfit:wght@500;700;800&family=Manrope:wght@500;700;800&display=swap');
+
+.site {
+  font-family: var(--f-texte); color: #1f2937; background: #fff;
+  /* Teintes claires des couleurs de l'école (Tailwind ne sait pas éclaircir une couleur réglable). */
+  --c1-10: color-mix(in srgb, var(--c1) 10%, transparent);
+  --c1-15: color-mix(in srgb, var(--c1) 15%, transparent);
+  --c1-40: color-mix(in srgb, var(--c1) 40%, transparent);
+  --c2-10: color-mix(in srgb, var(--c2) 10%, transparent);
+  --c2-20: color-mix(in srgb, var(--c2) 20%, transparent);
+  --c2-25: color-mix(in srgb, var(--c2) 25%, transparent);
+  --c2-30: color-mix(in srgb, var(--c2) 30%, transparent);
+}
+.site .titre { font-family: var(--f-titre); letter-spacing: -0.01em; }
+html { scroll-behavior: smooth; }
+
+/* ── Mode modification (couleur SenClass) ── */
+.editable {
+  cursor: text;
+  border-radius: 4px;
+  outline: 1.5px dashed rgba(245, 158, 11, 0.55);
+  outline-offset: 3px;
+  min-width: 2ch;
+  transition: outline-color .15s, background-color .15s;
+}
+.editable:hover { outline-color: #F59E0B; }
+.editable:focus { outline: 2px solid #F59E0B; background: rgba(245, 158, 11, 0.08); }
+.editable:empty::before { content: attr(data-vide); opacity: .45; font-style: italic; }
+
+.outil {
+  display: inline-flex; align-items: center; gap: .375rem;
+  padding: .375rem .625rem; border-radius: .5rem;
+  background: #fff; color: #111827; border: 1px solid #e5e7eb;
+  font: 500 12px/1.2 'Inter', system-ui, sans-serif; letter-spacing: 0;
+  box-shadow: 0 2px 8px rgba(0,0,0,.18); white-space: nowrap;
+}
+.outil:hover { border-color: #F59E0B; }
+
+@keyframes apparition { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+.apparition { animation: apparition .7s ease both; }
+
+/* ── Articles d'actualité (lecture et éditeur) ── */
+.article { font-size: 1.125rem; line-height: 1.8; color: #374151; }
+.article > * + * { margin-top: 1.1em; }
+.article h2 { font-family: var(--f-titre); font-size: 1.85rem; line-height: 1.25; font-weight: 700; color: var(--c1); margin-top: 1.6em; }
+.article h3 { font-family: var(--f-titre); font-size: 1.4rem; line-height: 1.3; font-weight: 700; color: #111827; margin-top: 1.4em; }
+.article a:not(.carte-lien) { color: var(--c1); text-decoration: underline; text-underline-offset: 3px; }
+.article ul { list-style: disc; padding-left: 1.5em; }
+.article ol { list-style: decimal; padding-left: 1.5em; }
+.article li + li { margin-top: .35em; }
+.article li p { margin: 0; }
+.article blockquote { border-left: 4px solid var(--c2); background: var(--c2-10); padding: 1em 1.4em; border-radius: 0 12px 12px 0; font-style: italic; color: #1f2937; }
+.article hr { border: 0; height: 2px; background: #e5e7eb; margin: 2.2em 0; }
+.article img { width: 100%; border-radius: 16px; }
+.article mark { border-radius: 3px; padding: 0 2px; }
+.article .integration { position: relative; width: 100%; max-width: 100%; border-radius: 16px; overflow: hidden; background: #000; }
+.article .integration-facebook, .article .integration-instagram, .article .integration-tiktok { max-width: 500px; margin-left: auto; margin-right: auto; background: #fff; }
+.article .integration iframe { position: absolute; inset: 0; width: 100%; height: 100%; }
+.article video { width: 100%; border-radius: 16px; background: #000; }
+.article .carte-lien { display: flex; border: 1px solid #e5e7eb; border-radius: 16px; overflow: hidden; text-decoration: none; color: inherit; background: #fff; transition: box-shadow .2s; }
+.article .carte-lien:hover { box-shadow: 0 8px 24px rgba(0,0,0,.08); }
+.article .carte-lien img { width: 34%; max-width: 220px; aspect-ratio: 1.6; object-fit: cover; border-radius: 0; flex-shrink: 0; }
+.article .carte-lien-texte { display: flex; flex-direction: column; gap: .25em; padding: 1em 1.2em; min-width: 0; font-size: .95rem; line-height: 1.45; }
+.article .carte-lien-texte strong { color: #111827; }
+.article .carte-lien-description { color: #6b7280; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.article .carte-lien-texte small { color: var(--c1); font-weight: 600; text-transform: uppercase; letter-spacing: .05em; font-size: .7rem; }
+.article .ProseMirror-selectednode { outline: 3px solid #F59E0B; outline-offset: 2px; }
+.article p.is-editor-empty:first-child::before { content: attr(data-placeholder); color: #9ca3af; float: left; height: 0; pointer-events: none; font-style: italic; }
+
+/* ── Modèle Teranga ── */
+@keyframes defilement { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+.teranga .titre { letter-spacing: -0.03em; }
+/* Couleur d'accent éclaircie, lisible sur les fonds sombres. */
+.teranga { --c2-clair: color-mix(in srgb, var(--c2) 45%, white); }
+
+/* ── Modèle Prestige ── */
+.prestige .titre { letter-spacing: -0.015em; font-weight: 400; }
+.prestige .capitales { font-size: .72rem; letter-spacing: .28em; text-transform: uppercase; font-weight: 500; }
+.prestige .signature { font-family: 'Mrs Saint Delafield', cursive; letter-spacing: 0; }
+.prestige ::selection { background: var(--c2); color: #fff; }
+/* Apparition au défilement (désactivée si l'appareil demande moins d'animations). */
+.baobab .revele, .campus .revele, .prestige .revele { opacity: 0; transform: translateY(28px); transition: opacity 1.1s cubic-bezier(.2,.7,.2,1), transform 1.1s cubic-bezier(.2,.7,.2,1); }
+.baobab .revele.visible, .campus .revele.visible, .prestige .revele.visible { opacity: 1; transform: none; }
+@media (prefers-reduced-motion: reduce) { .baobab .revele, .campus .revele, .prestige .revele { opacity: 1; transform: none; transition: none; } }
+@keyframes zoom-lent { from { transform: scale(1.12); } to { transform: scale(1); } }
+.prestige .zoom-lent { animation: zoom-lent 14s cubic-bezier(.2,.7,.2,1) both; }
+@keyframes trait-defile { 0% { transform: scaleY(0); transform-origin: top; } 50% { transform: scaleY(1); transform-origin: top; } 51% { transform-origin: bottom; } 100% { transform: scaleY(0); transform-origin: bottom; } }
+/* Grain photographique léger sur les grandes images. */
+.prestige .grain::after { content: ''; position: absolute; inset: 0; pointer-events: none; opacity: .09; mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E"); }
+.prestige .defile-x { scrollbar-width: none; }
+.prestige .defile-x::-webkit-scrollbar { display: none; }
+
+/* ── Modèle Campus ── */
+.campus .titre { letter-spacing: -0.01em; }
+/* Petites hachures en coin des cartes. */
+.campus .hachures { background-image: repeating-linear-gradient(-45deg, var(--c1-15) 0 2px, transparent 2px 8px); }
+/* Titre qui se remplit de couleur au défilement (--rempli : 0 → 1). */
+.campus .remplissage {
+  background-image: linear-gradient(90deg, var(--encre) 0 50%, color-mix(in srgb, var(--encre) 22%, transparent) 50% 100%);
+  background-size: 200% 100%; background-position: calc(100% - var(--rempli, 1) * 100%) 0;
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+}
+.campus .remplissage-clair { background-image: linear-gradient(90deg, #fff 0 50%, rgba(255,255,255,.25) 50% 100%); }
+@keyframes pulsation { 0% { transform: scale(1); opacity: .7; } 100% { transform: scale(1.7); opacity: 0; } }
+.campus .pulsation::before, .campus .pulsation::after { content: ''; position: absolute; inset: 0; border-radius: 9999px; border: 1.5px solid rgba(255,255,255,.6); animation: pulsation 2.4s ease-out infinite; }
+.campus .pulsation::after { animation-delay: 1.2s; }
+@keyframes flotte { 0%, 100% { transform: translateY(0) rotate(-6deg); } 50% { transform: translateY(-12px) rotate(-2deg); } }
+.campus .flotte { animation: flotte 6s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) { .campus .pulsation::before, .campus .pulsation::after, .campus .flotte { animation: none; } }
+
+/* ── Modèle Baobab ── */
+.baobab .titre { letter-spacing: -0.035em; }
+/* Trait « dessiné à la main » sous un mot : il se trace quand le titre apparaît. */
+.baobab .trait path { stroke-dasharray: 1; stroke-dashoffset: 1; transition: stroke-dashoffset 1.1s cubic-bezier(.65,0,.35,1) .35s; }
+.baobab .visible .trait path, .baobab .trait.trace path { stroke-dashoffset: 0; }
+@keyframes flottement { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-10px); } }
+.baobab .flottement { animation: flottement 5s ease-in-out infinite; }
+.baobab .flottement-lent { animation: flottement 7s ease-in-out infinite reverse; }
+@keyframes point-vivant { 0% { box-shadow: 0 0 0 0 rgba(34,197,94,.6); } 100% { box-shadow: 0 0 0 10px rgba(34,197,94,0); } }
+.baobab .point-vivant { animation: point-vivant 1.6s ease-out infinite; }
+@keyframes defilement-inverse { from { transform: translateX(-50%); } to { transform: translateX(0); } }
+@media (prefers-reduced-motion: reduce) { .baobab .flottement, .baobab .flottement-lent, .baobab .point-vivant { animation: none; } .baobab .trait path { stroke-dashoffset: 0; } }

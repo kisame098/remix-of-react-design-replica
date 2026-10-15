@@ -30,8 +30,9 @@ import {
   FileCheck2,
   Hotel, Landmark,
   FileText,
+  Globe,
 } from 'lucide-react';
-import { menuPourMode, modeDeLEcole, urlMenuActive, type IconeMenu } from '@/lib/modeGestion';
+import { accesSiteWeb, menuPourMode, modeDeLEcole, urlMenuActive, type IconeMenu } from '@/lib/modeGestion';
 import { lireReglagesFinancements } from '@/lib/financements';
 import { SchoolYearSelector } from './SchoolYearSelector';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -45,7 +46,7 @@ const ICONES: Record<IconeMenu, typeof LayoutDashboard> = {
   notes: ClipboardList, cursus: Shuffle, emploi: Calendar, presences: UserCheck, paiements: Wallet,
   salaires: Banknote, identifiants: KeyRound,
   apercu: LayoutGrid, formations: BookOpen, promotions: UsersRound, evaluations: PenLine,
-  examens: FileCheck2, stages: Hotel, documents: FileText, financements: Landmark,
+  examens: FileCheck2, stages: Hotel, documents: FileText, financements: Landmark, siteweb: Globe,
 };
 
 export const DashboardSidebar = () => {
@@ -56,9 +57,10 @@ export const DashboardSidebar = () => {
 
   const mode = modeDeLEcole(school);
   const financements = useMemo(() => lireReglagesFinancements(school?.settings).actif, [school?.settings]);
+  const siteWeb = accesSiteWeb(school, accountRole);
   const visibleMenuItems = useMemo(
-    () => menuPourMode(mode, { financements }).filter(item => !item.permission || hasPermission(accountRole, staffPermissions, item.permission)),
-    [mode, financements, accountRole, staffPermissions]
+    () => menuPourMode(mode, { financements, siteWeb }).filter(item => !item.permission || hasPermission(accountRole, staffPermissions, item.permission)),
+    [mode, financements, siteWeb, accountRole, staffPermissions]
   );
   // Une seule rubrique s'allume à la fois — la plus précise, même quand deux
   // URLs se chevauchent par préfixe (ex : /formation et /formation/formations).
@@ -154,6 +156,13 @@ export const DashboardSidebar = () => {
                               isActive ? 'bg-primary-foreground/20 text-primary-foreground' : 'bg-amber-100 text-amber-700'
                             }`}>
                               En dév.
+                            </span>
+                          )}
+                          {item.beta && (
+                            <span className={`ml-2 rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${
+                              isActive ? 'bg-primary-foreground/20 text-primary-foreground' : 'bg-violet-100 text-violet-700'
+                            }`}>
+                              Bêta
                             </span>
                           )}
                         </motion.span>
