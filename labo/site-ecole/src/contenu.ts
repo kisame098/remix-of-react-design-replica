@@ -14,6 +14,7 @@ const portrait = (id: string) => `https://images.unsplash.com/${id}?auto=format&
 export const MODELES_SITE = {
   institution: { nom: 'Institution', description: 'Classique et solennel : photos plein écran, titres à empattements.', couleurs: ['#0B5D3B', '#E8A317'] },
   teranga: { nom: 'Teranga', description: 'Moderne et chaleureux : fond crème, grands titres, motifs inspirés du wax.', couleurs: ['#B4441C', '#0E5E5A'] },
+  prestige: { nom: 'Prestige', description: 'Pour les établissements d\'excellence : sobre, éditorial, bleu nuit et or.', couleurs: ['#0F1E3D', '#B08D57'] },
 } as const;
 export type ModeleSite = keyof typeof MODELES_SITE;
 
@@ -392,6 +393,54 @@ export const CONTENU_DEFAUT = {
     titre: 'Écrivez-nous',
     texte: 'Votre message nous parvient directement sur WhatsApp. Nous répondons dans la journée.',
   },
+
+  /** Contenu propre au modèle Prestige (sections que les autres modèles n'ont pas). */
+  prestige: {
+    manifeste: {
+      surtitre: 'Notre engagement',
+      texte: 'Nous formons des esprits rigoureux, curieux et libres. Chaque élève est suivi, exigé, encouragé — jusqu\'à ce qu\'il donne le meilleur de lui-même. L\'excellence n\'est pas un privilège : c\'est une discipline quotidienne.',
+      signature: 'Mamadou Diop',
+      fonction: 'Directeur général',
+    },
+    distinctions: {
+      surtitre: 'Palmarès',
+      titre: 'Distinctions de nos élèves',
+      elements: [
+        { annee: '2026', titre: 'Concours général sénégalais', detail: '1er prix de mathématiques, 2e prix de philosophie' },
+        { annee: '2026', titre: 'Olympiades nationales de sciences', detail: 'Médaille d\'or, catégorie lycée' },
+        { annee: '2025', titre: 'Concours d\'éloquence inter-lycées', detail: 'Lauréate, finale nationale' },
+        { annee: '2025', titre: 'Prix d\'excellence du BFEM', detail: '12 mentions Très bien' },
+      ],
+    },
+    destinations: {
+      surtitre: 'Après le Bac',
+      titre: 'Où poursuivent nos bacheliers',
+      texte: 'Nos élèves sont accompagnés dans leur orientation, au Sénégal comme à l\'international.',
+      elements: [
+        'Université Cheikh Anta Diop', 'École Polytechnique de Thiès', 'École Supérieure Polytechnique', 'Classes préparatoires',
+        'Sciences Po', 'Université Laval', 'Université Gaston Berger', 'Écoles d\'ingénieurs', 'Facultés de médecine',
+      ],
+    },
+    visite: {
+      surtitre: 'Portes ouvertes',
+      titre: 'Venez découvrir le campus',
+      texte: 'Rencontrez la direction, visitez les salles et posez toutes vos questions. Sur rendez-vous, du lundi au samedi.',
+      bouton: { texte: 'Prendre rendez-vous', lien: '#/contact' } as LienBouton,
+      image: photo('photo-1632215861513-130b66fe97f4'),
+    },
+    appelImage: photo('photo-1567057419565-4349c49d8a04'),
+  },
+
+  /** Ordre des sections pour le modèle Prestige : il a sa propre structure. */
+  pagesPrestige: {
+    accueil: ['diaporama', 'manifeste', 'chiffres', 'cycles', 'resultats', 'distinctions', 'destinations', 'temoignages', 'actualites-recentes', 'appel'],
+    ecole: ['entete-ecole', 'histoire', 'mot-directeur', 'valeurs', 'equipe', 'infrastructures', 'visite'],
+    enseignement: ['entete-enseignement', 'cycles-detail', 'pedagogie', 'resultats', 'appel'],
+    'vie-scolaire': ['entete-vie-scolaire', 'activites', 'services', 'galerie', 'calendrier'],
+    admissions: ['entete-admissions', 'etapes', 'pieces', 'frais', 'preinscription', 'faq', 'visite'],
+    actualites: ['entete-actualites', 'liste-actualites', 'suivez-nous'],
+    contact: ['entete-contact', 'coordonnees', 'suivez-nous'],
+  } as Record<string, string[]>,
 
   pied: {
     texte: 'Un établissement d\'enseignement privé laïc reconnu par l\'État, du préscolaire au baccalauréat.',

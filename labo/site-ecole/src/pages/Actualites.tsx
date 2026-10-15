@@ -58,9 +58,24 @@ export function PageArticle({ id }: { id: string }) {
   const autres = contenu.actualites.elements.filter(x => x.id !== id).slice(0, 3);
 
   const teranga = contenu.identite.modele === 'teranga';
+  const prestige = contenu.identite.modele === 'prestige';
   return (
     <article>
-      {teranga ? (
+      {prestige ? (
+        <div className="pt-16">
+          <div className="max-w-4xl mx-auto px-6 text-center apparition">
+            <a href="#/actualites" className="capitales text-black/45 hover:text-[var(--c1)] inline-flex items-center gap-2"><ArrowLeft className="h-3.5 w-3.5" />Le journal</a>
+            <p className="mt-10 flex items-center justify-center gap-4 capitales">
+              <T c={`${ce}.categorie`} className="text-[var(--c2)]" /><span className="h-px w-8 bg-black/20" /><T c={`${ce}.date`} className="text-black/50" />
+            </p>
+            <T c={`${ce}.titre`} as="h1" className="titre block text-5xl md:text-7xl leading-[1.02] mt-8" />
+            <T c={`${ce}.texte`} as="p" className="block mt-8 text-xl font-light text-black/60 max-w-2xl mx-auto" />
+          </div>
+          <div className="relative mt-16 h-[55vh] min-h-[360px] max-w-[1400px] mx-auto overflow-hidden grain">
+            <Img c={`${ce}.image`} className="absolute inset-0 w-full h-full object-cover" />
+          </div>
+        </div>
+      ) : teranga ? (
         <div className="max-w-5xl mx-auto px-6 pt-16 apparition">
           <a href="#/actualites" className="inline-flex items-center gap-1.5 rounded-full bg-white border border-black/10 px-4 py-2 text-sm font-semibold"><ArrowLeft className="h-4 w-4" />Toutes les actualités</a>
           <div className="flex flex-wrap items-center gap-3 mt-8 text-sm font-semibold">
@@ -89,8 +104,8 @@ export function PageArticle({ id }: { id: string }) {
       </div>
       )}
 
-      <div className="max-w-4xl mx-auto px-6 py-14">
-        {edition && (
+      <div className={`${prestige ? 'max-w-3xl py-20 [&_.article]:text-[1.2rem] [&_.article]:font-light' : 'max-w-4xl py-14'} mx-auto px-6`}>
+        {edition && !prestige && (
           <div className="mb-6 rounded-xl bg-amber-50 border border-amber-200 p-4 text-sm font-sans">
             <p className="font-semibold text-amber-900 mb-1">Résumé affiché sur la carte de l'actualité :</p>
             <T c={`${ce}.texte`} as="p" className="block text-gray-700" />

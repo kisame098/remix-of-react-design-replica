@@ -12,6 +12,7 @@ import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { MODELES_SITE, POLICES, TYPES_RESEAUX, type ModeleSite, type Police, type Reseau, type TypeReseau } from './contenu';
 import { POLICES_TERANGA } from './themes/teranga/GabaritTeranga';
+import { POLICES_PRESTIGE } from './themes/prestige/GabaritPrestige';
 import { STYLE_RESEAU } from './reseaux';
 import { useEdition } from './edition';
 
@@ -92,7 +93,7 @@ function PanneauIdentite({ ouvert, onFermer }: { ouvert: boolean; onFermer: () =
         <div className="space-y-7 mt-6">
           <Groupe titre="Modèle du site">
             <p className="text-xs text-muted-foreground -mt-1">Changez de modèle à tout moment : vos textes, photos et actualités sont conservés.</p>
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-3 gap-2">
               {(Object.entries(MODELES_SITE) as [ModeleSite, (typeof MODELES_SITE)[ModeleSite]][]).map(([cle, m]) => (
                 <button key={cle} type="button" onClick={() => maj('identite.modele', cle)}
                   className={`rounded-xl border p-2 text-left transition-all ${id.modele === cle ? 'border-primary ring-2 ring-primary' : 'hover:border-primary/50'}`}>
@@ -134,7 +135,7 @@ function PanneauIdentite({ ouvert, onFermer }: { ouvert: boolean; onFermer: () =
               <Couleur libelle="Couleur d'accent" valeur={id.couleur2} onChange={v => maj('identite.couleur2', v)} />
             </div>
             <div className="grid grid-cols-3 gap-2">
-              {(Object.entries(id.modele === 'teranga' ? POLICES_TERANGA : POLICES) as [Police, { nom: string; titres: string }][]).map(([cle, p]) => (
+              {(Object.entries(id.modele === 'teranga' ? POLICES_TERANGA : id.modele === 'prestige' ? POLICES_PRESTIGE : POLICES) as [Police, { nom: string; titres: string }][]).map(([cle, p]) => (
                 <button key={cle} type="button" onClick={() => maj('identite.police', cle)}
                   className={`rounded-xl border p-3 text-left transition-all ${id.police === cle ? 'border-primary ring-1 ring-primary' : 'hover:border-primary/50'}`}>
                   <span className="block text-xl font-bold" style={{ fontFamily: p.titres }}>Aa</span>
@@ -228,6 +229,19 @@ function Couleur({ libelle, valeur, onChange }: { libelle: string; valeur: strin
 
 /** Petit aperçu dessiné de chaque modèle, pour choisir d'un coup d'œil. */
 function MiniatureModele({ modele }: { modele: ModeleSite }) {
+  if (modele === 'prestige') {
+    return (
+      <span className="block h-24 rounded-lg overflow-hidden bg-[#0E1525] relative">
+        <span className="absolute inset-0 bg-gradient-to-t from-[#0E1525] to-[#33415c]" />
+        <span className="absolute left-2 top-2 h-3.5 w-3 bg-[#0F1E3D] border border-[#B08D57]" style={{ clipPath: 'polygon(0 0,100% 0,100% 60%,50% 100%,0 60%)' }} />
+        <span className="absolute left-2.5 bottom-3 space-y-1">
+          <span className="block h-px w-4 bg-[#B08D57]" />
+          <span className="block h-2 w-16 bg-white/90" /><span className="block h-2 w-12 bg-white/90" />
+          <span className="block h-2 w-6 bg-[#B08D57] mt-1.5" />
+        </span>
+      </span>
+    );
+  }
   if (modele === 'teranga') {
     return (
       <span className="block h-24 rounded-lg overflow-hidden bg-[#FAF6EF] p-1.5 relative">

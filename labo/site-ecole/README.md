@@ -14,7 +14,7 @@ npm run labo:site
 Site sur http://localhost:8090. Tests : `npm run labo:site:test`. Types :
 `npm run labo:site:types`.
 
-## Deux modèles au choix
+## Trois modèles au choix
 
 Même contenu, même façon de modifier, présentation **complètement
 différente**. Le directeur choisit dans « Identité & couleurs » ; ses textes,
@@ -36,8 +36,21 @@ photos et actualités sont conservés quand il change de modèle.
 | Calendrier | liste | frise horizontale |
 | Pied de page | colonnes | « Parlons-en » + grand nom de l'école |
 
-Couleurs conseillées : Institution vert / or, Teranga terracotta / sarcelle
-(toujours modifiables).
+Couleurs conseillées : Institution vert / or, Teranga terracotta / sarcelle,
+Prestige bleu nuit / or patiné (toujours modifiables).
+
+### Prestige — pour les établissements d'excellence
+
+Sa propre structure (ordre des pages dans `contenu.pagesPrestige`) et des
+sections qu'il est seul à proposer : **Manifeste** signé à la main,
+**Palmarès et distinctions**, **Où vont nos bacheliers** (défilement des
+universités), **Visite du campus**. Mise en scène : ouverture plein écran
+avec fondu lent et barre de progression, en-tête transparent qui se pose au
+défilement, menu plein écran avec aperçu photo de chaque page, apparitions au
+défilement, compteurs animés, programmes et journal dont la photo suit le
+pointeur, campus en défilement horizontal, chapitres numérotés en chiffres
+romains, blason généré aux initiales, grain photographique, angles droits et
+filets fins. Respecte « réduire les animations » du système.
 
 ## Le site
 
@@ -95,6 +108,8 @@ Bouton « Modifier le site » en bas de l'écran :
 - `src/EditeurArticle.tsx` — éditeur des articles (TipTap), chargé seulement
   en mode modification.
 - `src/pages/` — les sections du modèle Institution, rangées par page.
+- `src/themes/prestige/` — le modèle Prestige (gabarit, blason, apparitions,
+  compteurs, sections communes et exclusives).
 - `src/themes/teranga/` — le modèle Teranga : gabarit, motifs wax, sections
   (mêmes identifiants que l'autre modèle, branchées dans `sections.tsx`).
 

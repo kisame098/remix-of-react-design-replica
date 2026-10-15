@@ -4,11 +4,15 @@ import '@/index.css';
 import './site.css';
 import { FournisseurEdition, useEdition } from './edition';
 import { GabaritTeranga } from './themes/teranga/GabaritTeranga';
+import { GabaritPrestige } from './themes/prestige/GabaritPrestige';
 import { Gabarit } from './Gabarit';
 import BarreEdition from './BarreEdition';
 import { PageSections } from './sections';
 import { PageArticle } from './pages/Actualites';
 import { routeDepuisHash } from './utilitaires';
+
+// Chaque page s'ouvre en haut : le navigateur ne doit pas rouvrir au milieu de l'ancienne position.
+if ('scrollRestoration' in history) history.scrollRestoration = 'manual';
 
 function Site() {
   const [route, setRoute] = useState(() => routeDepuisHash(location.hash));
@@ -20,7 +24,7 @@ function Site() {
 
   return (
     <FournisseurEdition>
-      <Habillage page={route.page}>
+      <Habillage page={route.page} article={route.page === 'actualites' && !!route.sous}>
         {route.page === 'actualites' && route.sous
           ? <PageArticle id={route.sous} />
           : <PageSections page={route.page} />}
@@ -31,9 +35,11 @@ function Site() {
 }
 
 /** Le gabarit (en-tête, menu, pied de page) du modèle choisi par l'école. */
-function Habillage({ page, children }: { page: string; children: React.ReactNode }) {
+function Habillage({ page, article, children }: { page: string; article: boolean; children: React.ReactNode }) {
   const { contenu } = useEdition();
-  const Composant = contenu.identite.modele === 'teranga' ? GabaritTeranga : Gabarit;
+  const modele = contenu.identite.modele;
+  if (modele === 'prestige') return <GabaritPrestige page={page} sansBandeau={article}>{children}</GabaritPrestige>;
+  const Composant = modele === 'teranga' ? GabaritTeranga : Gabarit;
   return <Composant page={page}>{children}</Composant>;
 }
 

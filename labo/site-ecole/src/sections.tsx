@@ -19,6 +19,15 @@ import { ListeActualites } from './pages/Actualites';
 import { Coordonnees } from './pages/Contact';
 import type { ModeleSite } from './contenu';
 import { EntetePageTeranga } from './themes/teranga/GabaritTeranga';
+import { EntetePageP } from './themes/prestige/GabaritPrestige';
+import {
+  ActualitesRecentesP, AppelP, ChiffresP, DestinationsP, DistinctionsP, ManifesteP, OuvertureP, PiliersP, ProgrammesP,
+  ResultatsP, SuivezNousP, TemoignagesP,
+} from './themes/prestige/accueil';
+import {
+  ActivitesP, CalendrierP, CampusP, CandidatureP, ChapitresP, ContactP, EquipeP, EtapesP, FaqP, FraisP, GalerieP, HistoireP,
+  LettreP, ListeActualitesP, PiecesP, VisiteP,
+} from './themes/prestige/pages';
 import {
   ActualitesRecentesT, AppelT, ChiffresT, CyclesT, DiaporamaT, ListeEditoriale, MotT, ResultatsT, SuivezNousT, TemoignagesT,
 } from './themes/teranga/accueil';
@@ -91,11 +100,42 @@ const COMPOSANTS_TERANGA: Record<string, () => ReactNode> = {
   'entete-contact': () => <EntetePageTeranga c="contact.entete" motif="eventails" />, coordonnees: CoordonneesT,
 };
 
-/** Sections du modèle choisi par l'école (noms et groupes communs aux deux modèles). */
+/** Le modèle Prestige : sa propre présentation de chaque section… */
+const COMPOSANTS_PRESTIGE: Record<string, () => ReactNode> = {
+  diaporama: OuvertureP, chiffres: ChiffresP, 'mot-directeur': LettreP, cycles: ProgrammesP,
+  atouts: () => <PiliersP c="accueil.atouts" numero={1} />, resultats: ResultatsP, temoignages: TemoignagesP,
+  'actualites-recentes': ActualitesRecentesP, 'suivez-nous': SuivezNousP, appel: AppelP,
+  'entete-ecole': () => <EntetePageP c="ecole.entete" page="ecole" />, histoire: HistoireP,
+  valeurs: () => <PiliersP c="ecole.valeurs" fond />, equipe: EquipeP, infrastructures: CampusP,
+  'entete-enseignement': () => <EntetePageP c="enseignement.entete" page="enseignement" />, 'cycles-detail': ChapitresP,
+  pedagogie: () => <PiliersP c="enseignement.pedagogie" fond />,
+  'entete-vie-scolaire': () => <EntetePageP c="vieScolaire.entete" page="vie-scolaire" />, activites: ActivitesP,
+  services: () => <PiliersP c="vieScolaire.services" fond />, galerie: GalerieP, calendrier: CalendrierP,
+  'entete-admissions': () => <EntetePageP c="admissions.entete" page="admissions" />, etapes: EtapesP, pieces: PiecesP, frais: FraisP,
+  preinscription: CandidatureP, faq: FaqP,
+  'entete-actualites': () => <EntetePageP c="actualites.entete" page="actualites" />, 'liste-actualites': ListeActualitesP,
+  'entete-contact': () => <EntetePageP c="contact.entete" page="contact" />, coordonnees: ContactP,
+};
+
+/** … et des sections qu'il est seul à proposer. */
+const SECTIONS_PRESTIGE_SEULES: typeof SECTIONS = {
+  manifeste: { nom: 'Manifeste signé', groupe: 'Prestige', Composant: ManifesteP },
+  distinctions: { nom: 'Palmarès et distinctions', groupe: 'Prestige', Composant: DistinctionsP },
+  destinations: { nom: 'Où vont nos bacheliers', groupe: 'Prestige', Composant: DestinationsP },
+  visite: { nom: 'Visite du campus', groupe: 'Prestige', Composant: VisiteP },
+};
+
+/** Sections du modèle choisi par l'école (noms et groupes communs aux modèles). */
 export function sectionsDuModele(modele: ModeleSite): typeof SECTIONS {
-  if (modele !== 'teranga') return SECTIONS;
-  return Object.fromEntries(Object.entries(SECTIONS).map(([id, s]) => [id, { ...s, Composant: COMPOSANTS_TERANGA[id] ?? s.Composant }]));
+  const remplacer = (composants: Record<string, () => ReactNode>) =>
+    Object.fromEntries(Object.entries(SECTIONS).map(([id, s]) => [id, { ...s, Composant: composants[id] ?? s.Composant }]));
+  if (modele === 'teranga') return remplacer(COMPOSANTS_TERANGA);
+  if (modele === 'prestige') return { ...remplacer(COMPOSANTS_PRESTIGE), ...SECTIONS_PRESTIGE_SEULES };
+  return SECTIONS;
 }
+
+/** Prestige a son propre ordre de sections ; les deux autres modèles partagent le leur. */
+export const cleOrdre = (modele: ModeleSite) => (modele === 'prestige' ? 'pagesPrestige' : 'pages') as 'pages' | 'pagesPrestige';
 
 const cleDePage = (page: string) => page || 'accueil';
 const nomDePage = (cle: string) => PAGES_INTERNES.find(p => p.lien === (cle === 'accueil' ? '#/' : `#/${cle}`))?.nom ?? cle;
@@ -104,8 +144,9 @@ const nomDePage = (cle: string) => PAGES_INTERNES.find(p => p.lien === (cle === 
 export function PageSections({ page }: { page: string }) {
   const { contenu, edition, maj } = useEdition();
   const SECTIONS = sectionsDuModele(contenu.identite.modele);
+  const ordre = cleOrdre(contenu.identite.modele);
   const cle = cleDePage(page);
-  const ids = (contenu.pages[cle] ?? []).filter(id => SECTIONS[id]);
+  const ids = (contenu[ordre][cle] ?? []).filter(id => SECTIONS[id]);
   const [ajout, setAjout] = useState<number | null>(null);
   const capteurs = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
@@ -114,14 +155,14 @@ export function PageSections({ page }: { page: string }) {
 
   if (!edition) return <>{ids.map(id => { const { Composant } = SECTIONS[id]; return <Composant key={id} />; })}</>;
 
-  const changer = (liste: string[]) => maj(`pages.${cle}`, liste);
+  const changer = (liste: string[]) => maj(`${ordre}.${cle}`, liste);
   const finGlisse = ({ active, over }: DragEndEvent) => {
     if (over && active.id !== over.id) changer(arrayMove(ids, ids.indexOf(String(active.id)), ids.indexOf(String(over.id))));
   };
   const envoyer = (id: string, vers: string) => {
     changer(ids.filter(x => x !== id));
-    const cible = (contenu.pages[vers] ?? []).filter(x => x !== id);
-    maj(`pages.${vers}`, [...cible, id]);
+    const cible = (contenu[ordre][vers] ?? []).filter(x => x !== id);
+    maj(`${ordre}.${vers}`, [...cible, id]);
   };
 
   return (
@@ -200,8 +241,9 @@ function Outil({ titre, onClick, disabled, children }: { titre: string; onClick:
 /** Fenêtre « Ajouter une section » : tout le catalogue, rangé par page d'origine. */
 function CatalogueSections({ ouvert, dejaLa, onFermer, onChoisir }: { ouvert: boolean; dejaLa: string[]; onFermer: () => void; onChoisir: (id: string) => void }) {
   const { contenu } = useEdition();
+  const SECTIONS = sectionsDuModele(contenu.identite.modele);
   const groupes = [...new Set(Object.values(SECTIONS).map(s => s.groupe))];
-  const ou = (id: string) => Object.entries(contenu.pages).filter(([, l]) => l.includes(id)).map(([p]) => nomDePage(p));
+  const ou = (id: string) => Object.entries(contenu[cleOrdre(contenu.identite.modele)]).filter(([, l]) => l.includes(id)).map(([p]) => nomDePage(p));
   return (
     <Dialog open={ouvert} onOpenChange={o => !o && onFermer()}>
       <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto font-sans">

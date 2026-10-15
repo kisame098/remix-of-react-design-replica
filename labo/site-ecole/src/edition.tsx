@@ -3,7 +3,7 @@ import {
   DndContext, KeyboardSensor, PointerSensor, closestCenter, useSensor, useSensors, type DragEndEvent,
 } from '@dnd-kit/core';
 import {
-  SortableContext, arrayMove, rectSortingStrategy, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy,
+  SortableContext, arrayMove, horizontalListSortingStrategy, rectSortingStrategy, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import {
@@ -210,8 +210,10 @@ const LARGEURS: Record<number, string> = {
  * chaque élément se GLISSE à la souris (poignée), se duplique, se supprime,
  * et une case « Ajouter » termine la liste.
  */
-export function Liste<E>({ c, nouveau, colonnes, className = '', classeElement = '', libelleAjout = 'Ajouter', children }: {
+export function Liste<E>({ c, nouveau, colonnes, horizontal = false, className = '', classeElement = '', libelleAjout = 'Ajouter', children }: {
   c: string; nouveau: E; colonnes?: 1 | 2 | 3 | 4; className?: string; classeElement?: string; libelleAjout?: string;
+  /** Liste qui défile à l'horizontale (on la réordonne de gauche à droite). */
+  horizontal?: boolean;
   children: (element: E, index: number, chemin: string) => ReactNode;
 }) {
   const { edition, majListe } = useEdition();
@@ -235,7 +237,7 @@ export function Liste<E>({ c, nouveau, colonnes, className = '', classeElement =
 
   return (
     <DndContext sensors={capteurs} collisionDetection={closestCenter} onDragEnd={finGlisse}>
-      <SortableContext items={ids} strategy={colonnes && colonnes > 1 ? rectSortingStrategy : verticalListSortingStrategy}>
+      <SortableContext items={ids} strategy={horizontal ? horizontalListSortingStrategy : colonnes && colonnes > 1 ? rectSortingStrategy : verticalListSortingStrategy}>
         <div className={conteneur}>
           {liste.map((el, i) => (
             <ElementTriable key={ids[i]} id={ids[i]} className={`${largeur} ${classeElement}`}
@@ -247,7 +249,7 @@ export function Liste<E>({ c, nouveau, colonnes, className = '', classeElement =
             </ElementTriable>
           ))}
           <button type="button" onClick={() => majListe(c, l => ajouterElement(l, structuredClone(nouveau)))}
-            className={`${largeur} min-h-[56px] rounded-2xl border-2 border-dashed border-gray-300 text-gray-500 bg-white/60 hover:border-amber-400 hover:text-gray-800 flex items-center justify-center gap-1.5 text-sm font-medium p-4`}>
+            className={`${largeur} ${horizontal ? classeElement : ''} min-h-[56px] rounded-2xl border-2 border-dashed border-gray-300 text-gray-500 bg-white/60 hover:border-amber-400 hover:text-gray-800 flex items-center justify-center gap-1.5 text-sm font-medium p-4`}>
             <Plus className="h-4 w-4" />{libelleAjout}
           </button>
         </div>
