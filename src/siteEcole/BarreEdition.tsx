@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { AlertTriangle, Check, ImagePlus, Palette, Pencil, Plus, RotateCcw, Trash2 } from 'lucide-react';
+import { AlertTriangle, Check, ImagePlus, LayoutTemplate, Palette, Pencil, Plus, RotateCcw, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -16,12 +16,14 @@ import { POLICES_PRESTIGE } from './themes/prestige/GabaritPrestige';
 import { POLICES_CAMPUS } from './themes/campus/GabaritCampus';
 import { POLICES_BAOBAB } from './themes/baobab/GabaritBaobab';
 import { STYLE_RESEAU } from './reseaux';
+import { FenetreModeles } from './ChoixModele';
 import { useEdition } from './edition';
 
 /** Barre flottante, au style SenClass : bascule du mode modification et réglages du site. */
 export default function BarreEdition({ actions }: { actions?: React.ReactNode }) {
-  const { edition, setEdition, alerte, reinitialiser, identiteOuverte, ouvrirIdentite } = useEdition();
+  const { edition, setEdition, alerte, reinitialiser, identiteOuverte, ouvrirIdentite, contenu, maj } = useEdition();
   const [reinit, setReinit] = useState(false);
+  const [modeles, setModeles] = useState(false);
 
   return (
     <>
@@ -43,6 +45,9 @@ export default function BarreEdition({ actions }: { actions?: React.ReactNode })
           </Button>
           {edition && (
             <>
+              <Button variant="ghost" className="gap-1.5 rounded-xl" onClick={() => setModeles(true)}>
+                <LayoutTemplate className="h-4 w-4" />Modèle
+              </Button>
               <Button variant="ghost" className="gap-1.5 rounded-xl" onClick={() => ouvrirIdentite(true)}>
                 <Palette className="h-4 w-4" />Identité &amp; couleurs
               </Button>
@@ -55,7 +60,12 @@ export default function BarreEdition({ actions }: { actions?: React.ReactNode })
         </div>
       </div>
 
-      <PanneauIdentite ouvert={identiteOuverte} onFermer={() => ouvrirIdentite(false)} />
+      <PanneauIdentite ouvert={identiteOuverte} onFermer={() => ouvrirIdentite(false)} ouvrirModeles={setModeles} />
+      <FenetreModeles ouvert={modeles} onFermer={() => setModeles(false)} contenu={contenu}
+        onChoisir={(m, couleurs) => {
+          maj('identite.modele', m);
+          if (couleurs) { maj('identite.couleur1', MODELES_SITE[m].couleurs[0]); maj('identite.couleur2', MODELES_SITE[m].couleurs[1]); }
+        }} />
 
       <AlertDialog open={reinit} onOpenChange={setReinit}>
         <AlertDialogContent className="font-sans">
@@ -74,7 +84,7 @@ export default function BarreEdition({ actions }: { actions?: React.ReactNode })
 }
 
 /** Ce qui apparaît partout sur le site : nom, logo, couleurs, coordonnées. */
-function PanneauIdentite({ ouvert, onFermer }: { ouvert: boolean; onFermer: () => void }) {
+function PanneauIdentite({ ouvert, onFermer, ouvrirModeles }: { ouvert: boolean; onFermer: () => void; ouvrirModeles: (v: boolean) => void }) {
   const { contenu, maj, televerser } = useEdition();
   const id = contenu.identite;
   const logo = useRef<HTMLInputElement>(null);
@@ -95,16 +105,9 @@ function PanneauIdentite({ ouvert, onFermer }: { ouvert: boolean; onFermer: () =
 
         <div className="space-y-7 mt-6">
           <Groupe titre="Modèle du site">
-            <p className="text-xs text-muted-foreground -mt-1">Changez de modèle à tout moment : vos textes, photos et actualités sont conservés.</p>
-            <div className="grid grid-cols-2 gap-2">
-              {(Object.entries(MODELES_SITE) as [ModeleSite, (typeof MODELES_SITE)[ModeleSite]][]).map(([cle, m]) => (
-                <button key={cle} type="button" onClick={() => maj('identite.modele', cle)}
-                  className={`rounded-xl border p-2 text-left transition-all ${id.modele === cle ? 'border-primary ring-2 ring-primary' : 'hover:border-primary/50'}`}>
-                  <MiniatureModele modele={cle} />
-                  <span className="block font-semibold text-sm mt-2">{m.nom}</span>
-                  <span className="block text-[11px] leading-snug text-muted-foreground">{m.description}</span>
-                </button>
-              ))}
+            <div className="flex items-center justify-between gap-3 rounded-xl border p-3">
+              <span className="text-sm"><span className="block font-semibold">{MODELES_SITE[id.modele].nom}</span><span className="block text-xs text-muted-foreground">{MODELES_SITE[id.modele].description}</span></span>
+              <Button variant="outline" size="sm" className="gap-1.5 shrink-0" onClick={() => { onFermer(); ouvrirModeles(true); }}><LayoutTemplate className="h-3.5 w-3.5" />Changer</Button>
             </div>
             {(id.couleur1 !== MODELES_SITE[id.modele].couleurs[0] || id.couleur2 !== MODELES_SITE[id.modele].couleurs[1]) && (
               <Button variant="outline" size="sm" className="w-full gap-2" onClick={() => { maj('identite.couleur1', MODELES_SITE[id.modele].couleurs[0]); maj('identite.couleur2', MODELES_SITE[id.modele].couleurs[1]); }}>
@@ -227,71 +230,5 @@ function Couleur({ libelle, valeur, onChange }: { libelle: string; valeur: strin
         <span className="text-xs uppercase text-muted-foreground">{valeur}</span>
       </span>
     </label>
-  );
-}
-
-/** Petit aperçu dessiné de chaque modèle, pour choisir d'un coup d'œil. */
-function MiniatureModele({ modele }: { modele: ModeleSite }) {
-  if (modele === 'baobab') {
-    return (
-      <span className="block h-24 rounded-lg overflow-hidden bg-white relative border">
-        <span className="absolute right-0 inset-y-0 w-[45%] bg-[#F3F7F4] rounded-bl-2xl" />
-        <span className="absolute left-2 top-5 space-y-1">
-          <span className="block h-2 w-14 rounded bg-[#0D1F19]" /><span className="block h-2 w-9 rounded bg-[#0F5C45]" />
-          <span className="block h-0.5 w-9 rounded bg-[#FF7A3D]" /><span className="block h-3 w-14 rounded-md bg-white border mt-2" />
-        </span>
-        <span className="absolute right-2 top-3 h-11 w-10 rounded-lg bg-[#0F5C45]/70" />
-        <span className="absolute right-8 top-9 h-7 w-7 rounded-md bg-[#FF7A3D]/80 ring-2 ring-white" />
-        <span className="absolute right-3 bottom-2 h-6 w-9 rounded-md bg-[#0F5C45] ring-2 ring-white" />
-      </span>
-    );
-  }
-  if (modele === 'campus') {
-    return (
-      <span className="block h-24 rounded-lg overflow-hidden relative" style={{ background: 'linear-gradient(180deg,#06213d,#0B3A66 45%,#6fa3d8)' }}>
-        <span className="absolute inset-x-0 top-3 text-center text-[19px] font-extrabold tracking-tight text-white/40" style={{ fontFamily: 'Bitter, serif' }}>ÉCOLE</span>
-        <span className="absolute inset-x-0 bottom-0 h-12 bg-gradient-to-t from-[#0A1A33] to-[#2b5a8a]/40" />
-        <span className="absolute left-2 bottom-2.5 space-y-1"><span className="block h-1.5 w-14 rounded bg-white" /><span className="block h-2.5 w-9 rounded-full bg-[#F9C23C]" /></span>
-        <span className="absolute right-2 bottom-2 h-6 w-6 rounded-full border border-white/70" />
-      </span>
-    );
-  }
-  if (modele === 'prestige') {
-    return (
-      <span className="block h-24 rounded-lg overflow-hidden bg-[#0E1525] relative">
-        <span className="absolute inset-0 bg-gradient-to-t from-[#0E1525] to-[#33415c]" />
-        <span className="absolute left-2 top-2 h-3.5 w-3 bg-[#0F1E3D] border border-[#B08D57]" style={{ clipPath: 'polygon(0 0,100% 0,100% 60%,50% 100%,0 60%)' }} />
-        <span className="absolute left-2.5 bottom-3 space-y-1">
-          <span className="block h-px w-4 bg-[#B08D57]" />
-          <span className="block h-2 w-16 bg-white/90" /><span className="block h-2 w-12 bg-white/90" />
-          <span className="block h-2 w-6 bg-[#B08D57] mt-1.5" />
-        </span>
-      </span>
-    );
-  }
-  if (modele === 'teranga') {
-    return (
-      <span className="block h-24 rounded-lg overflow-hidden bg-[#FAF6EF] p-1.5 relative">
-        <span className="block h-3 rounded-full bg-white border border-black/5 mx-2" />
-        <span className="absolute left-3 top-7 space-y-1">
-          <span className="block h-2.5 w-14 rounded bg-[#1C1917]" /><span className="block h-2.5 w-10 rounded bg-[#1C1917]" />
-          <span className="block h-2 w-8 rounded-full bg-[#B4441C] mt-2" />
-        </span>
-        <span className="absolute right-3 top-6 h-14 w-11 rounded-t-full rounded-b-md bg-[#0E5E5A]" />
-        <span className="absolute right-1.5 bottom-2 h-6 w-6 rounded-full bg-[#B4441C]" />
-      </span>
-    );
-  }
-  return (
-    <span className="block h-24 rounded-lg overflow-hidden bg-white relative">
-      <span className="block h-2 bg-[#0B5D3B]" />
-      <span className="block h-3 bg-white border-b" />
-      <span className="block h-12 bg-gradient-to-r from-gray-800 to-gray-500 relative">
-        <span className="absolute left-2 top-3 space-y-1"><span className="block h-2 w-14 rounded bg-white" /><span className="block h-1.5 w-8 rounded bg-[#E8A317]" /></span>
-      </span>
-      <span className="absolute left-2 right-2 bottom-2 h-5 rounded bg-white shadow flex justify-around items-center">
-        {[0, 1, 2].map(k => <span key={k} className="h-1.5 w-5 rounded bg-[#0B5D3B]" />)}
-      </span>
-    </span>
   );
 }

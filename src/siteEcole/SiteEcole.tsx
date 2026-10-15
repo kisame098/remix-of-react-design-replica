@@ -1,12 +1,8 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import './site.css';
-import { FournisseurEdition, useEdition } from './edition';
+import { FournisseurEdition } from './edition';
+import Habillage from './Habillage';
 import type { Contenu } from './contenu';
-import { GabaritTeranga } from './themes/teranga/GabaritTeranga';
-import { GabaritPrestige } from './themes/prestige/GabaritPrestige';
-import { GabaritCampus } from './themes/campus/GabaritCampus';
-import { GabaritBaobab } from './themes/baobab/GabaritBaobab';
-import { Gabarit } from './Gabarit';
 import BarreEdition from './BarreEdition';
 import { PageSections } from './sections';
 import { PageArticle } from './pages/Actualites';
@@ -46,15 +42,4 @@ export default function SiteEcole({ initial, onChange, televerser, modifiable = 
       {modifiable && <BarreEdition actions={actions} />}
     </FournisseurEdition>
   );
-}
-
-/** Le gabarit (en-tête, menu, pied de page) du modèle choisi par l'école. */
-function Habillage({ page, article, children }: { page: string; article: boolean; children: ReactNode }) {
-  const { contenu } = useEdition();
-  const modele = contenu.identite.modele;
-  if (modele === 'prestige') return <GabaritPrestige page={page} sansBandeau={article}>{children}</GabaritPrestige>;
-  if (modele === 'campus') return <GabaritCampus page={page} sansBandeau={article}>{children}</GabaritCampus>;
-  if (modele === 'baobab') return <GabaritBaobab page={page}>{children}</GabaritBaobab>;
-  const Composant = modele === 'teranga' ? GabaritTeranga : Gabarit;
-  return <Composant page={page}>{children}</Composant>;
 }

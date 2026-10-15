@@ -1,6 +1,6 @@
 import { supabase } from '@/integrations/supabase/client';
 import type { School } from '@/lib/supabase';
-import { CONTENU_DEFAUT, MODELES_SITE, type Contenu } from '@/siteEcole/contenu';
+import { CONTENU_DEFAUT, MODELES_SITE, type Contenu, type ModeleSite } from '@/siteEcole/contenu';
 import { contenuDepuis } from '@/siteEcole/edition';
 import { ecrire } from '@/siteEcole/chemin';
 
@@ -28,12 +28,12 @@ export interface SiteEnregistre {
 
 /**
  * Le site de départ d'une école qui ouvre l'éditeur pour la première fois :
- * le modèle « Campus » (celui retenu), et tout ce que SenClass sait déjà de
+ * le modèle qu'elle a choisi (Campus par défaut), avec ses couleurs, et tout ce que SenClass sait déjà de
  * l'école à la place des exemples — nom, logo, téléphone, e-mail, ville.
  */
-export function siteDeDepart(school: Pick<School, 'name' | 'logo_url' | 'phone' | 'email' | 'city' | 'country'>): Contenu {
-  const [c1, c2] = MODELES_SITE.campus.couleurs;
-  let c: Contenu = ecrire(CONTENU_DEFAUT, 'identite.modele', 'campus');
+export function siteDeDepart(school: Pick<School, 'name' | 'logo_url' | 'phone' | 'email' | 'city' | 'country'>, modele: ModeleSite = 'campus'): Contenu {
+  const [c1, c2] = MODELES_SITE[modele].couleurs;
+  let c: Contenu = ecrire(CONTENU_DEFAUT, 'identite.modele', modele);
   c = ecrire(c, 'identite.couleur1', c1);
   c = ecrire(c, 'identite.couleur2', c2);
   if (school.name) {

@@ -9,6 +9,7 @@ import {
 import { useAuth } from '@/hooks/useAuth';
 import { toast } from '@/hooks/use-toast';
 import SiteEcole from '@/siteEcole/SiteEcole';
+import { GalerieModeles } from '@/siteEcole/ChoixModele';
 import { contenuDepuis } from '@/siteEcole/edition';
 import type { Contenu } from '@/siteEcole/contenu';
 import {
@@ -24,6 +25,8 @@ type Etat = 'enregistre' | 'en_cours' | 'erreur';
 export default function SiteWeb() {
   const { school, accountRole } = useAuth();
   const [initial, setInitial] = useState<Contenu | null>(null);
+  /** Première ouverture : l'école choisit d'abord son modèle dans la galerie. */
+  const [aChoisir, setAChoisir] = useState(false);
   const [erreurChargement, setErreurChargement] = useState<string | null>(null);
   const [etat, setEtat] = useState<Etat>('enregistre');
   const [publieLe, setPublieLe] = useState<string | null>(null);
@@ -46,7 +49,8 @@ export default function SiteWeb() {
         existe.current = !!site;
         setPublieLe(site?.publie_le ?? null);
         setSlug(s);
-        setInitial(site ? contenuDepuis(site.brouillon) : siteDeDepart(school));
+        if (site) setInitial(contenuDepuis(site.brouillon));
+        else setAChoisir(true);
       } catch (e) {
         if (!annule) setErreurChargement((e as { message?: string })?.message ?? 'Erreur inconnue');
       }
@@ -120,6 +124,29 @@ export default function SiteWeb() {
   }
   if (erreurChargement) {
     return <div className="min-h-screen flex items-center justify-center p-6 text-destructive">Chargement du site impossible : {erreurChargement}</div>;
+  }
+  if (aChoisir && school) {
+    return (
+      <div className="min-h-screen bg-muted/30">
+        <div className="max-w-7xl mx-auto px-5 py-10">
+          <div className="flex items-start justify-between gap-4 flex-wrap mb-8">
+            <div>
+              <p className="inline-flex items-center gap-1.5 rounded-full bg-sky-100 text-sky-700 px-2.5 py-1 text-xs font-semibold"><Globe className="h-3.5 w-3.5" />Site web de l'école · Bêta</p>
+              <h1 className="text-3xl font-bold mt-3">Choisissez le modèle de votre site</h1>
+              <p className="text-muted-foreground mt-1.5 max-w-2xl">Chaque aperçu montre déjà votre école (nom, logo, coordonnées). Vous pourrez tout modifier ensuite — y compris changer de modèle à tout moment, sans rien perdre.</p>
+            </div>
+            <Button asChild variant="outline"><Link to="/dashboard"><ArrowLeft className="h-4 w-4 mr-1.5" />Tableau de bord</Link></Button>
+          </div>
+          <GalerieModeles contenu={siteDeDepart(school)} choixCouleurs={false} onChoisir={m => {
+            const depart = siteDeDepart(school, m);
+            setInitial(depart);
+            setAChoisir(false);
+            // Enregistré tout de suite : la galerie ne revient pas si le directeur quitte sans rien modifier.
+            surChangement(depart);
+          }} />
+        </div>
+      </div>
+    );
   }
   if (!initial) {
     return <div className="min-h-screen flex items-center justify-center gap-2 text-muted-foreground"><Loader2 className="h-5 w-5 animate-spin" />Chargement de votre site…</div>;
