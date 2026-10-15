@@ -34,4 +34,13 @@ export default defineConfig({
     },
   },
   server: { port: 8090 },
+  // L'éditeur d'article est chargé à la demande : sans cette liste, Vite
+  // découvrirait TipTap au premier clic et rechargerait la page en plein travail.
+  optimizeDeps: {
+    include: [
+      '@tiptap/react', '@tiptap/starter-kit', '@tiptap/extension-link', '@tiptap/extension-image',
+      '@tiptap/extension-text-align', '@tiptap/extension-underline', '@tiptap/extension-text-style',
+      '@tiptap/extension-color', '@tiptap/extension-highlight', '@tiptap/extension-placeholder',
+    ],
+  },
 });

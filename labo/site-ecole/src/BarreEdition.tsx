@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { AlertTriangle, Check, ImagePlus, Palette, Pencil, RotateCcw, Trash2 } from 'lucide-react';
+import { AlertTriangle, Check, ImagePlus, Palette, Pencil, Plus, RotateCcw, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -8,37 +8,38 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription,
   AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { POLICES, type Police } from './contenu';
+import { Switch } from '@/components/ui/switch';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { POLICES, TYPES_RESEAUX, type Police, type Reseau, type TypeReseau } from './contenu';
+import { STYLE_RESEAU } from './reseaux';
 import { useEdition } from './edition';
 
 /** Barre flottante, au style SenClass : bascule du mode modification et réglages du site. */
 export default function BarreEdition() {
-  const { edition, setEdition, stockagePlein } = useEdition();
-  const [identite, setIdentite] = useState(false);
+  const { edition, setEdition, stockagePlein, reinitialiser, identiteOuverte, ouvrirIdentite } = useEdition();
   const [reinit, setReinit] = useState(false);
-  const { reinitialiser } = useEdition();
 
   return (
     <>
       {edition && (
-        <div className="fixed top-0 inset-x-0 z-[55] bg-[#F59E0B] text-gray-900 text-sm font-medium text-center py-1.5 px-4 font-sans">
-          Mode modification : cliquez sur un texte pour l'écrire, sur « Changer la photo » pour remplacer une image. Survolez une section pour la masquer.
+        <div className="fixed top-0 inset-x-0 z-[45] bg-[#F59E0B] text-gray-900 text-sm font-medium text-center py-1.5 px-4 font-sans">
+          Mode modification : cliquez sur un texte pour l'écrire · survolez un élément ou une section pour le glisser, le dupliquer ou le retirer.
         </div>
       )}
       {stockagePlein && (
-        <div className="fixed top-9 left-1/2 -translate-x-1/2 z-[55] bg-red-600 text-white text-sm rounded-lg px-4 py-2 flex items-center gap-2 font-sans shadow-lg">
+        <div className="fixed top-9 left-1/2 -translate-x-1/2 z-[45] bg-red-600 text-white text-sm rounded-lg px-4 py-2 flex items-center gap-2 font-sans shadow-lg">
           <AlertTriangle className="h-4 w-4" />Photos trop lourdes : le dernier changement ne sera pas gardé (labo).
         </div>
       )}
 
-      <div className="fixed bottom-5 left-1/2 -translate-x-1/2 z-[55] font-sans">
+      <div className="fixed bottom-5 left-1/2 -translate-x-1/2 z-[45] font-sans">
         <div className="flex items-center gap-1.5 rounded-2xl border bg-background/95 backdrop-blur shadow-2xl p-1.5">
           <Button onClick={() => setEdition(!edition)} className="gap-1.5 rounded-xl" variant={edition ? 'default' : 'outline'}>
             {edition ? <><Check className="h-4 w-4" />Terminer</> : <><Pencil className="h-4 w-4" />Modifier le site</>}
           </Button>
           {edition && (
             <>
-              <Button variant="ghost" className="gap-1.5 rounded-xl" onClick={() => setIdentite(true)}>
+              <Button variant="ghost" className="gap-1.5 rounded-xl" onClick={() => ouvrirIdentite(true)}>
                 <Palette className="h-4 w-4" />Identité &amp; couleurs
               </Button>
               <Button variant="ghost" size="icon" className="rounded-xl" title="Revenir au modèle de départ" aria-label="Revenir au modèle de départ" onClick={() => setReinit(true)}>
@@ -49,7 +50,7 @@ export default function BarreEdition() {
         </div>
       </div>
 
-      <PanneauIdentite ouvert={identite} onFermer={() => setIdentite(false)} />
+      <PanneauIdentite ouvert={identiteOuverte} onFermer={() => ouvrirIdentite(false)} />
 
       <AlertDialog open={reinit} onOpenChange={setReinit}>
         <AlertDialogContent className="font-sans">
@@ -124,18 +125,47 @@ function PanneauIdentite({ ouvert, onFermer }: { ouvert: boolean; onFermer: () =
 
           <Groupe titre="Coordonnées">
             {champ('telephone', 'Téléphone')}
-            {champ('whatsapp', 'WhatsApp', '+221 7X XXX XX XX')}
             {champ('email', 'E-mail')}
             {champ('adresse', 'Adresse (sert aussi au plan)')}
             {champ('horaires', 'Horaires', 'Lun – Ven : … · Sam : …')}
           </Groupe>
 
+          <Groupe titre="WhatsApp">
+            <p className="text-xs text-muted-foreground -mt-1">Un clic sur n'importe quel bouton WhatsApp du site ouvre une discussion avec ce numéro.</p>
+            {champ('whatsapp', 'Numéro WhatsApp', '+221 7X XXX XX XX')}
+            {champ('messageWhatsApp', 'Message déjà écrit pour le visiteur')}
+          </Groupe>
+
           <Groupe titre="Réseaux sociaux">
-            <p className="text-xs text-muted-foreground -mt-1">Laisser vide pour ne pas afficher l'icône.</p>
-            {champ('facebook', 'Facebook', 'https://facebook.com/…')}
-            {champ('instagram', 'Instagram', 'https://instagram.com/…')}
-            {champ('youtube', 'YouTube', 'https://youtube.com/…')}
-            {champ('tiktok', 'TikTok', 'https://tiktok.com/@…')}
+            <p className="text-xs text-muted-foreground -mt-1">Collez l'adresse de chaque page. Les icônes apparaissent en haut, en bas et dans « Suivez-nous ».</p>
+            {id.reseaux.map((r, i) => {
+              const { Icone, couleur } = STYLE_RESEAU[r.type] ?? STYLE_RESEAU.site;
+              const changer = (v: Partial<Reseau>) => maj('identite.reseaux', id.reseaux.map((x, j) => j === i ? { ...x, ...v } : x));
+              return (
+                <div key={i} className="rounded-xl border p-2.5 space-y-2">
+                  <div className="flex items-center gap-2">
+                    <span className="h-8 w-8 rounded-full flex items-center justify-center text-white flex-shrink-0" style={{ background: couleur }}><Icone className="h-4 w-4" /></span>
+                    <Select value={r.type} onValueChange={v => changer({ type: v as TypeReseau })}>
+                      <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
+                      <SelectContent>{Object.entries(TYPES_RESEAUX).map(([t, nom]) => <SelectItem key={t} value={t}>{nom}</SelectItem>)}</SelectContent>
+                    </Select>
+                    <Button variant="ghost" size="icon" className="h-8 w-8 flex-shrink-0" aria-label="Retirer ce réseau"
+                      onClick={() => maj('identite.reseaux', id.reseaux.filter((_, j) => j !== i))}><Trash2 className="h-4 w-4 text-destructive" /></Button>
+                  </div>
+                  <Input value={r.url} onChange={e => changer({ url: e.target.value })} placeholder="https://www.facebook.com/votre-ecole" />
+                </div>
+              );
+            })}
+            <Button variant="outline" size="sm" className="gap-1.5" onClick={() => maj('identite.reseaux', [...id.reseaux, { type: 'facebook', url: '' }])}>
+              <Plus className="h-3.5 w-3.5" />Ajouter un réseau
+            </Button>
+            <label className="flex items-center justify-between gap-3 rounded-xl border p-3">
+              <span className="text-sm">
+                <span className="block font-medium">Afficher le fil Facebook</span>
+                <span className="block text-xs text-muted-foreground">Vos dernières publications Facebook dans « Suivez-nous ».</span>
+              </span>
+              <Switch checked={id.filFacebook} onCheckedChange={v => maj('identite.filFacebook', v)} />
+            </label>
           </Groupe>
 
           <Groupe titre="Bouton « Espace parents »">

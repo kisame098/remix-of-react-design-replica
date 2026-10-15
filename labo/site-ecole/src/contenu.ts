@@ -19,6 +19,15 @@ export type Police = keyof typeof POLICES;
 
 export interface LienBouton { texte: string; lien: string }
 
+export const TYPES_RESEAUX = {
+  facebook: 'Facebook', instagram: 'Instagram', tiktok: 'TikTok', youtube: 'YouTube', linkedin: 'LinkedIn',
+  x: 'X (Twitter)', whatsapp: 'Chaîne WhatsApp', telegram: 'Telegram', site: 'Autre lien',
+} as const;
+export type TypeReseau = keyof typeof TYPES_RESEAUX;
+export interface Reseau { type: TypeReseau; url: string }
+
+export interface Actualite { id: string; image: string; date: string; categorie: string; titre: string; texte: string; contenu: string }
+
 export const CONTENU_DEFAUT = {
   identite: {
     nom: 'Groupe Scolaire Excellence',
@@ -32,10 +41,15 @@ export const CONTENU_DEFAUT = {
     email: 'contact@ecole-exemple.sn',
     adresse: 'Sacré-Cœur 3, Dakar, Sénégal',
     horaires: 'Lun – Ven : 7 h 30 – 18 h · Sam : 8 h – 13 h',
-    facebook: 'https://facebook.com/',
-    instagram: 'https://instagram.com/',
-    youtube: '',
-    tiktok: '',
+    /** Message déjà écrit quand un visiteur clique sur un bouton WhatsApp. */
+    messageWhatsApp: 'Bonjour, je souhaite avoir des informations sur l\'école.',
+    reseaux: [
+      { type: 'facebook', url: 'https://www.facebook.com/' },
+      { type: 'instagram', url: 'https://www.instagram.com/' },
+      { type: 'tiktok', url: 'https://www.tiktok.com/' },
+    ] as Reseau[],
+    /** Afficher le fil de la page Facebook dans la section « Suivez-nous ». */
+    filFacebook: true,
     espaceParents: { texte: 'Espace parents', lien: 'https://senclass.com' } as LienBouton,
     creation: '2005',
   },
@@ -45,8 +59,16 @@ export const CONTENU_DEFAUT = {
     bouton: { texte: 'S\'inscrire', lien: '#/admissions' } as LienBouton,
   },
 
-  /** Sections masquées par l'école (identifiants de section). */
-  masques: [] as string[],
+  /** Ordre des sections de chaque page : on les glisse, on les retire, on en ajoute. */
+  pages: {
+    accueil: ['diaporama', 'chiffres', 'mot-directeur', 'cycles', 'atouts', 'resultats', 'temoignages', 'actualites-recentes', 'suivez-nous', 'appel'],
+    ecole: ['entete-ecole', 'histoire', 'valeurs', 'equipe', 'infrastructures', 'appel'],
+    enseignement: ['entete-enseignement', 'cycles-detail', 'pedagogie', 'resultats', 'appel'],
+    'vie-scolaire': ['entete-vie-scolaire', 'activites', 'services', 'galerie', 'calendrier', 'appel'],
+    admissions: ['entete-admissions', 'etapes', 'pieces', 'frais', 'preinscription', 'faq'],
+    actualites: ['entete-actualites', 'liste-actualites', 'suivez-nous'],
+    contact: ['entete-contact', 'coordonnees', 'suivez-nous'],
+  } as Record<string, string[]>,
 
   accueil: {
     diapos: [
@@ -63,7 +85,7 @@ export const CONTENU_DEFAUT = {
         texte: 'Des classes à effectif réduit et des enseignants attentifs à chaque élève.',
       },
       {
-        image: photo('photo-1719408937898-e15b8638e1d8'),
+        image: photo('photo-1774870292182-d59afbebf09e'),
         surtitre: 'Moyen et secondaire',
         titre: 'Préparer le BFEM et le Baccalauréat avec sérénité',
         texte: 'Suivi personnalisé, examens blancs, cours de renforcement et orientation.',
@@ -130,6 +152,12 @@ export const CONTENU_DEFAUT = {
 
     actualites: { surtitre: 'Actualités', titre: 'La vie de l\'école' },
 
+    suivez: {
+      surtitre: 'Suivez-nous',
+      titre: 'Restez connectés à la vie de l\'école',
+      texte: 'Photos, annonces et événements : retrouvez-nous sur nos réseaux.',
+    },
+
     appel: {
       titre: 'Inscriptions 2026-2027 ouvertes',
       texte: 'Réservez dès maintenant la place de votre enfant. Notre équipe vous accueille du lundi au samedi.',
@@ -161,7 +189,7 @@ export const CONTENU_DEFAUT = {
       titre: 'L\'équipe de direction',
       elements: [
         { photo: portrait('photo-1616805765352-beedbad46b2a'), nom: 'M. Mamadou Diop', fonction: 'Directeur général' },
-        { photo: portrait('photo-1636144896336-b056be4a8dfe'), nom: 'Mme Awa Sarr', fonction: 'Directrice des études' },
+        { photo: portrait('photo-1743871698163-a2e470d8eac7'), nom: 'Mme Awa Sarr', fonction: 'Directrice des études' },
         { photo: portrait('photo-1654125992479-37dc114b3a5c'), nom: 'M. Ousmane Ba', fonction: 'Surveillant général' },
         { photo: portrait('photo-1573497019418-b400bb3ab074'), nom: 'Mme Khady Gueye', fonction: 'Directrice du préscolaire' },
       ],
@@ -256,7 +284,7 @@ export const CONTENU_DEFAUT = {
         { image: photo('photo-1548102249-acdce64fffbd', 900) },
         { image: photo('photo-1745012010615-47abbeb3e906', 900) },
         { image: photo('photo-1694286068561-3233c946e9be', 900) },
-        { image: photo('photo-1719408937898-e15b8638e1d8', 900) },
+        { image: photo('photo-1744809448493-448812255e4d', 900) },
         { image: photo('photo-1632215861513-130b66fe97f4', 900) },
         { image: photo('photo-1567057420215-0afa9aa9253a', 900) },
         { image: photo('photo-1653566031471-85365f8d0ae0', 900) },
@@ -331,12 +359,24 @@ export const CONTENU_DEFAUT = {
   },
 
   actualites: {
-    entete: { titre: 'Actualités', texte: 'Événements, résultats et vie de l\'établissement.', image: photo('photo-1627556704243-5f0771d90783') },
+    entete: { titre: 'Actualités', texte: 'Événements, résultats et vie de l\'établissement.', image: photo('photo-1632215863479-201029d93143') },
     elements: [
-      { image: photo('photo-1719408937898-e15b8638e1d8', 900), date: '20 juillet 2026', categorie: 'Résultats', titre: 'Excellents résultats au Baccalauréat 2026', texte: 'Félicitations à nos bacheliers ! 89 % de réussite et plusieurs mentions.' },
-      { image: photo('photo-1745012010615-47abbeb3e906', 900), date: '15 juin 2026', categorie: 'Sport', titre: 'Nos cadets remportent le tournoi inter-écoles', texte: 'Une belle victoire en finale, fruit d\'une saison de travail.' },
-      { image: photo('photo-1694286068561-3233c946e9be', 900), date: '28 mars 2026', categorie: 'Vie scolaire', titre: 'Semaine culturelle : lecture, théâtre et danse', texte: 'Une semaine riche en découvertes pour tous les élèves.' },
-    ],
+      {
+        id: 'resultats-bac-2026', image: photo('photo-1621352152645-61f4835b081b', 1400), date: '20 juillet 2026', categorie: 'Résultats',
+        titre: 'Excellents résultats au Baccalauréat 2026', texte: 'Félicitations à nos bacheliers ! 89 % de réussite et plusieurs mentions.',
+        contenu: '<p>Les résultats du <strong>Baccalauréat 2026</strong> sont tombés, et nos élèves ont une nouvelle fois fait honneur à l\'établissement.</p><h2>Les chiffres de la session</h2><ul><li><strong>89 %</strong> de réussite toutes séries confondues</li><li>Série S : 92 % · Série L : 86 %</li><li>14 mentions, dont 3 mentions Très bien</li></ul><p>Ce succès est celui des élèves, de leurs familles et de toute l\'équipe pédagogique, mobilisée toute l\'année : cours de renforcement, Bac blancs chaque trimestre et suivi personnalisé.</p><blockquote><p>« Nous sommes fiers de nos élèves. Ces résultats récompensent une année de travail sérieux. » — La direction</p></blockquote><p>La cérémonie de remise des prix aura lieu à la rentrée. Les familles recevront une invitation.</p>',
+      },
+      {
+        id: 'tournoi-inter-ecoles', image: photo('photo-1745012010615-47abbeb3e906', 1400), date: '15 juin 2026', categorie: 'Sport',
+        titre: 'Nos cadets remportent le tournoi inter-écoles', texte: 'Une belle victoire en finale, fruit d\'une saison de travail.',
+        contenu: '<p>Notre équipe de football des cadets a remporté la finale du tournoi inter-écoles, au terme d\'un match disputé.</p><p>Bravo aux joueurs et à leur encadreur pour cette saison exemplaire, où le fair-play a été aussi remarqué que le jeu.</p>',
+      },
+      {
+        id: 'semaine-culturelle', image: photo('photo-1694286068561-3233c946e9be', 1400), date: '28 mars 2026', categorie: 'Vie scolaire',
+        titre: 'Semaine culturelle : lecture, théâtre et danse', texte: 'Une semaine riche en découvertes pour tous les élèves.',
+        contenu: '<p>Pendant une semaine, les élèves de tous les cycles ont présenté leurs talents : concours de lecture, pièces de théâtre, poésie et danses traditionnelles.</p><p>Merci aux parents venus nombreux pour la journée de clôture.</p>',
+      },
+    ] as Actualite[],
   },
 
   contact: {

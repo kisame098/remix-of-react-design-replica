@@ -30,7 +30,8 @@ Actualités, Contact.
 - Bouton WhatsApp flottant, bouton « Espace parents » vers le portail.
 
 Photos : Unsplash (licence libre, usage commercial permis), appelées par leur
-adresse. Noms, chiffres et tarifs sont des exemples à remplacer.
+adresse ; uniquement des élèves et personnes africains (contrôle visuel de
+chaque photo). Noms, chiffres et tarifs sont des exemples à remplacer.
 
 ## Modifier
 
@@ -38,12 +39,22 @@ Bouton « Modifier le site » en bas de l'écran :
 
 - cliquer sur un texte et écrire ;
 - « Changer la photo » sur chaque image (fichier de l'appareil ou adresse) ;
-- l'icône de lien sur un bouton choisit sa destination ;
-- au survol d'un élément de liste : déplacer, dupliquer, supprimer ; case
-  « Ajouter » en fin de liste ;
-- au survol d'une section : la masquer (et la réafficher) ;
+- l'icône de lien sur un bouton choisit sa destination (une page, notre
+  WhatsApp, notre téléphone, une adresse) ;
+- éléments de liste (cycles, chiffres, équipe…) : **glisser à la souris**
+  avec la poignée ⠿, dupliquer, supprimer, « Ajouter » ; les rangées se
+  recentrent, jamais de trou ;
+- sections : **glisser**, monter / descendre, ajouter en dessous, **envoyer
+  vers une autre page**, retirer ; « Ajouter une section » propose tout le
+  catalogue ;
+- actualités : un clic ouvre **l'article complet** (`#/actualites/<id>`),
+  écrit dans un éditeur : titres, gras, couleurs, surligné, alignement,
+  listes, citations, photos, **vidéos YouTube / Facebook / TikTok /
+  Instagram**, liens **simples, en carte d'aperçu ou intégrés** ; partage
+  WhatsApp / Facebook ;
 - « Identité & couleurs » : nom, devise, logo, 2 couleurs, 3 polices,
-  coordonnées, réseaux sociaux, lien de l'espace parents.
+  coordonnées, **WhatsApp** (numéro + message), **réseaux sociaux** (liste
+  libre), fil de la page Facebook, espace parents.
 
 ## Code
 
@@ -54,12 +65,23 @@ Bouton « Modifier le site » en bas de l'écran :
   avec le modèle (testé dans `chemin.test.ts`).
 - `src/Gabarit.tsx` — bandeau, en-tête, menu, pied de page, WhatsApp.
 - `src/composants.tsx` — sections réutilisées par plusieurs pages.
-- `src/pages/` — une page par fichier.
+- `src/sections.tsx` — catalogue des sections et `PageSections` (ordre,
+  glisser-déposer, envoi vers une autre page).
+- `src/EditeurArticle.tsx` — éditeur des articles (TipTap), chargé seulement
+  en mode modification.
+- `src/pages/` — les sections, rangées par page d'origine.
+
+Bibliothèques ajoutées au projet pour le labo : TipTap (éditeur) et dnd-kit
+(glisser-déposer). Les aperçus de liens sont lus par le service public
+microlink.io.
 
 ## Labo : limites actuelles
 
 - Le contenu est gardé dans ce navigateur (`localStorage`) ; les photos
   envoyées sont réduites à 1 600 px.
+- Le HTML des articles est affiché tel quel : avant la mise en ligne publique,
+  le nettoyer (DOMPurify, iframes limitées à YouTube / Facebook / TikTok /
+  Instagram).
 
 ## Étapes suivantes
 

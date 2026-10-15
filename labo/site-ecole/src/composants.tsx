@@ -1,7 +1,9 @@
 import { useState } from 'react';
-import { ArrowRight, Calendar, CheckCircle2, Quote, Send } from 'lucide-react';
-import { Bouton, Icone, Img, Liste, Section, T, useEdition } from './edition';
-import { lienWhatsApp } from './utilitaires';
+import { ArrowRight, Calendar, CheckCircle2, Pencil, Quote, Send } from 'lucide-react';
+import { TYPES_RESEAUX, type Actualite } from './contenu';
+import { IconeWhatsApp, STYLE_RESEAU } from './reseaux';
+import { Bouton, Icone, Img, Liste, Section, T, useEdition, useValeur } from './edition';
+import { estPageFacebook, lienWhatsApp } from './utilitaires';
 
 /** Surtitre doré + grand titre, centré ou à gauche. */
 export function TitreSection({ c, centre = true, clair = false, texte = true }: { c: string; centre?: boolean; clair?: boolean; texte?: boolean }) {
@@ -19,15 +21,14 @@ export const Conteneur = ({ children, className = '' }: { children: React.ReactN
   <div className={`max-w-7xl mx-auto px-6 ${className}`}>{children}</div>;
 
 /** Grille icône + titre + texte (atouts, valeurs, pédagogie, services). */
-export function GrilleIcones({ id, nom, c, fond = false }: { id: string; nom: string; c: string; fond?: boolean }) {
+export function GrilleIcones({ c, fond = false }: { c: string; fond?: boolean }) {
   return (
-    <Section id={id} nom={nom} className={`py-20 ${fond ? 'bg-gray-50' : ''}`}>
+    <Section className={`py-20 ${fond ? 'bg-gray-50' : ''}`}>
       <Conteneur>
         <TitreSection c={c} />
-        <Liste c={`${c}.elements`} nouveau={{ icone: 'star', titre: 'Nouveau point fort', texte: 'Décrivez-le en une phrase.' }}
-          className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6" classeElement="h-full">
+        <Liste c={`${c}.elements`} colonnes={3} nouveau={{ icone: 'star', titre: 'Nouveau point fort', texte: 'Décrivez-le en une phrase.' }} classeElement="flex">
           {(_, __, ce) => (
-            <div className="h-full bg-white rounded-2xl p-7 border border-gray-100 shadow-sm hover:shadow-lg hover:-translate-y-1 transition-all group">
+            <div className="w-full bg-white rounded-2xl p-7 border border-gray-100 shadow-sm hover:shadow-lg hover:-translate-y-1 transition-all group">
               <span className="inline-flex h-14 w-14 rounded-2xl items-center justify-center bg-[var(--c1-10)] text-[var(--c1)] group-hover:bg-[var(--c1)] group-hover:text-white transition-colors">
                 <Icone c={`${ce}.icone`} className="h-7 w-7" />
               </span>
@@ -47,9 +48,9 @@ export function CartesCycles() {
     <Section id="accueil-cycles" nom="Nos cycles" className="py-20 bg-gray-50">
       <Conteneur>
         <TitreSection c="accueil.cycles" />
-        <Liste c="enseignement.cycles" nouveau={NOUVEAU_CYCLE} className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6" classeElement="h-full" libelleAjout="Ajouter un cycle">
+        <Liste c="enseignement.cycles" colonnes={4} nouveau={NOUVEAU_CYCLE} classeElement="flex" libelleAjout="Ajouter un cycle">
           {(_, __, ce) => (
-            <a href="#/enseignement" className="h-full flex flex-col bg-white rounded-2xl overflow-hidden shadow-sm hover:shadow-xl transition-all group">
+            <a href="#/enseignement" className="w-full flex flex-col bg-white rounded-2xl overflow-hidden shadow-sm hover:shadow-xl transition-all group">
               <div className="relative h-48 overflow-hidden">
                 <Img c={`${ce}.image`} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
                 <T c={`${ce}.age`} className="absolute bottom-3 left-3 bg-[var(--c2)] text-gray-900 text-xs font-bold px-3 py-1 rounded-full" />
@@ -79,8 +80,7 @@ export function Resultats() {
       <div className="absolute -left-20 -bottom-40 h-96 w-96 rounded-full bg-[var(--c2-10)]" />
       <Conteneur className="relative">
         <TitreSection c="accueil.resultats" clair />
-        <Liste c="accueil.resultats.elements" nouveau={{ examen: 'Examen', taux: '0 %', detail: 'Détail' }}
-          className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6 max-w-5xl mx-auto">
+        <Liste c="accueil.resultats.elements" colonnes={3} nouveau={{ examen: 'Examen', taux: '0 %', detail: 'Détail' }} className="max-w-5xl mx-auto">
           {(_, __, ce) => (
             <div className="text-center rounded-2xl bg-white/10 backdrop-blur border border-white/15 p-8">
               <T c={`${ce}.taux`} as="p" className="titre text-6xl font-bold text-[var(--c2)]" />
@@ -99,10 +99,9 @@ export function Temoignages() {
     <Section id="temoignages" nom="Témoignages" className="py-20">
       <Conteneur>
         <TitreSection c="accueil.temoignages" />
-        <Liste c="accueil.temoignages.elements" nouveau={{ texte: 'Votre témoignage…', nom: 'Nom', role: 'Parent d\'élève', photo: '' }}
-          className="grid md:grid-cols-3 gap-6" classeElement="h-full">
+        <Liste c="accueil.temoignages.elements" colonnes={3} nouveau={{ texte: 'Votre témoignage…', nom: 'Nom', role: 'Parent d\'élève', photo: '' }} classeElement="flex">
           {(_, __, ce) => (
-            <figure className="h-full bg-white rounded-2xl p-8 border border-gray-100 shadow-sm flex flex-col">
+            <figure className="w-full bg-white rounded-2xl p-8 border border-gray-100 shadow-sm flex flex-col">
               <Quote className="h-10 w-10 text-[var(--c2)] mb-4" />
               <T c={`${ce}.texte`} as="blockquote" className="text-gray-700 leading-relaxed flex-1 italic" />
               <figcaption className="flex items-center gap-3 mt-6 pt-6 border-t border-gray-100">
@@ -122,34 +121,99 @@ export function Temoignages() {
   );
 }
 
-export const NOUVELLE_ACTUALITE = { image: '', date: 'Date', categorie: 'Catégorie', titre: 'Titre de l\'actualité', texte: 'Résumé en une ou deux phrases.' };
+export function nouvelleActualite(id: string): Actualite {
+  return {
+    id, image: '', date: new Date().toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' }),
+    categorie: 'Vie scolaire', titre: 'Nouvelle actualité', texte: 'Résumé en une ou deux phrases.', contenu: '',
+  };
+}
 
+/** Cartes d'actualités : un clic ouvre l'article complet. */
 export function CartesActualites({ limite }: { limite?: number }) {
   const { contenu } = useEdition();
   // Sur l'accueil : les premières seulement ; l'ajout se fait sur la page Actualités.
   if (limite) {
-    return <div className="grid md:grid-cols-3 gap-6">{contenu.actualites.elements.slice(0, limite).map((_, i) => <CarteActualite key={i} ce={`actualites.elements.${i}`} />)}</div>;
+    return (
+      <div className="flex flex-wrap justify-center gap-6">
+        {contenu.actualites.elements.slice(0, limite).map((a, i) => (
+          <div key={a.id} className="flex w-full md:w-[calc((100%_-_1.5rem)/2)] lg:w-[calc((100%_-_3rem)/3)]"><CarteActualite ce={`actualites.elements.${i}`} /></div>
+        ))}
+      </div>
+    );
   }
   return (
-    <Liste c="actualites.elements" nouveau={NOUVELLE_ACTUALITE} className="grid md:grid-cols-2 lg:grid-cols-3 gap-6" classeElement="h-full" libelleAjout="Ajouter une actualité">
+    <Liste c="actualites.elements" colonnes={3} nouveau={nouvelleActualite(`actualite-${Date.now()}`)} classeElement="flex" libelleAjout="Ajouter une actualité">
       {(_, __, ce) => <CarteActualite ce={ce} />}
     </Liste>
   );
 }
 
 function CarteActualite({ ce }: { ce: string }) {
+  const { edition } = useEdition();
+  const a = useValeur<Actualite>(ce);
+  const lien = `#/actualites/${encodeURIComponent(a.id)}`;
   return (
-    <article className="h-full bg-white rounded-2xl overflow-hidden shadow-sm border border-gray-100 hover:shadow-xl transition-shadow flex flex-col">
-      <div className="relative h-52 overflow-hidden">
-        <Img c={`${ce}.image`} className="w-full h-full object-cover" />
+    <article className="w-full bg-white rounded-2xl overflow-hidden shadow-sm border border-gray-100 hover:shadow-xl transition-shadow flex flex-col group">
+      <a href={lien} className="relative h-52 overflow-hidden block">
+        <Img c={`${ce}.image`} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
         <T c={`${ce}.categorie`} className="absolute top-4 left-4 bg-[var(--c1)] text-white text-xs font-semibold px-3 py-1 rounded-full" />
-      </div>
-      <div className="p-6 flex-1">
+      </a>
+      <div className="p-6 flex-1 flex flex-col">
         <p className="flex items-center gap-1.5 text-sm text-gray-500"><Calendar className="h-4 w-4" /><T c={`${ce}.date`} /></p>
-        <T c={`${ce}.titre`} as="h3" className="titre block text-xl font-bold text-gray-900 mt-2 leading-snug" />
-        <T c={`${ce}.texte`} as="p" className="block text-gray-600 mt-2 text-sm leading-relaxed" />
+        <a href={lien}><T c={`${ce}.titre`} as="h3" className="titre block text-xl font-bold text-gray-900 mt-2 leading-snug group-hover:text-[var(--c1)] transition-colors" /></a>
+        <T c={`${ce}.texte`} as="p" className="block text-gray-600 mt-2 text-sm leading-relaxed flex-1" />
+        <a href={lien} className="mt-4 inline-flex items-center gap-1 text-sm font-semibold text-[var(--c1)]">
+          {edition ? 'Écrire l\'article' : 'Lire la suite'} <ArrowRight className="h-4 w-4 group-hover:translate-x-1 transition-transform" />
+        </a>
       </div>
     </article>
+  );
+}
+
+/** Réseaux sociaux de l'école en grands boutons, et le fil de sa page Facebook. */
+export function SuivezNous() {
+  const { contenu, edition, ouvrirIdentite } = useEdition();
+  const id = contenu.identite;
+  const facebook = id.reseaux.find(r => r.type === 'facebook' && estPageFacebook(r.url));
+  return (
+    <Section className="py-20 bg-gray-50">
+      <Conteneur>
+        <TitreSection c="accueil.suivez" />
+        <div className="flex flex-wrap justify-center gap-4">
+          {id.reseaux.filter(r => r.url).map((r, i) => {
+            const { Icone, couleur } = STYLE_RESEAU[r.type] ?? STYLE_RESEAU.site;
+            return (
+              <a key={i} href={r.url} target="_blank" rel="noreferrer"
+                className="flex items-center gap-3 rounded-full pl-2 pr-6 py-2 bg-white border border-gray-200 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all font-semibold text-gray-800">
+                <span className="h-10 w-10 rounded-full flex items-center justify-center text-white" style={{ background: couleur }}><Icone className="h-5 w-5" /></span>
+                {TYPES_RESEAUX[r.type]}
+              </a>
+            );
+          })}
+          {id.whatsapp && (
+            <a href={lienWhatsApp(id.whatsapp, id.messageWhatsApp)} target="_blank" rel="noreferrer"
+              className="flex items-center gap-3 rounded-full pl-2 pr-6 py-2 bg-white border border-gray-200 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all font-semibold text-gray-800">
+              <span className="h-10 w-10 rounded-full flex items-center justify-center text-white bg-[#25D366]"><IconeWhatsApp className="h-5 w-5" /></span>
+              WhatsApp
+            </a>
+          )}
+          {edition && (
+            <button type="button" className="outil !rounded-full !px-5" onClick={() => ouvrirIdentite(true)}>
+              <Pencil className="h-3.5 w-3.5" />Modifier nos réseaux
+            </button>
+          )}
+        </div>
+        {id.filFacebook && facebook && (
+          <div className="mt-12 flex justify-center">
+            <iframe title="Page Facebook" className="rounded-2xl shadow-lg border-0 bg-white w-full max-w-[500px]" height={600}
+              src={`https://www.facebook.com/plugins/page.php?href=${encodeURIComponent(facebook.url)}&tabs=timeline&width=500&height=600&small_header=false&hide_cover=false`} />
+          </div>
+        )}
+        {edition && id.filFacebook && !facebook && (
+          <p className="mt-8 text-center text-sm text-gray-500">Ajoutez l'adresse de votre page Facebook pour afficher ici vos dernières publications.</p>
+        )}
+      </Conteneur>
+    </Section>
   );
 }
 

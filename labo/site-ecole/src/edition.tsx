@@ -1,6 +1,13 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ElementType, type ReactNode } from 'react';
 import {
-  ArrowLeft, ArrowRight, Award, BookOpen, Bus, Camera, ChartColumn, Clock, Copy, Eye, EyeOff, Globe, GraduationCap,
+  DndContext, KeyboardSensor, PointerSensor, closestCenter, useSensor, useSensors, type DragEndEvent,
+} from '@dnd-kit/core';
+import {
+  SortableContext, arrayMove, rectSortingStrategy, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
+import {
+  ArrowLeft, ArrowRight, Award, BookOpen, Bus, Camera, ChartColumn, Clock, Copy, GripVertical, Globe, GraduationCap, MessageCircleMore, Phone,
   Handshake, Heart, ImagePlus, Laptop, Link2, MessageCircle, Music, Plus, Scale, Shield, Star, Trash2, Trophy,
   Users, Utensils, Palette, FlaskConical, Baby, Library,
 } from 'lucide-react';
@@ -10,6 +17,7 @@ import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { CONTENU_DEFAUT, type Contenu, type LienBouton } from './contenu';
 import { ajouterElement, deplacerElement, ecrire, fusionner, lire, retirerElement } from './chemin';
+import { lienWhatsApp } from './utilitaires';
 
 /* ─────────────────────────── Contexte ─────────────────────────── */
 
@@ -34,6 +42,9 @@ interface Edition {
   ouvrir: (c: Cible) => void;
   reinitialiser: () => void;
   stockagePlein: boolean;
+  /** Panneau « Identité & couleurs » (ouvrable depuis les icônes de réseaux, etc.). */
+  identiteOuverte: boolean;
+  ouvrirIdentite: (v: boolean) => void;
 }
 
 const Ctx = createContext<Edition | null>(null);
@@ -49,6 +60,7 @@ export function FournisseurEdition({ children }: { children: ReactNode }) {
   const [edition, setEdition] = useState(false);
   const [cible, ouvrir] = useState<Cible>(null);
   const [stockagePlein, setStockagePlein] = useState(false);
+  const [identiteOuverte, ouvrirIdentite] = useState(false);
 
   useEffect(() => {
     try { localStorage.setItem(CLE, JSON.stringify(contenu)); setStockagePlein(false); }
@@ -61,8 +73,8 @@ export function FournisseurEdition({ children }: { children: ReactNode }) {
 
   const valeur = useMemo<Edition>(() => ({
     contenu, edition, setEdition, maj, majListe, ouvrir,
-    reinitialiser: () => setContenu(CONTENU_DEFAUT), stockagePlein,
-  }), [contenu, edition, maj, majListe, stockagePlein]);
+    reinitialiser: () => setContenu(CONTENU_DEFAUT), stockagePlein, identiteOuverte, ouvrirIdentite,
+  }), [contenu, edition, maj, majListe, stockagePlein, identiteOuverte]);
 
   return (
     <Ctx.Provider value={valeur}>
@@ -182,37 +194,87 @@ export function Icone({ c, className = '' }: { c: string; className?: string }) 
 /* ─────────────────────────── Listes ─────────────────────────── */
 
 /**
- * Liste d'éléments (chiffres, cycles, témoignages…). En mode modification,
- * chaque élément a ses outils (déplacer, dupliquer, supprimer) et une case
- * « Ajouter » termine la liste.
+ * Largeur d'un élément selon le nombre de colonnes voulu. Les éléments sont
+ * en « flex-wrap » centré : en supprimer un ne laisse jamais de trou, la
+ * rangée se recentre.
  */
-export function Liste<E>({ c, nouveau, className = '', classeElement = '', libelleAjout = 'Ajouter', children }: {
-  c: string; nouveau: E; className?: string; classeElement?: string; libelleAjout?: string;
+const LARGEURS: Record<number, string> = {
+  1: 'w-full',
+  2: 'w-full md:w-[calc((100%_-_1.5rem)/2)]',
+  3: 'w-full md:w-[calc((100%_-_1.5rem)/2)] lg:w-[calc((100%_-_3rem)/3)]',
+  4: 'w-full sm:w-[calc((100%_-_1.5rem)/2)] lg:w-[calc((100%_-_4.5rem)/4)]',
+};
+
+/**
+ * Liste d'éléments (chiffres, cycles, témoignages…). En mode modification,
+ * chaque élément se GLISSE à la souris (poignée), se duplique, se supprime,
+ * et une case « Ajouter » termine la liste.
+ */
+export function Liste<E>({ c, nouveau, colonnes, className = '', classeElement = '', libelleAjout = 'Ajouter', children }: {
+  c: string; nouveau: E; colonnes?: 1 | 2 | 3 | 4; className?: string; classeElement?: string; libelleAjout?: string;
   children: (element: E, index: number, chemin: string) => ReactNode;
 }) {
   const { edition, majListe } = useEdition();
   const liste = useValeur<E[]>(c) ?? [];
+  const capteurs = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  );
+  const conteneur = colonnes ? `flex flex-wrap justify-center gap-6 ${className}` : className;
+  const largeur = colonnes ? LARGEURS[colonnes] : '';
+  const ids = liste.map((_, i) => `${c}#${i}`);
+
+  if (!edition) {
+    return <div className={conteneur}>{liste.map((el, i) => <div key={i} className={`${largeur} ${classeElement}`}>{children(el, i, `${c}.${i}`)}</div>)}</div>;
+  }
+
+  const finGlisse = ({ active, over }: DragEndEvent) => {
+    if (!over || active.id === over.id) return;
+    majListe(c, l => arrayMove(l, ids.indexOf(String(active.id)), ids.indexOf(String(over.id))));
+  };
+
   return (
-    <div className={className}>
-      {liste.map((el, i) => (
-        <div key={i} className={`${classeElement} ${edition ? 'relative group/el' : ''}`}>
-          {children(el, i, `${c}.${i}`)}
-          {edition && (
-            <div className="absolute -top-3 left-1/2 -translate-x-1/2 z-40 hidden group-hover/el:flex items-center rounded-lg bg-white text-gray-900 border border-gray-200 shadow-md p-0.5">
-              <OutilBtn titre="Avant" disabled={i === 0} onClick={() => majListe(c, l => deplacerElement(l, i, -1))}><ArrowLeft /></OutilBtn>
-              <OutilBtn titre="Après" disabled={i === liste.length - 1} onClick={() => majListe(c, l => deplacerElement(l, i, 1))}><ArrowRight /></OutilBtn>
-              <OutilBtn titre="Dupliquer" onClick={() => majListe(c, l => ajouterElement(l, structuredClone(l[i]), i))}><Copy /></OutilBtn>
-              <OutilBtn titre="Supprimer" onClick={() => majListe(c, l => retirerElement(l, i))}><Trash2 className="text-red-600" /></OutilBtn>
-            </div>
-          )}
+    <DndContext sensors={capteurs} collisionDetection={closestCenter} onDragEnd={finGlisse}>
+      <SortableContext items={ids} strategy={colonnes && colonnes > 1 ? rectSortingStrategy : verticalListSortingStrategy}>
+        <div className={conteneur}>
+          {liste.map((el, i) => (
+            <ElementTriable key={ids[i]} id={ids[i]} className={`${largeur} ${classeElement}`}
+              premier={i === 0} dernier={i === liste.length - 1}
+              onDeplacer={sens => majListe(c, l => deplacerElement(l, i, sens))}
+              onDupliquer={() => majListe(c, l => ajouterElement(l, structuredClone(l[i]), i))}
+              onSupprimer={() => majListe(c, l => retirerElement(l, i))}>
+              {children(el, i, `${c}.${i}`)}
+            </ElementTriable>
+          ))}
+          <button type="button" onClick={() => majListe(c, l => ajouterElement(l, structuredClone(nouveau)))}
+            className={`${largeur} min-h-[56px] rounded-2xl border-2 border-dashed border-gray-300 text-gray-500 bg-white/60 hover:border-amber-400 hover:text-gray-800 flex items-center justify-center gap-1.5 text-sm font-medium p-4`}>
+            <Plus className="h-4 w-4" />{libelleAjout}
+          </button>
         </div>
-      ))}
-      {edition && (
-        <button type="button" onClick={() => majListe(c, l => ajouterElement(l, structuredClone(nouveau)))}
-          className="min-h-[56px] rounded-2xl border-2 border-dashed border-gray-300 text-gray-500 bg-white/60 hover:opacity-100 flex items-center justify-center gap-1.5 text-sm font-medium p-4">
-          <Plus className="h-4 w-4" />{libelleAjout}
+      </SortableContext>
+    </DndContext>
+  );
+}
+
+function ElementTriable({ id, className, premier, dernier, onDeplacer, onDupliquer, onSupprimer, children }: {
+  id: string; className: string; premier: boolean; dernier: boolean;
+  onDeplacer: (sens: -1 | 1) => void; onDupliquer: () => void; onSupprimer: () => void; children: ReactNode;
+}) {
+  const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } = useSortable({ id });
+  return (
+    <div ref={setNodeRef} style={{ transform: CSS.Translate.toString(transform), transition }}
+      className={`${className} relative group/el ${isDragging ? 'z-50 opacity-80 ring-2 ring-amber-400 rounded-2xl shadow-2xl' : ''}`}>
+      {children}
+      <div className={`absolute -top-3 left-1/2 -translate-x-1/2 z-40 ${isDragging ? 'flex' : 'hidden group-hover/el:flex'} items-center rounded-lg bg-white text-gray-900 border border-gray-200 shadow-md p-0.5`}>
+        <button type="button" ref={setActivatorNodeRef} {...attributes} {...listeners} title="Glisser pour déplacer" aria-label="Glisser pour déplacer"
+          className="p-1.5 rounded-md hover:bg-amber-50 cursor-grab active:cursor-grabbing text-amber-600 [&>svg]:h-3.5 [&>svg]:w-3.5">
+          <GripVertical />
         </button>
-      )}
+        <OutilBtn titre="Avant" disabled={premier} onClick={() => onDeplacer(-1)}><ArrowLeft /></OutilBtn>
+        <OutilBtn titre="Après" disabled={dernier} onClick={() => onDeplacer(1)}><ArrowRight /></OutilBtn>
+        <OutilBtn titre="Dupliquer" onClick={onDupliquer}><Copy /></OutilBtn>
+        <OutilBtn titre="Supprimer" onClick={onSupprimer}><Trash2 className="text-red-600" /></OutilBtn>
+      </div>
     </div>
   );
 }
@@ -220,7 +282,7 @@ export function Liste<E>({ c, nouveau, className = '', classeElement = '', libel
 function OutilBtn({ titre, onClick, disabled, children }: { titre: string; onClick: () => void; disabled?: boolean; children: ReactNode }) {
   return (
     <button type="button" title={titre} aria-label={titre} disabled={disabled}
-      onClick={e => { e.stopPropagation(); onClick(); }}
+      onClick={e => { e.preventDefault(); e.stopPropagation(); onClick(); }}
       className="p-1.5 rounded-md hover:bg-gray-100 disabled:opacity-30 [&>svg]:h-3.5 [&>svg]:w-3.5">
       {children}
     </button>
@@ -229,32 +291,9 @@ function OutilBtn({ titre, onClick, disabled, children }: { titre: string; onCli
 
 /* ─────────────────────────── Sections ─────────────────────────── */
 
-/** Section que l'école peut masquer (et réafficher) en mode modification. */
-export function Section({ id, nom, className = '', children }: { id: string; nom: string; className?: string; children: ReactNode }) {
-  const { edition, contenu, majListe } = useEdition();
-  const masquee = contenu.masques.includes(id);
-  if (masquee && !edition) return null;
-  if (masquee) {
-    return (
-      <div className="bg-gray-100 border-y border-dashed border-gray-300 py-3 px-6 flex items-center justify-center gap-3 text-sm text-gray-500">
-        Section « {nom} » masquée
-        <button type="button" className="outil" onClick={() => majListe('masques', l => l.filter(x => x !== id))}>
-          <Eye className="h-3.5 w-3.5" />Afficher
-        </button>
-      </div>
-    );
-  }
-  return (
-    <section className={`${className} ${edition ? 'relative group/sec' : ''}`}>
-      {edition && (
-        <button type="button" onClick={() => majListe('masques', l => [...l, id])}
-          className="outil absolute top-3 left-3 z-30 opacity-0 group-hover/sec:opacity-100 transition-opacity">
-          <EyeOff className="h-3.5 w-3.5" />Masquer « {nom} »
-        </button>
-      )}
-      {children}
-    </section>
-  );
+/** Bloc d'une page. Son ordre, son retrait et son ajout se gèrent dans `PageSections`. */
+export function Section({ className = '', children }: { id?: string; nom?: string; className?: string; children: ReactNode }) {
+  return <section className={className}>{children}</section>;
 }
 
 /* ─────────────────────────── Fenêtres ─────────────────────────── */
@@ -301,7 +340,7 @@ function FenetreImage({ cible, onFermer }: { cible: Cible; onFermer: () => void 
  * Labo : la photo est gardée dans le navigateur. On la réduit (1600 px, JPEG)
  * pour ne pas remplir le stockage ; l'étape suivante l'enverra sur Supabase.
  */
-function reduireImage(f: File): Promise<string> {
+export function reduireImage(f: File): Promise<string> {
   return new Promise(resolve => {
     const lecteur = new FileReader();
     lecteur.onload = () => {
@@ -346,6 +385,14 @@ function FenetreLien({ cible, onFermer }: { cible: Cible; onFermer: () => void }
           {PAGES_INTERNES.map(p => (
             <Button key={p.lien} size="sm" variant={lien === p.lien ? 'default' : 'outline'} onClick={() => setLien(p.lien)}>{p.nom}</Button>
           ))}
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Button size="sm" variant="outline" className="gap-1.5" onClick={() => setLien(lienWhatsApp(contenu.identite.whatsapp, contenu.identite.messageWhatsApp))}>
+            <MessageCircleMore className="h-3.5 w-3.5 text-green-600" />Notre WhatsApp
+          </Button>
+          <Button size="sm" variant="outline" className="gap-1.5" onClick={() => setLien(`tel:${contenu.identite.telephone.replace(/\s/g, '')}`)}>
+            <Phone className="h-3.5 w-3.5" />Nous appeler
+          </Button>
         </div>
         <div className="space-y-1.5">
           <Label>Adresse</Label>

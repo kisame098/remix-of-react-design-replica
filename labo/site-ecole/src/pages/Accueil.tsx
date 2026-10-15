@@ -2,33 +2,9 @@ import { useEffect, useState } from 'react';
 import { ArrowRight, ChevronLeft, ChevronRight, Plus, Trash2 } from 'lucide-react';
 import { Bouton, Img, Liste, Section, T, useEdition } from '../edition';
 import { ajouterElement, retirerElement } from '../chemin';
-import { Appel, CartesActualites, CartesCycles, Conteneur, GrilleIcones, Resultats, Temoignages, TitreSection } from '../composants';
+import { CartesActualites, Conteneur, TitreSection } from '../composants';
 
-export default function Accueil() {
-  return (
-    <>
-      <Diaporama />
-      <Chiffres />
-      <MotDuDirecteur />
-      <CartesCycles />
-      <GrilleIcones id="atouts" nom="Pourquoi nous choisir" c="accueil.atouts" />
-      <Resultats />
-      <Temoignages />
-      <Section id="accueil-actualites" nom="Actualités" className="py-20 bg-gray-50">
-        <Conteneur>
-          <div className="flex flex-wrap items-end justify-between gap-4">
-            <TitreSection c="accueil.actualites" centre={false} />
-            <a href="#/actualites" className="mb-12 inline-flex items-center gap-1 font-semibold text-[var(--c1)] hover:gap-2 transition-all">Toutes les actualités <ArrowRight className="h-4 w-4" /></a>
-          </div>
-          <CartesActualites limite={3} />
-        </Conteneur>
-      </Section>
-      <Appel />
-    </>
-  );
-}
-
-function Diaporama() {
+export function Diaporama() {
   const { contenu, edition, majListe } = useEdition();
   const diapos = contenu.accueil.diapos;
   const [i, setI] = useState(0);
@@ -86,7 +62,7 @@ function Diaporama() {
       )}
 
       {edition && (
-        <div className="absolute top-3 left-1/2 -translate-x-1/2 z-30 flex gap-2">
+        <div className="absolute top-14 left-1/2 -translate-x-1/2 z-30 flex gap-2">
           <button type="button" className="outil" onClick={() => { majListe('accueil.diapos', l => ajouterElement(l, structuredClone(l[courant]), courant)); setI(courant + 1); }}>
             <Plus className="h-3.5 w-3.5" />Ajouter une diapositive
           </button>
@@ -101,12 +77,13 @@ function Diaporama() {
   );
 }
 
-function Chiffres() {
+export function Chiffres() {
   return (
-    <Section id="chiffres" nom="Chiffres clés" className="relative z-20 -mt-16 md:-mt-20">
+    <Section className="relative z-20 -mt-16 md:-mt-20 pb-4">
       <Conteneur>
         <Liste c="accueil.chiffres" nouveau={{ valeur: '0', libelle: 'libellé' }}
-          className="grid grid-cols-2 lg:grid-cols-4 bg-white rounded-2xl shadow-xl border border-gray-100 divide-x divide-gray-100 overflow-visible">
+          className="flex flex-wrap bg-white rounded-2xl shadow-xl border border-gray-100"
+          classeElement="flex-1 basis-1/2 lg:basis-0 border-gray-100 [&:not(:first-child)]:lg:border-l">
           {(_, __, ce) => (
             <div className="px-4 py-8 md:py-10 text-center">
               <T c={`${ce}.valeur`} as="p" className="titre text-4xl md:text-5xl font-bold text-[var(--c1)]" />
@@ -119,9 +96,9 @@ function Chiffres() {
   );
 }
 
-function MotDuDirecteur() {
+export function MotDuDirecteur() {
   return (
-    <Section id="mot-directeur" nom="Mot du directeur" className="py-24">
+    <Section className="py-24">
       <Conteneur className="grid lg:grid-cols-[5fr_7fr] gap-14 items-center">
         <div className="relative max-w-md mx-auto lg:mx-0 w-full">
           <div className="absolute -left-4 -top-4 w-full h-full rounded-3xl border-4 border-[var(--c2)]" />
@@ -137,6 +114,20 @@ function MotDuDirecteur() {
           <TitreSection c="accueil.mot" centre={false} texte={false} />
           <T c="accueil.mot.texte" as="div" className="block -mt-4 text-gray-600 text-lg leading-relaxed" />
         </div>
+      </Conteneur>
+    </Section>
+  );
+}
+
+export function ActualitesRecentes() {
+  return (
+    <Section className="py-20 bg-gray-50">
+      <Conteneur>
+        <div className="flex flex-wrap items-end justify-between gap-4">
+          <TitreSection c="accueil.actualites" centre={false} />
+          <a href="#/actualites" className="mb-12 inline-flex items-center gap-1 font-semibold text-[var(--c1)] hover:gap-2 transition-all">Toutes les actualités <ArrowRight className="h-4 w-4" /></a>
+        </div>
+        <CartesActualites limite={3} />
       </Conteneur>
     </Section>
   );

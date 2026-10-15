@@ -1,7 +1,8 @@
 import { useEffect, useState, type CSSProperties, type ReactNode } from 'react';
-import { Clock, Facebook, Instagram, Mail, MapPin, Menu, Phone, X, Youtube, Music2 } from 'lucide-react';
-import { POLICES } from './contenu';
-import { Bouton, Img, PAGES_INTERNES, Section, T, useEdition } from './edition';
+import { Clock, Mail, MapPin, Menu, Pencil, Phone, X } from 'lucide-react';
+import { POLICES, TYPES_RESEAUX } from './contenu';
+import { IconeWhatsApp, STYLE_RESEAU } from './reseaux';
+import { Bouton, Img, PAGES_INTERNES, T, useEdition } from './edition';
 import { lienWhatsApp } from './utilitaires';
 
 export function Gabarit({ page, children }: { page: string; children: ReactNode }) {
@@ -14,14 +15,14 @@ export function Gabarit({ page, children }: { page: string; children: ReactNode 
 
   return (
     <div className={`site min-h-screen flex flex-col ${edition ? 'pb-24 pt-9' : ''}`} style={style}>
-      <Section id="annonce" nom="Bandeau d'annonce">
+      {(edition || contenu.annonce.texte) && (
         <div className="bg-[var(--c2)] text-gray-900 text-sm">
           <div className="max-w-7xl mx-auto px-4 py-2 flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-center">
             <T c="annonce.texte" className="font-medium" />
             <Bouton c="annonce.bouton" className="underline font-bold underline-offset-2" />
           </div>
         </div>
-      </Section>
+      )}
 
       <BarreHaute />
       <EnTete page={page} edition={edition} />
@@ -41,26 +42,37 @@ function BarreHaute() {
     <div className="hidden md:block bg-[var(--c1)] text-white/90 text-[13px]">
       <div className="max-w-7xl mx-auto px-6 h-10 flex items-center gap-6">
         <a href={`tel:${id.telephone.replace(/\s/g, '')}`} className="flex items-center gap-1.5 hover:text-white"><Phone className="h-3.5 w-3.5" />{id.telephone}</a>
-        <a href={`mailto:${id.email}`} className="flex items-center gap-1.5 hover:text-white"><Mail className="h-3.5 w-3.5" />{id.email}</a>
-        <span className="hidden lg:flex items-center gap-1.5"><Clock className="h-3.5 w-3.5" />{id.horaires}</span>
+        {id.whatsapp && <a href={lienWhatsApp(id.whatsapp, id.messageWhatsApp)} target="_blank" rel="noreferrer" className="flex items-center gap-1.5 hover:text-white"><IconeWhatsApp className="h-3.5 w-3.5" />{id.whatsapp}</a>}
+        <a href={`mailto:${id.email}`} className="hidden lg:flex items-center gap-1.5 hover:text-white"><Mail className="h-3.5 w-3.5" />{id.email}</a>
+        <span className="hidden xl:flex items-center gap-1.5"><Clock className="h-3.5 w-3.5" />{id.horaires}</span>
         <div className="ml-auto flex items-center gap-3"><Reseaux /></div>
       </div>
     </div>
   );
 }
 
+/** Icônes des réseaux de l'école + WhatsApp. En mode modification, un clic ouvre leur réglage. */
 export function Reseaux({ className = 'h-4 w-4' }: { className?: string }) {
-  const { contenu } = useEdition();
+  const { contenu, edition, ouvrirIdentite } = useEdition();
   const id = contenu.identite;
-  const liens = [
-    { url: id.facebook, Icone: Facebook, nom: 'Facebook' },
-    { url: id.instagram, Icone: Instagram, nom: 'Instagram' },
-    { url: id.youtube, Icone: Youtube, nom: 'YouTube' },
-    { url: id.tiktok, Icone: Music2, nom: 'TikTok' },
-  ].filter(l => l.url);
-  return <>{liens.map(({ url, Icone, nom }) => (
-    <a key={nom} href={url} target="_blank" rel="noreferrer" aria-label={nom} className="opacity-80 hover:opacity-100"><Icone className={className} /></a>
-  ))}</>;
+  return (
+    <>
+      {id.reseaux.filter(r => r.url).map((r, i) => {
+        const { Icone } = STYLE_RESEAU[r.type] ?? STYLE_RESEAU.site;
+        return <a key={i} href={r.url} target="_blank" rel="noreferrer" aria-label={TYPES_RESEAUX[r.type]} className="opacity-80 hover:opacity-100"><Icone className={className} /></a>;
+      })}
+      {id.whatsapp && (
+        <a href={lienWhatsApp(id.whatsapp, id.messageWhatsApp)} target="_blank" rel="noreferrer" aria-label="WhatsApp" className="opacity-80 hover:opacity-100">
+          <IconeWhatsApp className={className} />
+        </a>
+      )}
+      {edition && (
+        <button type="button" onClick={() => ouvrirIdentite(true)} className="outil !py-0.5 !px-2" title="Modifier les réseaux">
+          <Pencil className="h-3 w-3" />Réseaux
+        </button>
+      )}
+    </>
+  );
 }
 
 export function Logo({ clair = false }: { clair?: boolean }) {
@@ -91,12 +103,12 @@ function EnTete({ page, edition }: { page: string; edition: boolean }) {
   }, []);
 
   return (
-    <header className={`sticky ${edition ? 'top-9' : 'top-0'} z-50 bg-white transition-shadow ${defile ? 'shadow-md' : 'border-b border-gray-100'}`}>
+    <header className={`sticky ${edition ? 'top-9' : 'top-0'} z-40 bg-white transition-shadow ${defile ? 'shadow-md' : 'border-b border-gray-100'}`}>
       <div className="max-w-7xl mx-auto px-4 md:px-6 h-20 flex items-center gap-6">
         <Logo />
         <nav className="hidden xl:flex items-center gap-1 ml-auto">
           {PAGES_INTERNES.map(p => {
-            const actif = p.lien === `#/${page}`;
+            const actif = p.lien === `#/${page}` || (p.lien === '#/' && page === '');
             return (
               <a key={p.lien} href={p.lien}
                 className={`px-3 py-2 text-[15px] font-medium rounded-md transition-colors relative ${actif ? 'text-[var(--c1)]' : 'text-gray-700 hover:text-[var(--c1)]'}`}>
@@ -146,7 +158,8 @@ function PiedDePage() {
           <p className="titre font-bold text-lg mb-4">Nous trouver</p>
           <ul className="space-y-3 text-sm text-white/80">
             <li className="flex gap-2"><MapPin className="h-4 w-4 mt-0.5 flex-shrink-0 text-[var(--c2)]" />{id.adresse}</li>
-            <li className="flex gap-2"><Phone className="h-4 w-4 mt-0.5 flex-shrink-0 text-[var(--c2)]" />{id.telephone}<br />{id.whatsapp}</li>
+            <li className="flex gap-2"><Phone className="h-4 w-4 mt-0.5 flex-shrink-0 text-[var(--c2)]" />{id.telephone}</li>
+            {id.whatsapp && <li><a href={lienWhatsApp(id.whatsapp, id.messageWhatsApp)} target="_blank" rel="noreferrer" className="flex gap-2 hover:text-white"><IconeWhatsApp className="h-4 w-4 mt-0.5 flex-shrink-0 text-[var(--c2)]" />{id.whatsapp}</a></li>}
             <li className="flex gap-2"><Mail className="h-4 w-4 mt-0.5 flex-shrink-0 text-[var(--c2)]" />{id.email}</li>
             <li className="flex gap-2"><Clock className="h-4 w-4 mt-0.5 flex-shrink-0 text-[var(--c2)]" />{id.horaires}</li>
           </ul>
@@ -172,10 +185,10 @@ function BoutonWhatsApp() {
   const id = contenu.identite;
   if (!id.whatsapp) return null;
   return (
-    <a href={lienWhatsApp(id.whatsapp, `Bonjour ${id.nom}, je souhaite avoir des informations.`)} target="_blank" rel="noreferrer"
+    <a href={lienWhatsApp(id.whatsapp, id.messageWhatsApp)} target="_blank" rel="noreferrer"
       aria-label="Écrire sur WhatsApp"
       className={`fixed right-5 ${edition ? 'bottom-24' : 'bottom-5'} z-40 h-14 w-14 rounded-full bg-[#25D366] text-white shadow-lg flex items-center justify-center hover:scale-105 transition`}>
-      <svg viewBox="0 0 24 24" className="h-7 w-7 fill-current" aria-hidden="true"><path d="M17.47 14.38c-.3-.15-1.75-.86-2.02-.96-.27-.1-.47-.15-.67.15-.2.3-.77.96-.94 1.16-.17.2-.35.22-.64.07-.3-.15-1.25-.46-2.38-1.47-.88-.78-1.47-1.75-1.64-2.05-.17-.3-.02-.46.13-.6.13-.14.3-.35.45-.52.15-.17.2-.3.3-.5.1-.2.05-.37-.03-.52-.07-.15-.67-1.6-.92-2.2-.24-.58-.49-.5-.67-.5h-.57c-.2 0-.52.07-.8.37-.27.3-1.04 1.02-1.04 2.48 0 1.46 1.07 2.88 1.21 3.08.15.2 2.1 3.2 5.08 4.48.71.31 1.26.49 1.7.63.71.22 1.36.19 1.87.12.57-.09 1.75-.72 2-1.41.25-.69.25-1.29.17-1.41-.07-.12-.27-.2-.57-.35zM12.04 21.5h-.01a9.4 9.4 0 0 1-4.8-1.32l-.34-.2-3.56.94.95-3.47-.22-.36a9.4 9.4 0 0 1-1.44-5.01c0-5.2 4.23-9.43 9.43-9.43a9.38 9.38 0 0 1 9.43 9.44c0 5.2-4.23 9.42-9.44 9.42zm8.02-17.44A11.27 11.27 0 0 0 12.04.75C5.8.75.72 5.83.72 12.07c0 2 .52 3.94 1.51 5.65L.62 23.25l5.66-1.48a11.3 11.3 0 0 0 5.41 1.38h.01c6.24 0 11.32-5.08 11.32-11.32 0-3.02-1.18-5.87-3.32-8z" /></svg>
+      <IconeWhatsApp className="h-7 w-7" />
     </a>
   );
 }

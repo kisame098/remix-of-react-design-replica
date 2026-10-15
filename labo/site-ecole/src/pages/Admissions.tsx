@@ -2,93 +2,101 @@ import { useState } from 'react';
 import { ChevronDown, FileText, Wallet } from 'lucide-react';
 import { Liste, Section, T, useEdition } from '../edition';
 import { Conteneur, FormulaireWhatsApp, TitreSection } from '../composants';
-import { EntetePage } from '../Gabarit';
 
-export default function Admissions() {
-  const { contenu } = useEdition();
-  const cycles = contenu.enseignement.cycles.map(c => c.nom);
-
+export function Etapes() {
   return (
-    <>
-      <EntetePage c="admissions.entete" />
+    <Section className="py-24">
+      <Conteneur>
+        <TitreSection c="admissions.etapes" />
+        <Liste c="admissions.etapes.elements" colonnes={4} nouveau={{ titre: 'Nouvelle étape', texte: 'Description.' }} classeElement="flex pt-6">
+          {(_, i, ce) => (
+            <div className="w-full relative bg-white rounded-2xl p-7 pt-10 border border-gray-100 shadow-sm">
+              <span className="absolute -top-6 left-7 h-12 w-12 rounded-full bg-[var(--c1)] text-white titre text-xl font-bold flex items-center justify-center ring-4 ring-white">{i + 1}</span>
+              <T c={`${ce}.titre`} as="h3" className="titre block text-xl font-bold text-gray-900" />
+              <T c={`${ce}.texte`} as="p" className="block text-gray-600 mt-2 leading-relaxed" />
+            </div>
+          )}
+        </Liste>
+      </Conteneur>
+    </Section>
+  );
+}
 
-      <Section id="etapes" nom="Étapes d'inscription" className="py-24">
-        <Conteneur>
-          <TitreSection c="admissions.etapes" />
-          <Liste c="admissions.etapes.elements" nouveau={{ titre: 'Nouvelle étape', texte: 'Description.' }}
-            className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6" classeElement="h-full">
-            {(_, i, ce) => (
-              <div className="h-full relative bg-white rounded-2xl p-7 pt-10 border border-gray-100 shadow-sm">
-                <span className="absolute -top-6 left-7 h-12 w-12 rounded-full bg-[var(--c1)] text-white titre text-xl font-bold flex items-center justify-center ring-4 ring-white">{i + 1}</span>
-                <T c={`${ce}.titre`} as="h3" className="titre block text-xl font-bold text-gray-900" />
-                <T c={`${ce}.texte`} as="p" className="block text-gray-600 mt-2 leading-relaxed" />
+export function Pieces() {
+  return (
+    <Section className="py-16">
+      <Conteneur className="grid lg:grid-cols-2 gap-8">
+        <Encadre icone={<FileText className="h-6 w-6" />} c="admissions.pieces" />
+        <Encadre icone={<Wallet className="h-6 w-6" />} c="admissions.paiement" />
+      </Conteneur>
+    </Section>
+  );
+}
+
+export function Frais() {
+  return (
+    <Section className="py-24 bg-gray-50">
+      <Conteneur className="max-w-4xl">
+        <TitreSection c="admissions.frais" />
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+          <div className="grid grid-cols-3 bg-[var(--c1)] text-white font-semibold text-sm md:text-base">
+            <span className="p-4 md:px-6">Cycle</span><span className="p-4 md:px-6 text-right">Inscription</span><span className="p-4 md:px-6 text-right">Mensualité</span>
+          </div>
+          <Liste c="admissions.frais.elements" nouveau={{ niveau: 'Niveau', inscription: '0 F', mensualite: '0 F' }} className="divide-y divide-gray-100" libelleAjout="Ajouter une ligne">
+            {(_, __, ce) => (
+              <div className="grid grid-cols-3 text-sm md:text-base">
+                <T c={`${ce}.niveau`} className="p-4 md:px-6 font-semibold text-gray-900" />
+                <T c={`${ce}.inscription`} className="p-4 md:px-6 text-right text-gray-700" />
+                <T c={`${ce}.mensualite`} className="p-4 md:px-6 text-right font-semibold text-[var(--c1)]" />
               </div>
             )}
           </Liste>
-        </Conteneur>
-      </Section>
+        </div>
+        <T c="admissions.frais.note" as="p" className="block mt-4 text-sm text-gray-500 text-center" />
+      </Conteneur>
+    </Section>
+  );
+}
 
-      <Section id="pieces" nom="Pièces et paiement" className="pb-24">
-        <Conteneur className="grid lg:grid-cols-2 gap-8">
-          <Encadre icone={<FileText className="h-6 w-6" />} c="admissions.pieces" />
-          <Encadre icone={<Wallet className="h-6 w-6" />} c="admissions.paiement" />
-        </Conteneur>
-      </Section>
+export function Preinscription() {
+  const { contenu } = useEdition();
+  return (
+    <Section className="py-24">
+      <Conteneur className="max-w-3xl">
+        <div className="text-center mb-10">
+          <T c="admissions.formulaire.titre" as="h2" className="titre block text-3xl md:text-4xl font-bold text-[var(--c1)]" />
+          <T c="admissions.formulaire.texte" as="p" className="block mt-4 text-gray-600 text-lg" />
+        </div>
+        <div className="bg-white rounded-3xl shadow-xl border border-gray-100 p-6 md:p-10">
+          <FormulaireWhatsApp
+            entete="Demande de préinscription"
+            bouton="Envoyer la préinscription"
+            champs={[
+              { nom: 'enfant', libelle: 'Nom et prénom de l\'enfant', requis: true },
+              { nom: 'naissance', libelle: 'Date de naissance' },
+              { nom: 'cycle', libelle: 'Cycle demandé', type: 'select', options: contenu.enseignement.cycles.map(c => c.nom), requis: true },
+              { nom: 'classe', libelle: 'Classe demandée' },
+              { nom: 'parent', libelle: 'Nom du parent', requis: true },
+              { nom: 'telephone', libelle: 'Téléphone', type: 'tel', requis: true },
+              { nom: 'message', libelle: 'Message (facultatif)', type: 'textarea' },
+            ]}
+          />
+        </div>
+      </Conteneur>
+    </Section>
+  );
+}
 
-      <Section id="frais" nom="Frais de scolarité" className="py-24 bg-gray-50">
-        <Conteneur className="max-w-4xl">
-          <TitreSection c="admissions.frais" />
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-            <div className="grid grid-cols-3 bg-[var(--c1)] text-white font-semibold text-sm md:text-base">
-              <span className="p-4 md:px-6">Cycle</span><span className="p-4 md:px-6 text-right">Inscription</span><span className="p-4 md:px-6 text-right">Mensualité</span>
-            </div>
-            <Liste c="admissions.frais.elements" nouveau={{ niveau: 'Niveau', inscription: '0 F', mensualite: '0 F' }} className="divide-y divide-gray-100" libelleAjout="Ajouter une ligne">
-              {(_, __, ce) => (
-                <div className="grid grid-cols-3 text-sm md:text-base">
-                  <T c={`${ce}.niveau`} className="p-4 md:px-6 font-semibold text-gray-900" />
-                  <T c={`${ce}.inscription`} className="p-4 md:px-6 text-right text-gray-700" />
-                  <T c={`${ce}.mensualite`} className="p-4 md:px-6 text-right font-semibold text-[var(--c1)]" />
-                </div>
-              )}
-            </Liste>
-          </div>
-          <T c="admissions.frais.note" as="p" className="block mt-4 text-sm text-gray-500 text-center" />
-        </Conteneur>
-      </Section>
-
-      <Section id="preinscription" nom="Préinscription" className="py-24">
-        <Conteneur className="max-w-3xl">
-          <div className="text-center mb-10">
-            <T c="admissions.formulaire.titre" as="h2" className="titre block text-3xl md:text-4xl font-bold text-[var(--c1)]" />
-            <T c="admissions.formulaire.texte" as="p" className="block mt-4 text-gray-600 text-lg" />
-          </div>
-          <div className="bg-white rounded-3xl shadow-xl border border-gray-100 p-6 md:p-10">
-            <FormulaireWhatsApp
-              entete="Demande de préinscription"
-              bouton="Envoyer la préinscription"
-              champs={[
-                { nom: 'enfant', libelle: 'Nom et prénom de l\'enfant', requis: true },
-                { nom: 'naissance', libelle: 'Date de naissance' },
-                { nom: 'cycle', libelle: 'Cycle demandé', type: 'select', options: cycles, requis: true },
-                { nom: 'classe', libelle: 'Classe demandée' },
-                { nom: 'parent', libelle: 'Nom du parent', requis: true },
-                { nom: 'telephone', libelle: 'Téléphone', type: 'tel', requis: true },
-                { nom: 'message', libelle: 'Message (facultatif)', type: 'textarea' },
-              ]}
-            />
-          </div>
-        </Conteneur>
-      </Section>
-
-      <Section id="faq" nom="Questions fréquentes" className="py-24 bg-gray-50">
-        <Conteneur className="max-w-3xl">
-          <TitreSection c="admissions.faq" />
-          <Liste c="admissions.faq.elements" nouveau={{ question: 'Nouvelle question ?', reponse: 'Réponse.' }} className="space-y-3" libelleAjout="Ajouter une question">
-            {(_, __, ce) => <Question ce={ce} />}
-          </Liste>
-        </Conteneur>
-      </Section>
-    </>
+export function Faq() {
+  return (
+    <Section className="py-24 bg-gray-50">
+      <Conteneur className="max-w-3xl">
+        <TitreSection c="admissions.faq" />
+        <Liste c="admissions.faq.elements" nouveau={{ question: 'Nouvelle question ?', reponse: 'Réponse.' }} className="space-y-3" libelleAjout="Ajouter une question">
+          {(_, __, ce) => <Question ce={ce} />}
+        </Liste>
+      </Conteneur>
+    </Section>
   );
 }
 
