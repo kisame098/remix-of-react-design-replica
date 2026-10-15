@@ -2,6 +2,8 @@ import { createRoot } from "react-dom/client";
 import App from "./App.tsx";
 import "./index.css";
 import { doitRechargerDOffice } from "./lib/rechargementApresDeploiement";
+import { sousDomaineEcole } from "./lib/hoteEcole";
+import { lazy, Suspense } from "react";
 
 // ── Après un déploiement ───────────────────────────────────────────────────
 // Les écrans sont chargés à la demande. Un onglet resté ouvert pendant une
@@ -31,4 +33,11 @@ setTimeout(() => {
   try { sessionStorage.removeItem(CLE_RECHARGEMENT); } catch { /* rien */ }
 }, 10_000);
 
-createRoot(document.getElementById("root")!).render(<App />);
+// Sur « <école>.senclass.com », seul le site publié de l'école s'affiche : ni le
+// SaaS, ni la connexion, ni l'application installable.
+const ecole = sousDomaineEcole(window.location.hostname);
+const SitePublic = lazy(() => import("./pages/SitePublic"));
+
+createRoot(document.getElementById("root")!).render(
+  ecole ? <Suspense fallback={null}><SitePublic cle={ecole} /></Suspense> : <App />,
+);

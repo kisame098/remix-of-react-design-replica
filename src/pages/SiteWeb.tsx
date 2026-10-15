@@ -9,6 +9,7 @@ import {
 import { useAuth } from '@/hooks/useAuth';
 import { toast } from '@/hooks/use-toast';
 import SiteEcole from '@/siteEcole/SiteEcole';
+import { adresseSiteEcole } from '@/lib/hoteEcole';
 import { GalerieModeles } from '@/siteEcole/ChoixModele';
 import { contenuDepuis } from '@/siteEcole/edition';
 import type { Contenu } from '@/siteEcole/contenu';
@@ -101,7 +102,7 @@ export default function SiteWeb() {
       const s = await publierSite();
       setSlug(s);
       setPublieLe(new Date().toISOString());
-      toast({ title: 'Site publié', description: `Votre site est en ligne : ${location.origin}/site/${s}` });
+      toast({ title: 'Site publié', description: `Votre site est en ligne : ${adresseSiteEcole(s, location.hostname, location.origin)}` });
     } catch (e) {
       toast({ title: 'Publication impossible', description: (e as { message?: string })?.message ?? 'Erreur inconnue', variant: 'destructive' });
     } finally {
@@ -152,7 +153,7 @@ export default function SiteWeb() {
     return <div className="min-h-screen flex items-center justify-center gap-2 text-muted-foreground"><Loader2 className="h-5 w-5 animate-spin" />Chargement de votre site…</div>;
   }
 
-  const adresse = slug ? `${location.origin}/site/${slug}` : null;
+  const adresse = slug ? adresseSiteEcole(slug, location.hostname, location.origin) : null;
   const actions = (
     <>
       <span className="hidden sm:flex items-center gap-1.5 px-2 text-xs text-muted-foreground whitespace-nowrap" aria-live="polite">

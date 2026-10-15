@@ -6,8 +6,10 @@ import type { Contenu } from '@/siteEcole/contenu';
 import { sitePublic } from '@/lib/siteWeb';
 
 /** Le site publié d'une école, ouvert à tous, sans aucun outil de modification. */
-export default function SitePublic() {
-  const { cle } = useParams<{ cle: string }>();
+export default function SitePublic({ cle: cleImposee }: { cle?: string }) {
+  // Sur un sous-domaine d'école (hors du routeur), le slug est passé directement.
+  const params = useParams<{ cle: string }>();
+  const cle = cleImposee ?? params.cle;
   const [contenu, setContenu] = useState<Contenu | null | undefined>(undefined);
 
   useEffect(() => {
