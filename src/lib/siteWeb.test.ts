@@ -4,7 +4,8 @@ vi.mock('@/integrations/supabase/client', () => ({ supabase: {} }));
 
 import { siteDeDepart } from './siteWeb';
 import { accesSiteWeb, menuPourMode } from './modeGestion';
-import { CONTENU_DEFAUT } from '@/siteEcole/contenu';
+import { CONTENU_DEFAUT, MODELES_SITE } from '@/siteEcole/contenu';
+import { avecModele } from '@/siteEcole/ChoixModele';
 
 describe('site web de l\'école — accès bêta', () => {
   it('seul le directeur d\'une école bêta-testeuse y a accès', () => {
@@ -47,5 +48,29 @@ describe('site web de l\'école — site de départ', () => {
     expect(c.identite.telephone).toBe(CONTENU_DEFAUT.identite.telephone);
     expect(c.identite.adresse).toBe(CONTENU_DEFAUT.identite.adresse);
     expect(CONTENU_DEFAUT.identite.nom).toBe('Groupe Scolaire Excellence');
+  });
+});
+
+describe('site web de l\'école — choix du modèle', () => {
+  const ecole = { name: 'Lycée Sant Yalla', logo_url: null, phone: '+221 33 800 00 00', email: null, city: 'Dakar', country: 'Sénégal' };
+
+  it('à la première ouverture, le modèle choisi arrive avec ses couleurs et les infos de l\'école', () => {
+    for (const modele of Object.keys(MODELES_SITE) as (keyof typeof MODELES_SITE)[]) {
+      const c = siteDeDepart(ecole, modele);
+      expect(c.identite.modele).toBe(modele);
+      expect([c.identite.couleur1, c.identite.couleur2]).toEqual([...MODELES_SITE[modele].couleurs]);
+      expect(c.identite.nom).toBe('Lycée Sant Yalla');
+    }
+  });
+
+  it('changer de modèle garde tous les textes ; les couleurs ne changent que si on le demande', () => {
+    const avant = { ...siteDeDepart(ecole, 'campus') };
+    const apresSans = avecModele(avant, 'prestige', false);
+    expect(apresSans.identite.modele).toBe('prestige');
+    expect(apresSans.identite.couleur1).toBe(avant.identite.couleur1);
+    expect(apresSans.accueil).toBe(avant.accueil);
+    const apresAvec = avecModele(avant, 'prestige', true);
+    expect([apresAvec.identite.couleur1, apresAvec.identite.couleur2]).toEqual([...MODELES_SITE.prestige.couleurs]);
+    expect(apresAvec.identite.nom).toBe('Lycée Sant Yalla');
   });
 });
