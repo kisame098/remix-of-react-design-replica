@@ -15,6 +15,23 @@ export function routeDepuisHash(hash: string): { page: string; sous: string } {
   return { page, sous: decodeURIComponent(sous) };
 }
 
+/**
+ * Site publié : les pages sont de vraies adresses, pour que Google les voie une à une.
+ * « /site/ecole-x/actualites/abc » (base « /site/ecole-x ») → { page: 'actualites', sous: 'abc' }.
+ * Sur le sous-domaine de l'école, la base est vide : « /actualites/abc ».
+ */
+export function routeDepuisChemin(chemin: string, base: string): { page: string; sous: string } {
+  const reste = chemin.startsWith(base) ? chemin.slice(base.length) : chemin;
+  return routeDepuisHash(`#${reste.startsWith('/') ? reste : `/${reste}`}`);
+}
+
+/** Lien interne écrit « #/admissions » → vraie adresse « <base>/admissions ». `null` si ce n'est pas un lien interne. */
+export function cheminDepuisLien(lien: string, base: string): string | null {
+  if (!lien.startsWith('#/')) return null;
+  const reste = lien.slice(2).replace(/\/+$/, '');
+  return reste ? `${base}/${reste}` : (base || '/');
+}
+
 /** Identifiant lisible d'une actualité, à partir de son titre, unique parmi `existants`. */
 export function identifiant(titre: string, existants: string[]): string {
   const base = titre.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()

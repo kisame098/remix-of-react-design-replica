@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { estPageFacebook, identifiant, integrationDepuisUrl, lienWhatsApp, routeDepuisHash } from './utilitaires';
+import { cheminDepuisLien, estPageFacebook, identifiant, integrationDepuisUrl, lienWhatsApp, routeDepuisChemin, routeDepuisHash } from './utilitaires';
 
 describe('utilitaires du site', () => {
   it('WhatsApp : chiffres seuls, message encodé', () => {
@@ -49,5 +49,21 @@ describe('utilitaires du site', () => {
     expect(estPageFacebook('https://www.facebook.com/GroupeScolaireExcellence')).toBe(true);
     expect(estPageFacebook('https://www.facebook.com/')).toBe(false);
     expect(estPageFacebook('https://instagram.com/x')).toBe(false);
+  });
+});
+
+describe('adresses réelles des pages', () => {
+  it('lit la page et l\'article depuis le chemin', () => {
+    expect(routeDepuisChemin('/admissions', '')).toEqual({ page: 'admissions', sous: '' });
+    expect(routeDepuisChemin('/', '')).toEqual({ page: '', sous: '' });
+    expect(routeDepuisChemin('/site/gse/actualites/bac-2026', '/site/gse')).toEqual({ page: 'actualites', sous: 'bac-2026' });
+    expect(routeDepuisChemin('/site/gse', '/site/gse')).toEqual({ page: '', sous: '' });
+  });
+  it('transforme les liens internes « #/… » en vraies adresses', () => {
+    expect(cheminDepuisLien('#/admissions', '')).toBe('/admissions');
+    expect(cheminDepuisLien('#/', '')).toBe('/');
+    expect(cheminDepuisLien('#/', '/site/gse')).toBe('/site/gse');
+    expect(cheminDepuisLien('#/actualites/bac-2026', '/site/gse')).toBe('/site/gse/actualites/bac-2026');
+    expect(cheminDepuisLien('https://wa.me/221', '')).toBeNull();
   });
 });

@@ -19,10 +19,6 @@ export default function SitePublic({ cle: cleImposee }: { cle?: string }) {
     return () => { annule = true; };
   }, [cle]);
 
-  useEffect(() => {
-    if (contenu) document.title = contenu.identite.nom;
-  }, [contenu]);
-
   if (contenu === undefined) {
     return <div className="min-h-screen flex items-center justify-center"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>;
   }
@@ -36,5 +32,6 @@ export default function SitePublic({ cle: cleImposee }: { cle?: string }) {
       </div>
     );
   }
-  return <SiteEcole initial={contenu} modifiable={false} />;
+  // Sur le sous-domaine, les pages sont à la racine (/admissions) ; sinon sous /site/<adresse>/.
+  return <SiteEcole initial={contenu} modifiable={false} base={cleImposee ? '' : `/site/${cle}`} />;
 }

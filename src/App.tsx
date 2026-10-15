@@ -130,7 +130,7 @@ const App = () => (
                 <Route path="/telecharger" element={<Telecharger />} />
                 <Route path="/reset-password" element={<ResetPassword />} />
                 {/* Site publié d'une école : ouvert à tous, sans connexion. */}
-                <Route path="/site/:cle" element={<SitePublic />} />
+                <Route path="/site/:cle/*" element={<SitePublic />} />
 
                 {/* ── Portail élève / professeur ─────────────────────── */}
                 <Route element={<ProtectedRoute />}>
