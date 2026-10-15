@@ -17,7 +17,10 @@
     "verify": "npm run typecheck && npm run lint && npm run test",
     "campagne": "node scripts/campagne.mjs",
     "audit:securite": "node scripts/audit-securite.mjs",
-    "mutations": "node scripts/mutations.mjs"
+    "mutations": "node scripts/mutations.mjs",
+    "labo:site": "vite --config labo/site-ecole/vite.config.ts",
+    "labo:site:test": "vitest run --config labo/site-ecole/vitest.config.ts",
+    "labo:site:types": "tsc -p labo/site-ecole/tsconfig.json --noEmit"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",
