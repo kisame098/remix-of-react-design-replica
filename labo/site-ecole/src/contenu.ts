@@ -10,6 +10,13 @@
 const photo = (id: string, largeur = 1600) => `https://images.unsplash.com/${id}?auto=format&fit=crop&w=${largeur}&q=80`;
 const portrait = (id: string) => `https://images.unsplash.com/${id}?auto=format&fit=crop&w=600&h=700&crop=faces&q=80`;
 
+/** Modèles de site : même contenu, présentation complètement différente. */
+export const MODELES_SITE = {
+  institution: { nom: 'Institution', description: 'Classique et solennel : photos plein écran, titres à empattements.', couleurs: ['#0B5D3B', '#E8A317'] },
+  teranga: { nom: 'Teranga', description: 'Moderne et chaleureux : fond crème, grands titres, motifs inspirés du wax.', couleurs: ['#B4441C', '#0E5E5A'] },
+} as const;
+export type ModeleSite = keyof typeof MODELES_SITE;
+
 export const POLICES = {
   classique: { nom: 'Classique', titres: "'Playfair Display', Georgia, serif", texte: "'Inter', system-ui, sans-serif" },
   moderne:   { nom: 'Moderne',   titres: "'Poppins', system-ui, sans-serif",    texte: "'Inter', system-ui, sans-serif" },
@@ -30,6 +37,7 @@ export interface Actualite { id: string; image: string; date: string; categorie:
 
 export const CONTENU_DEFAUT = {
   identite: {
+    modele: 'institution' as ModeleSite,
     nom: 'Groupe Scolaire Excellence',
     slogan: 'Discipline · Travail · Réussite',
     logo: '',

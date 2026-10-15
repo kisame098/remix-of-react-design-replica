@@ -10,7 +10,8 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { POLICES, TYPES_RESEAUX, type Police, type Reseau, type TypeReseau } from './contenu';
+import { MODELES_SITE, POLICES, TYPES_RESEAUX, type ModeleSite, type Police, type Reseau, type TypeReseau } from './contenu';
+import { POLICES_TERANGA } from './themes/teranga/GabaritTeranga';
 import { STYLE_RESEAU } from './reseaux';
 import { useEdition } from './edition';
 
@@ -89,6 +90,26 @@ function PanneauIdentite({ ouvert, onFermer }: { ouvert: boolean; onFermer: () =
         </SheetHeader>
 
         <div className="space-y-7 mt-6">
+          <Groupe titre="Modèle du site">
+            <p className="text-xs text-muted-foreground -mt-1">Changez de modèle à tout moment : vos textes, photos et actualités sont conservés.</p>
+            <div className="grid grid-cols-2 gap-2">
+              {(Object.entries(MODELES_SITE) as [ModeleSite, (typeof MODELES_SITE)[ModeleSite]][]).map(([cle, m]) => (
+                <button key={cle} type="button" onClick={() => maj('identite.modele', cle)}
+                  className={`rounded-xl border p-2 text-left transition-all ${id.modele === cle ? 'border-primary ring-2 ring-primary' : 'hover:border-primary/50'}`}>
+                  <MiniatureModele modele={cle} />
+                  <span className="block font-semibold text-sm mt-2">{m.nom}</span>
+                  <span className="block text-[11px] leading-snug text-muted-foreground">{m.description}</span>
+                </button>
+              ))}
+            </div>
+            {(id.couleur1 !== MODELES_SITE[id.modele].couleurs[0] || id.couleur2 !== MODELES_SITE[id.modele].couleurs[1]) && (
+              <Button variant="outline" size="sm" className="w-full gap-2" onClick={() => { maj('identite.couleur1', MODELES_SITE[id.modele].couleurs[0]); maj('identite.couleur2', MODELES_SITE[id.modele].couleurs[1]); }}>
+                <span className="flex">{MODELES_SITE[id.modele].couleurs.map(c => <span key={c} className="h-4 w-4 rounded-full border-2 border-white -ml-1 first:ml-0" style={{ background: c }} />)}</span>
+                Prendre les couleurs conseillées pour {MODELES_SITE[id.modele].nom}
+              </Button>
+            )}
+          </Groupe>
+
           <Groupe titre="École">
             {champ('nom', 'Nom de l\'école')}
             {champ('slogan', 'Devise ou slogan')}
@@ -113,7 +134,7 @@ function PanneauIdentite({ ouvert, onFermer }: { ouvert: boolean; onFermer: () =
               <Couleur libelle="Couleur d'accent" valeur={id.couleur2} onChange={v => maj('identite.couleur2', v)} />
             </div>
             <div className="grid grid-cols-3 gap-2">
-              {(Object.entries(POLICES) as [Police, (typeof POLICES)[Police]][]).map(([cle, p]) => (
+              {(Object.entries(id.modele === 'teranga' ? POLICES_TERANGA : POLICES) as [Police, { nom: string; titres: string }][]).map(([cle, p]) => (
                 <button key={cle} type="button" onClick={() => maj('identite.police', cle)}
                   className={`rounded-xl border p-3 text-left transition-all ${id.police === cle ? 'border-primary ring-1 ring-primary' : 'hover:border-primary/50'}`}>
                   <span className="block text-xl font-bold" style={{ fontFamily: p.titres }}>Aa</span>
@@ -202,5 +223,34 @@ function Couleur({ libelle, valeur, onChange }: { libelle: string; valeur: strin
         <span className="text-xs uppercase text-muted-foreground">{valeur}</span>
       </span>
     </label>
+  );
+}
+
+/** Petit aperçu dessiné de chaque modèle, pour choisir d'un coup d'œil. */
+function MiniatureModele({ modele }: { modele: ModeleSite }) {
+  if (modele === 'teranga') {
+    return (
+      <span className="block h-24 rounded-lg overflow-hidden bg-[#FAF6EF] p-1.5 relative">
+        <span className="block h-3 rounded-full bg-white border border-black/5 mx-2" />
+        <span className="absolute left-3 top-7 space-y-1">
+          <span className="block h-2.5 w-14 rounded bg-[#1C1917]" /><span className="block h-2.5 w-10 rounded bg-[#1C1917]" />
+          <span className="block h-2 w-8 rounded-full bg-[#B4441C] mt-2" />
+        </span>
+        <span className="absolute right-3 top-6 h-14 w-11 rounded-t-full rounded-b-md bg-[#0E5E5A]" />
+        <span className="absolute right-1.5 bottom-2 h-6 w-6 rounded-full bg-[#B4441C]" />
+      </span>
+    );
+  }
+  return (
+    <span className="block h-24 rounded-lg overflow-hidden bg-white relative">
+      <span className="block h-2 bg-[#0B5D3B]" />
+      <span className="block h-3 bg-white border-b" />
+      <span className="block h-12 bg-gradient-to-r from-gray-800 to-gray-500 relative">
+        <span className="absolute left-2 top-3 space-y-1"><span className="block h-2 w-14 rounded bg-white" /><span className="block h-1.5 w-8 rounded bg-[#E8A317]" /></span>
+      </span>
+      <span className="absolute left-2 right-2 bottom-2 h-5 rounded bg-white shadow flex justify-around items-center">
+        {[0, 1, 2].map(k => <span key={k} className="h-1.5 w-5 rounded bg-[#0B5D3B]" />)}
+      </span>
+    </span>
   );
 }

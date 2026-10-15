@@ -243,10 +243,13 @@ export function Appel() {
  * Formulaire sans serveur : il compose un message et l'ouvre dans WhatsApp,
  * adressé au numéro de l'école. Rien n'est stocké ni envoyé ailleurs.
  */
-export function FormulaireWhatsApp({ champs, entete, bouton = 'Envoyer sur WhatsApp' }: {
+export function FormulaireWhatsApp({ champs, entete, bouton = 'Envoyer sur WhatsApp', classeChamp: classePerso, classeBouton }: {
   champs: { nom: string; libelle: string; type?: 'text' | 'tel' | 'textarea' | 'select'; options?: string[]; requis?: boolean }[];
   entete: string;
   bouton?: string;
+  /** Apparence des champs et du bouton, propre à chaque modèle de site. */
+  classeChamp?: string;
+  classeBouton?: string;
 }) {
   const { contenu } = useEdition();
   const [valeurs, setValeurs] = useState<Record<string, string>>({});
@@ -259,7 +262,7 @@ export function FormulaireWhatsApp({ champs, entete, bouton = 'Envoyer sur Whats
     setEnvoye(true);
   };
 
-  const classeChamp = 'w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-gray-900 focus:outline-none focus:ring-2 focus:ring-[var(--c1-40)] focus:border-[var(--c1)]';
+  const classeChamp = classePerso ?? 'w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-gray-900 focus:outline-none focus:ring-2 focus:ring-[var(--c1-40)] focus:border-[var(--c1)]';
   return (
     <form onSubmit={envoyer} className="grid sm:grid-cols-2 gap-4">
       {champs.map(ch => (
@@ -276,7 +279,7 @@ export function FormulaireWhatsApp({ champs, entete, bouton = 'Envoyer sur Whats
         </label>
       ))}
       <div className="sm:col-span-2 flex flex-wrap items-center gap-4 mt-2">
-        <button type="submit" className="inline-flex items-center gap-2 px-7 py-3.5 rounded-full bg-[var(--c1)] text-white font-semibold hover:brightness-110 shadow-md">
+        <button type="submit" className={classeBouton ?? 'inline-flex items-center gap-2 px-7 py-3.5 rounded-full bg-[var(--c1)] text-white font-semibold hover:brightness-110 shadow-md'}>
           <Send className="h-4 w-4" />{bouton}
         </button>
         {envoye && <span className="flex items-center gap-1.5 text-sm text-green-700"><CheckCircle2 className="h-4 w-4" />WhatsApp s'est ouvert avec votre message.</span>}

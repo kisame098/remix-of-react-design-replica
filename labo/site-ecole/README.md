@@ -14,6 +14,31 @@ npm run labo:site
 Site sur http://localhost:8090. Tests : `npm run labo:site:test`. Types :
 `npm run labo:site:types`.
 
+## Deux modèles au choix
+
+Même contenu, même façon de modifier, présentation **complètement
+différente**. Le directeur choisit dans « Identité & couleurs » ; ses textes,
+photos et actualités sont conservés quand il change de modèle.
+
+| | Institution | Teranga |
+|---|---|---|
+| Esprit | classique, solennel | moderne, chaleureux, créatif |
+| Fond | blanc | crème, blocs arrondis |
+| Accueil | photo plein écran assombrie | deux colonnes, photo en arche, badge tournant |
+| Menu | barre classique + bandeau coordonnées | pilule flottante, menu plein écran sur téléphone |
+| Annonce | bandeau fixe | bandeau qui défile |
+| Décor | filets dorés | motifs géométriques inspirés du wax |
+| Chiffres | barre blanche | mosaïque de tuiles colorées |
+| Cycles (Enseignement) | blocs alternés | onglets |
+| Tarifs | tableau | cartes de prix |
+| Témoignages | cartes | bulles de discussion |
+| Actualités | grille de cartes | mise en page magazine |
+| Calendrier | liste | frise horizontale |
+| Pied de page | colonnes | « Parlons-en » + grand nom de l'école |
+
+Couleurs conseillées : Institution vert / or, Teranga terracotta / sarcelle
+(toujours modifiables).
+
 ## Le site
 
 7 pages : Accueil, Notre école, Enseignement, Vie scolaire, Admissions,
@@ -69,7 +94,9 @@ Bouton « Modifier le site » en bas de l'écran :
   glisser-déposer, envoi vers une autre page).
 - `src/EditeurArticle.tsx` — éditeur des articles (TipTap), chargé seulement
   en mode modification.
-- `src/pages/` — les sections, rangées par page d'origine.
+- `src/pages/` — les sections du modèle Institution, rangées par page.
+- `src/themes/teranga/` — le modèle Teranga : gabarit, motifs wax, sections
+  (mêmes identifiants que l'autre modèle, branchées dans `sections.tsx`).
 
 Bibliothèques ajoutées au projet pour le labo : TipTap (éditeur) et dnd-kit
 (glisser-déposer). Les aperçus de liens sont lus par le service public

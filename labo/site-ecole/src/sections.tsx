@@ -17,6 +17,15 @@ import { Activites, Calendrier, Galerie } from './pages/VieScolaire';
 import { Etapes, Faq, Frais, Pieces, Preinscription } from './pages/Admissions';
 import { ListeActualites } from './pages/Actualites';
 import { Coordonnees } from './pages/Contact';
+import type { ModeleSite } from './contenu';
+import { EntetePageTeranga } from './themes/teranga/GabaritTeranga';
+import {
+  ActualitesRecentesT, AppelT, ChiffresT, CyclesT, DiaporamaT, ListeEditoriale, MotT, ResultatsT, SuivezNousT, TemoignagesT,
+} from './themes/teranga/accueil';
+import {
+  ActivitesT, CalendrierT, CoordonneesT, CyclesOnglets, EquipeT, EtapesT, FaqT, FraisT, GalerieT, HistoireT, InfrastructuresT,
+  ListeActualitesT, PiecesT, PreinscriptionT,
+} from './themes/teranga/pages';
 
 /**
  * Catalogue de toutes les sections du site. Une section n'appartient à
@@ -65,12 +74,36 @@ export const SECTIONS: Record<string, { nom: string; groupe: string; Composant: 
   coordonnees: { nom: 'Coordonnées, formulaire et plan', groupe: 'Contact', Composant: Coordonnees },
 };
 
+/** Le modèle Teranga : mêmes sections (mêmes identifiants, même contenu), autre présentation. */
+const COMPOSANTS_TERANGA: Record<string, () => ReactNode> = {
+  diaporama: DiaporamaT, chiffres: ChiffresT, 'mot-directeur': MotT, cycles: CyclesT,
+  atouts: () => <ListeEditoriale c="accueil.atouts" />, resultats: ResultatsT, temoignages: TemoignagesT,
+  'actualites-recentes': ActualitesRecentesT, 'suivez-nous': SuivezNousT, appel: AppelT,
+  'entete-ecole': () => <EntetePageTeranga c="ecole.entete" />, histoire: HistoireT,
+  valeurs: () => <ListeEditoriale c="ecole.valeurs" fonce />, equipe: EquipeT, infrastructures: InfrastructuresT,
+  'entete-enseignement': () => <EntetePageTeranga c="enseignement.entete" motif="losanges" />, 'cycles-detail': CyclesOnglets,
+  pedagogie: () => <ListeEditoriale c="enseignement.pedagogie" fonce />,
+  'entete-vie-scolaire': () => <EntetePageTeranga c="vieScolaire.entete" motif="eventails" />, activites: ActivitesT,
+  services: () => <ListeEditoriale c="vieScolaire.services" />, galerie: GalerieT, calendrier: CalendrierT,
+  'entete-admissions': () => <EntetePageTeranga c="admissions.entete" />, etapes: EtapesT, pieces: PiecesT, frais: FraisT,
+  preinscription: PreinscriptionT, faq: FaqT,
+  'entete-actualites': () => <EntetePageTeranga c="actualites.entete" motif="losanges" />, 'liste-actualites': ListeActualitesT,
+  'entete-contact': () => <EntetePageTeranga c="contact.entete" motif="eventails" />, coordonnees: CoordonneesT,
+};
+
+/** Sections du modèle choisi par l'école (noms et groupes communs aux deux modèles). */
+export function sectionsDuModele(modele: ModeleSite): typeof SECTIONS {
+  if (modele !== 'teranga') return SECTIONS;
+  return Object.fromEntries(Object.entries(SECTIONS).map(([id, s]) => [id, { ...s, Composant: COMPOSANTS_TERANGA[id] ?? s.Composant }]));
+}
+
 const cleDePage = (page: string) => page || 'accueil';
 const nomDePage = (cle: string) => PAGES_INTERNES.find(p => p.lien === (cle === 'accueil' ? '#/' : `#/${cle}`))?.nom ?? cle;
 
 /** Les sections d'une page, dans l'ordre choisi par l'école. */
 export function PageSections({ page }: { page: string }) {
   const { contenu, edition, maj } = useEdition();
+  const SECTIONS = sectionsDuModele(contenu.identite.modele);
   const cle = cleDePage(page);
   const ids = (contenu.pages[cle] ?? []).filter(id => SECTIONS[id]);
   const [ajout, setAjout] = useState<number | null>(null);

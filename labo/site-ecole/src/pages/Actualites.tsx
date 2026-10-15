@@ -57,8 +57,22 @@ export function PageArticle({ id }: { id: string }) {
   const adresse = location.href;
   const autres = contenu.actualites.elements.filter(x => x.id !== id).slice(0, 3);
 
+  const teranga = contenu.identite.modele === 'teranga';
   return (
     <article>
+      {teranga ? (
+        <div className="max-w-5xl mx-auto px-6 pt-16 apparition">
+          <a href="#/actualites" className="inline-flex items-center gap-1.5 rounded-full bg-white border border-black/10 px-4 py-2 text-sm font-semibold"><ArrowLeft className="h-4 w-4" />Toutes les actualités</a>
+          <div className="flex flex-wrap items-center gap-3 mt-8 text-sm font-semibold">
+            <T c={`${ce}.categorie`} className="rounded-full bg-[var(--c1)] text-white px-4 py-1.5" />
+            <span className="flex items-center gap-1.5 text-black/50"><Calendar className="h-4 w-4" /><T c={`${ce}.date`} /></span>
+          </div>
+          <T c={`${ce}.titre`} as="h1" className="titre block text-4xl md:text-7xl font-extrabold leading-[0.98] mt-5" />
+          <div className="relative mt-12 h-[300px] md:h-[520px] rounded-[2.5rem] overflow-hidden">
+            <Img c={`${ce}.image`} className="absolute inset-0 w-full h-full object-cover" />
+          </div>
+        </div>
+      ) : (
       <div className="relative h-[380px] md:h-[480px] overflow-hidden">
         <Img c={`${ce}.image`} className="absolute inset-0 w-full h-full object-cover" />
         <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/40 to-black/10 pointer-events-none" />
@@ -73,6 +87,7 @@ export function PageArticle({ id }: { id: string }) {
           </div>
         </div>
       </div>
+      )}
 
       <div className="max-w-4xl mx-auto px-6 py-14">
         {edition && (

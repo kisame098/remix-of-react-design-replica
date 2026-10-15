@@ -1,5 +1,5 @@
 /* Typographies proposées à l'école (choix dans « Identité & couleurs »). */
-@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700;800&family=Poppins:wght@500;600;700&family=Cormorant+Garamond:wght@600;700&family=Source+Sans+3:wght@400;600&family=Inter:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700;800&family=Poppins:wght@500;600;700&family=Cormorant+Garamond:wght@600;700&family=Source+Sans+3:wght@400;600&family=Inter:wght@400;500;600;700&family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Fraunces:opsz,wght@9..144,600;9..144,800&family=Syne:wght@600;800&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,700&display=swap');
 
 .site {
   font-family: var(--f-texte); color: #1f2937; background: #fff;
@@ -67,3 +67,9 @@ html { scroll-behavior: smooth; }
 .article .carte-lien-texte small { color: var(--c1); font-weight: 600; text-transform: uppercase; letter-spacing: .05em; font-size: .7rem; }
 .article .ProseMirror-selectednode { outline: 3px solid #F59E0B; outline-offset: 2px; }
 .article p.is-editor-empty:first-child::before { content: attr(data-placeholder); color: #9ca3af; float: left; height: 0; pointer-events: none; font-style: italic; }
+
+/* ── Modèle Teranga ── */
+@keyframes defilement { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+.teranga .titre { letter-spacing: -0.03em; }
+/* Couleur d'accent éclaircie, lisible sur les fonds sombres. */
+.teranga { --c2-clair: color-mix(in srgb, var(--c2) 45%, white); }
