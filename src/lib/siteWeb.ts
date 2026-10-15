@@ -73,11 +73,23 @@ export async function enregistrerBrouillon(schoolId: string, contenu: Contenu, e
   if (error) throw error;
 }
 
-/** Publie le brouillon ; rend le slug de l'adresse publique (/site/<slug>). */
-export async function publierSite(): Promise<string> {
-  const { data, error } = await sb.rpc('site_publier');
+/**
+ * Publie le brouillon à l'adresse choisie (ou à l'adresse actuelle, ou à une
+ * adresse tirée du nom si l'école n'en a pas) ; rend l'adresse retenue.
+ */
+export async function publierSite(adresse?: string): Promise<string> {
+  const { data, error } = await sb.rpc('site_publier', adresse ? { p_slug: adresse } : {});
   if (error) throw error;
   return data as string;
+}
+
+export type EtatAdresse = 'libre' | 'actuelle' | 'prise' | 'reservee' | 'format';
+
+/** Vérifie auprès du serveur si l'adresse est libre pour cette école. */
+export async function verifierAdresse(adresse: string): Promise<EtatAdresse> {
+  const { data, error } = await sb.rpc('site_verifier_adresse', { p_slug: adresse });
+  if (error) throw error;
+  return data as EtatAdresse;
 }
 
 export async function depublierSite(): Promise<void> {

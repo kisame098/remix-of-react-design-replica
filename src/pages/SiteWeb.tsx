@@ -9,7 +9,8 @@ import {
 import { useAuth } from '@/hooks/useAuth';
 import { toast } from '@/hooks/use-toast';
 import SiteEcole from '@/siteEcole/SiteEcole';
-import { adresseSiteEcole } from '@/lib/hoteEcole';
+import { adresseSiteEcole, suggestionAdresse } from '@/lib/hoteEcole';
+import { ChampAdresse } from '@/components/siteWeb/ChampAdresse';
 import { GalerieModeles } from '@/siteEcole/ChoixModele';
 import { contenuDepuis } from '@/siteEcole/edition';
 import type { Contenu } from '@/siteEcole/contenu';
@@ -34,6 +35,9 @@ export default function SiteWeb() {
   const [slug, setSlug] = useState<string | null>(null);
   const [confirmer, setConfirmer] = useState(false);
   const [publication, setPublication] = useState(false);
+  /** L'adresse <adresse>.senclass.com choisie dans la fenêtre « Publier ». */
+  const [adresseChoisie, setAdresseChoisie] = useState('');
+  const [adresseValable, setAdresseValable] = useState(false);
   const existe = useRef(false);
   const minuteur = useRef<ReturnType<typeof setTimeout>>();
   const aEnregistrer = useRef<Contenu | null>(null);
@@ -99,7 +103,7 @@ export default function SiteWeb() {
     try {
       clearTimeout(minuteur.current);
       await enregistrer();
-      const s = await publierSite();
+      const s = await publierSite(adresseChoisie);
       setSlug(s);
       setPublieLe(new Date().toISOString());
       toast({ title: 'Site publié', description: `Votre site est en ligne : ${adresseSiteEcole(s, location.hostname, location.origin)}` });
@@ -186,19 +190,25 @@ export default function SiteWeb() {
         actions={actions}
       />
       <AlertDialog open={confirmer} onOpenChange={o => !publication && setConfirmer(o)}>
-        <AlertDialogContent className="font-sans">
+        <AlertDialogContent className="font-sans max-w-lg">
           <AlertDialogHeader>
-            <AlertDialogTitle>{publieLe ? 'Mettre à jour le site en ligne ?' : 'Publier votre site ?'}</AlertDialogTitle>
+            <AlertDialogTitle>{publieLe ? 'Mettre à jour le site en ligne ?' : 'Publier votre site'}</AlertDialogTitle>
             <AlertDialogDescription>
               {publieLe
                 ? 'Les visiteurs verront la version que vous avez sous les yeux.'
-                : 'Votre site deviendra visible par tous, à une adresse que vous pourrez partager (WhatsApp, Facebook…).'}
-              {adresse && <span className="block mt-2 font-medium text-foreground break-all">{adresse}</span>}
+                : 'Choisissez l\'adresse de votre site : c\'est elle que vous partagerez (WhatsApp, Facebook, affiches…).'}
             </AlertDialogDescription>
           </AlertDialogHeader>
+          {confirmer && school && (
+            <ChampAdresse
+              actuelle={slug}
+              suggestion={slug ?? suggestionAdresse(school.name)}
+              onChange={(a, ok) => { setAdresseChoisie(a); setAdresseValable(ok); }}
+            />
+          )}
           <AlertDialogFooter>
             <AlertDialogCancel disabled={publication}>Annuler</AlertDialogCancel>
-            <AlertDialogAction disabled={publication} onClick={e => { e.preventDefault(); void publier(); }}>
+            <AlertDialogAction disabled={publication || !adresseValable} onClick={e => { e.preventDefault(); void publier(); }}>
               {publication && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}{publieLe ? 'Mettre à jour' : 'Publier'}
             </AlertDialogAction>
           </AlertDialogFooter>
@@ -207,3 +217,4 @@ export default function SiteWeb() {
     </>
   );
 }
+

@@ -28,3 +28,25 @@ export function adresseSiteEcole(slug: string, hoteActuel: string, origineActuel
   if (h === 'senclass.com' || h === 'www.senclass.com') return `https://${slug}.senclass.com`;
   return `${origineActuelle}/site/${slug}`;
 }
+
+/**
+ * Pourquoi une adresse ne peut pas servir, ou null si elle convient.
+ * Même règle que le serveur (site_adresse_refusee, docs/sql/site_web_adresse.sql).
+ */
+export function adresseRefusee(slug: string): 'format' | 'reservee' | null {
+  if (!/^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$/.test(slug)) return 'format';
+  if (SOUS_DOMAINES_RESERVES.has(slug)) return 'reservee';
+  return null;
+}
+
+/** Nettoie ce que tape le directeur : minuscules, sans accents, espaces → tirets. */
+export function nettoyerAdresse(saisie: string): string {
+  return saisie.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
+    .replace(/[^a-z0-9-]+/g, '-').replace(/-{2,}/g, '-').replace(/^-+/, '').slice(0, 63);
+}
+
+/** Adresse proposée à partir du nom de l'école (« Groupe Scolaire Excellence » → « groupe-scolaire-excellence »). */
+export function suggestionAdresse(nom: string): string {
+  const base = nettoyerAdresse(nom).replace(/-+$/, '').slice(0, 60).replace(/-+$/, '');
+  return adresseRefusee(base) ? `ecole-${base}`.replace(/-+$/, '') : base;
+}
