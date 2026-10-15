@@ -5,8 +5,8 @@
 --
 --   • schools.beta_testeur : faux par défaut. Seul le chef du système le
 --     change (platform_set_school_beta), exactement comme le mode de gestion :
---     le rôle `authenticated` n'a AUCUN droit UPDATE sur cette colonne (les
---     droits sur `schools` sont accordés colonne par colonne). Chaque
+--     le rôle « authenticated » n'a AUCUN droit UPDATE sur cette colonne (les
+--     droits sur « schools » sont accordés colonne par colonne). Chaque
 --     changement est journalisé (platform_beta_changes).
 --   • school_sites : un site par école — le brouillon (enregistré au fil de
 --     l'eau) et la version publiée. Seul le DIRECTEUR (admin_school) d'une
