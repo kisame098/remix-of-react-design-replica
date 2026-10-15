@@ -19,8 +19,8 @@ import { STYLE_RESEAU } from './reseaux';
 import { useEdition } from './edition';
 
 /** Barre flottante, au style SenClass : bascule du mode modification et réglages du site. */
-export default function BarreEdition() {
-  const { edition, setEdition, stockagePlein, reinitialiser, identiteOuverte, ouvrirIdentite } = useEdition();
+export default function BarreEdition({ actions }: { actions?: React.ReactNode }) {
+  const { edition, setEdition, alerte, reinitialiser, identiteOuverte, ouvrirIdentite } = useEdition();
   const [reinit, setReinit] = useState(false);
 
   return (
@@ -30,9 +30,9 @@ export default function BarreEdition() {
           Mode modification : cliquez sur un texte pour l'écrire · survolez un élément ou une section pour le glisser, le dupliquer ou le retirer.
         </div>
       )}
-      {stockagePlein && (
+      {alerte && (
         <div className="fixed top-9 left-1/2 -translate-x-1/2 z-[45] bg-red-600 text-white text-sm rounded-lg px-4 py-2 flex items-center gap-2 font-sans shadow-lg">
-          <AlertTriangle className="h-4 w-4" />Photos trop lourdes : le dernier changement ne sera pas gardé (labo).
+          <AlertTriangle className="h-4 w-4" />{alerte}
         </div>
       )}
 
@@ -51,6 +51,7 @@ export default function BarreEdition() {
               </Button>
             </>
           )}
+          {actions && <><span className="h-6 w-px bg-border mx-0.5" />{actions}</>}
         </div>
       </div>
 
@@ -74,7 +75,7 @@ export default function BarreEdition() {
 
 /** Ce qui apparaît partout sur le site : nom, logo, couleurs, coordonnées. */
 function PanneauIdentite({ ouvert, onFermer }: { ouvert: boolean; onFermer: () => void }) {
-  const { contenu, maj } = useEdition();
+  const { contenu, maj, televerser } = useEdition();
   const id = contenu.identite;
   const logo = useRef<HTMLInputElement>(null);
   const champ = (cle: keyof typeof id, libelle: string, placeholder = '') => (
@@ -123,7 +124,7 @@ function PanneauIdentite({ ouvert, onFermer }: { ouvert: boolean; onFermer: () =
                 <input ref={logo} type="file" accept="image/*" className="hidden" onChange={e => {
                   const f = e.target.files?.[0]; e.target.value = '';
                   if (!f) return;
-                  const r = new FileReader(); r.onload = () => maj('identite.logo', String(r.result)); r.readAsDataURL(f);
+                  void televerser(f).then(src => maj('identite.logo', src));
                 }} />
                 <Button variant="outline" size="sm" className="gap-1.5" onClick={() => logo.current?.click()}><ImagePlus className="h-3.5 w-3.5" />Choisir</Button>
                 {id.logo && <Button variant="ghost" size="icon" aria-label="Retirer le logo" onClick={() => maj('identite.logo', '')}><Trash2 className="h-4 w-4 text-destructive" /></Button>}

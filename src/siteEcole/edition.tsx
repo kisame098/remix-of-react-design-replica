@@ -21,27 +21,22 @@ import { lienWhatsApp } from './utilitaires';
 
 /* ─────────────────────────── Contexte ─────────────────────────── */
 
-const CLE = 'labo.site-ecole.contenu';
-
-function charger(): Contenu {
-  try {
-    const brut = localStorage.getItem(CLE);
-    if (brut) return fusionner(CONTENU_DEFAUT, JSON.parse(brut));
-  } catch { /* stockage indisponible ou abîmé : modèle de départ */ }
-  return CONTENU_DEFAUT;
-}
-
 type Cible = { type: 'image' | 'lien' | 'icone'; chemin: string } | null;
 
 interface Edition {
   contenu: Contenu;
   edition: boolean;
   setEdition: (v: boolean) => void;
+  /** Faux sur le site public : aucun outil de modification n'existe. */
+  modifiable: boolean;
   maj: (chemin: string, valeur: unknown) => void;
   majListe: (chemin: string, f: (liste: unknown[]) => unknown[]) => void;
   ouvrir: (c: Cible) => void;
   reinitialiser: () => void;
-  stockagePlein: boolean;
+  /** Message d'alerte d'enregistrement (stockage plein, hors connexion…), sinon null. */
+  alerte: string | null;
+  /** Envoie une photo choisie par l'école et rend son adresse. */
+  televerser: (f: File) => Promise<string>;
   /** Panneau « Identité & couleurs » (ouvrable depuis les icônes de réseaux, etc.). */
   identiteOuverte: boolean;
   ouvrirIdentite: (v: boolean) => void;
@@ -55,33 +50,56 @@ export function useEdition() {
   return c;
 }
 
-export function FournisseurEdition({ children }: { children: ReactNode }) {
-  const [contenu, setContenu] = useState<Contenu>(charger);
-  const [edition, setEdition] = useState(false);
+/** Le contenu enregistré, complété par les champs du modèle ajoutés depuis. */
+export const contenuDepuis = (sauvegarde: unknown): Contenu => fusionner(CONTENU_DEFAUT, sauvegarde);
+
+/**
+ * Fournit le contenu du site et les outils de modification. Il ne sait pas
+ * OÙ le site est enregistré : celui qui l'utilise passe `onChange` (navigateur
+ * pour le labo, Supabase dans le SaaS) et `televerser` pour les photos.
+ */
+export function FournisseurEdition({ children, initial, onChange, televerser, modifiable = true, editionInitiale = false, alerte = null }: {
+  children: ReactNode;
+  initial: Contenu;
+  onChange?: (c: Contenu) => void;
+  televerser?: (f: File) => Promise<string>;
+  modifiable?: boolean;
+  editionInitiale?: boolean;
+  alerte?: string | null;
+}) {
+  const [contenu, setContenu] = useState<Contenu>(initial);
+  const [edition, setEdition] = useState(modifiable && editionInitiale);
   const [cible, ouvrir] = useState<Cible>(null);
-  const [stockagePlein, setStockagePlein] = useState(false);
   const [identiteOuverte, ouvrirIdentite] = useState(false);
+  const premier = useRef(true);
+  const rappel = useRef(onChange);
+  rappel.current = onChange;
 
   useEffect(() => {
-    try { localStorage.setItem(CLE, JSON.stringify(contenu)); setStockagePlein(false); }
-    catch { setStockagePlein(true); }
+    if (premier.current) { premier.current = false; return; }
+    rappel.current?.(contenu);
   }, [contenu]);
 
   const maj = useCallback((chemin: string, valeur: unknown) => setContenu(c => ecrire(c, chemin, valeur)), []);
   const majListe = useCallback((chemin: string, f: (l: unknown[]) => unknown[]) =>
     setContenu(c => ecrire(c, chemin, f((lire(c, chemin) as unknown[]) ?? []))), []);
+  const envoyer = useCallback((f: File) => (televerser ? televerser(f) : reduireImage(f)), [televerser]);
 
   const valeur = useMemo<Edition>(() => ({
-    contenu, edition, setEdition, maj, majListe, ouvrir,
-    reinitialiser: () => setContenu(CONTENU_DEFAUT), stockagePlein, identiteOuverte, ouvrirIdentite,
-  }), [contenu, edition, maj, majListe, stockagePlein, identiteOuverte]);
+    contenu, edition: modifiable && edition, setEdition, modifiable, maj, majListe, ouvrir,
+    reinitialiser: () => setContenu(CONTENU_DEFAUT), alerte, televerser: envoyer, identiteOuverte, ouvrirIdentite,
+  }), [contenu, edition, modifiable, maj, majListe, alerte, envoyer, identiteOuverte]);
 
   return (
     <Ctx.Provider value={valeur}>
       {children}
-      <FenetreImage cible={cible} onFermer={() => ouvrir(null)} />
-      <FenetreLien cible={cible} onFermer={() => ouvrir(null)} />
-      <FenetreIcone cible={cible} onFermer={() => ouvrir(null)} />
+      {modifiable && (
+        <>
+          <FenetreImage cible={cible} onFermer={() => ouvrir(null)} />
+          <FenetreLien cible={cible} onFermer={() => ouvrir(null)} />
+          <FenetreIcone cible={cible} onFermer={() => ouvrir(null)} />
+        </>
+      )}
     </Ctx.Provider>
   );
 }
@@ -301,8 +319,9 @@ export function Section({ className = '', children }: { id?: string; nom?: strin
 /* ─────────────────────────── Fenêtres ─────────────────────────── */
 
 function FenetreImage({ cible, onFermer }: { cible: Cible; onFermer: () => void }) {
-  const { contenu, maj } = useEdition();
+  const { contenu, maj, televerser } = useEdition();
   const ouvert = cible?.type === 'image';
+  const [envoi, setEnvoi] = useState(false);
   const [url, setUrl] = useState('');
   const fichier = useRef<HTMLInputElement>(null);
   useEffect(() => { if (ouvert) setUrl(String(lire(contenu, cible!.chemin) ?? '')); }, [ouvert]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -319,9 +338,10 @@ function FenetreImage({ cible, onFermer }: { cible: Cible; onFermer: () => void 
         <input ref={fichier} type="file" accept="image/*" className="hidden" onChange={e => {
           const f = e.target.files?.[0]; e.target.value = '';
           if (!f) return;
-          reduireImage(f).then(valider);
+          setEnvoi(true);
+          televerser(f).then(valider).catch(() => setEnvoi(false)).finally(() => setEnvoi(false));
         }} />
-        <Button className="gap-1.5" onClick={() => fichier.current?.click()}><ImagePlus className="h-4 w-4" />Choisir une photo</Button>
+        <Button className="gap-1.5" disabled={envoi} onClick={() => fichier.current?.click()}><ImagePlus className="h-4 w-4" />{envoi ? 'Envoi de la photo…' : 'Choisir une photo'}</Button>
         <div className="space-y-1.5">
           <Label>Ou adresse de l'image</Label>
           <Input value={url} onChange={e => setUrl(e.target.value)} placeholder="https://…" />

@@ -19,7 +19,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { reduireImage, useEdition } from './edition';
+import { useEdition } from './edition';
 import { integrationDepuisUrl } from './utilitaires';
 
 /* ─────────── Blocs propres au site : intégration, vidéo, carte d'aperçu ─────────── */
@@ -288,6 +288,7 @@ function FenetreLien({ ouvert, editeur, onFermer }: { ouvert: boolean; editeur: 
 }
 
 function FenetreImageArticle({ ouvert, editeur, onFermer }: { ouvert: boolean; editeur: Editor; onFermer: () => void }) {
+  const { televerser } = useEdition();
   const [url, setUrl] = useState('');
   const fichier = useRef<HTMLInputElement>(null);
   useEffect(() => { if (ouvert) setUrl(''); }, [ouvert]);
@@ -298,7 +299,7 @@ function FenetreImageArticle({ ouvert, editeur, onFermer }: { ouvert: boolean; e
         <DialogHeader><DialogTitle>Ajouter une photo</DialogTitle></DialogHeader>
         <input ref={fichier} type="file" accept="image/*" multiple className="hidden" onChange={async e => {
           const fichiers = [...(e.target.files ?? [])]; e.target.value = '';
-          for (const f of fichiers) editeur.chain().focus().setImage({ src: await reduireImage(f) }).run();
+          for (const f of fichiers) editeur.chain().focus().setImage({ src: await televerser(f) }).run();
           if (fichiers.length) onFermer();
         }} />
         <Button className="gap-1.5" onClick={() => fichier.current?.click()}><ImagePlus className="h-4 w-4" />Choisir une ou plusieurs photos</Button>

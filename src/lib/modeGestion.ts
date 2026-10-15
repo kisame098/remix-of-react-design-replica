@@ -28,7 +28,7 @@ export const estFormationPro = (school: { management_mode?: string | null } | nu
 export type IconeMenu =
   | 'dashboard' | 'inscription' | 'eleves' | 'profs' | 'classes' | 'notes' | 'cursus' | 'emploi'
   | 'presences' | 'paiements' | 'salaires' | 'identifiants'
-  | 'apercu' | 'formations' | 'promotions' | 'evaluations' | 'examens' | 'stages' | 'documents' | 'financements';
+  | 'apercu' | 'formations' | 'promotions' | 'evaluations' | 'examens' | 'stages' | 'documents' | 'financements' | 'siteweb';
 
 export interface ItemMenu {
   title: string;
@@ -39,6 +39,8 @@ export interface ItemMenu {
   bientot?: boolean;
   /** Regroupe visuellement les rubriques du mode formation. */
   groupe?: 'formation_pro';
+  /** Nouveauté réservée aux écoles bêta-testeuses. */
+  beta?: boolean;
 }
 
 const DASHBOARD: ItemMenu = { title: 'Dashboard', url: '/dashboard', icon: 'dashboard' };
@@ -90,18 +92,28 @@ export const RUBRIQUE_FINANCEMENTS: ItemMenu = {
   title: 'Financements', url: '/formation/financements', icon: 'financements', permission: 'financements', groupe: 'formation_pro',
 };
 
-export const menuPourMode = (mode: ModeGestion, options: { financements?: boolean } = {}): ItemMenu[] => {
+/**
+ * Site web de l'école : n'apparaît que pour le directeur d'une école que le chef
+ * du système a déclarée bêta-testeuse.
+ */
+export const accesSiteWeb = (school: { beta_testeur?: boolean | null } | null | undefined, accountRole: string | null | undefined): boolean =>
+  !!school?.beta_testeur && accountRole === 'admin';
+
+export const RUBRIQUE_SITE_WEB: ItemMenu = { title: 'Site web', url: '/site-web', icon: 'siteweb', beta: true };
+
+export const menuPourMode = (mode: ModeGestion, options: { financements?: boolean; siteWeb?: boolean } = {}): ItemMenu[] => {
+  const siteWeb = options.siteWeb ? [RUBRIQUE_SITE_WEB] : [];
   if (mode === 'formation_pro') {
     return [
       DASHBOARD, INSCRIPTION_ELEVES, GESTION_ELEVES, INSCRIPTION_PROFS, GESTION_PROFS,
       ...RUBRIQUES_FORMATION_PRO,
       ...(options.financements ? [RUBRIQUE_FINANCEMENTS] : []),
-      EMPLOIS, PRESENCES, PAIEMENTS, SALAIRES, IDENTIFIANTS,
+      EMPLOIS, PRESENCES, PAIEMENTS, SALAIRES, IDENTIFIANTS, ...siteWeb,
     ];
   }
   return [
     DASHBOARD, INSCRIPTION_ELEVES, GESTION_ELEVES, INSCRIPTION_PROFS, GESTION_PROFS,
-    GESTION_CLASSE, GESTION_NOTES, CURSUS, EMPLOIS, PRESENCES, PAIEMENTS, SALAIRES, IDENTIFIANTS, DOCUMENTS_ECOLE,
+    GESTION_CLASSE, GESTION_NOTES, CURSUS, EMPLOIS, PRESENCES, PAIEMENTS, SALAIRES, IDENTIFIANTS, DOCUMENTS_ECOLE, ...siteWeb,
   ];
 };
 

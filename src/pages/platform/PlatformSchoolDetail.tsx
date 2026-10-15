@@ -10,7 +10,7 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { ArrowLeft, Loader2, RefreshCw, ShieldAlert, Repeat } from 'lucide-react';
+import { ArrowLeft, FlaskConical, Loader2, RefreshCw, ShieldAlert, Repeat } from 'lucide-react';
 import { LIBELLES_MODE, type ModeGestion } from '@/lib/modeGestion';
 import { toast } from '@/hooks/use-toast';
 import {
@@ -70,6 +70,9 @@ const PlatformSchoolDetail = () => {
   const [mode, setMode] = useState<ModeGestion | null>(null);
   const [confirmerMode, setConfirmerMode] = useState<ModeGestion | null>(null);
   const [changementMode, setChangementMode] = useState(false);
+  const [beta, setBeta] = useState<boolean | null>(null);
+  const [confirmerBeta, setConfirmerBeta] = useState<boolean | null>(null);
+  const [changementBeta, setChangementBeta] = useState(false);
 
   const charger = useCallback(async () => {
     if (!schoolId) return;
@@ -80,8 +83,12 @@ const PlatformSchoolDetail = () => {
       toast({ title: 'Erreur', description: error.message, variant: 'destructive' });
     } else {
       setD(data as Detail);
-      const { data: m } = await sb.rpc('platform_school_mode', { p_school_id: schoolId });
+      const [{ data: m }, { data: b }] = await Promise.all([
+        sb.rpc('platform_school_mode', { p_school_id: schoolId }),
+        sb.rpc('platform_school_beta', { p_school_id: schoolId }),
+      ]);
       if (m === 'classique' || m === 'formation_pro') setMode(m);
+      if (typeof b === 'boolean') setBeta(b);
     }
     setLoading(false);
   }, [schoolId]);
@@ -99,6 +106,22 @@ const PlatformSchoolDetail = () => {
     } finally {
       setChangementMode(false);
       setConfirmerMode(null);
+    }
+  };
+
+  const appliquerBeta = async (cible: boolean) => {
+    if (!schoolId) return;
+    setChangementBeta(true);
+    try {
+      const { error } = await sb.rpc('platform_set_school_beta', { p_school_id: schoolId, p_beta: cible });
+      if (error) throw error;
+      setBeta(cible);
+      toast({ title: cible ? 'École bêta-testeuse' : 'Bêta désactivée', description: cible ? `${d?.ecole.nom} a maintenant accès aux nouveautés en test.` : `${d?.ecole.nom} n'a plus accès aux nouveautés en test.` });
+    } catch (e) {
+      toast({ title: 'Changement impossible', description: (e as { message?: string })?.message ?? 'Erreur inconnue', variant: 'destructive' });
+    } finally {
+      setChangementBeta(false);
+      setConfirmerBeta(null);
     }
   };
 
@@ -192,6 +215,45 @@ const PlatformSchoolDetail = () => {
             <AlertDialogCancel disabled={changementMode}>Annuler</AlertDialogCancel>
             <AlertDialogAction disabled={changementMode} onClick={e => { e.preventDefault(); if (confirmerMode) void appliquerMode(confirmerMode); }}>
               {changementMode && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}Confirmer
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* ── Bêta-testeur ───────────────────────────────────────────────── */}
+      <Card>
+        <CardHeader className="pb-2"><CardTitle className="text-base flex items-center gap-2">Bêta-testeur {beta && <Badge className="bg-sky-100 text-sky-700 hover:bg-sky-100">Bêta</Badge>}</CardTitle></CardHeader>
+        <CardContent className="flex items-center justify-between gap-4 flex-wrap">
+          <div className="text-sm">
+            <p>Accès aux nouveautés en test : <span className="font-semibold">{beta === null ? '—' : beta ? 'oui' : 'non'}</span></p>
+            <p className="text-xs text-muted-foreground mt-1 max-w-xl">
+              Une école bêta-testeuse voit les nouveautés avant les autres — pour l'instant le <strong>site web de l'école</strong> (rubrique « Site web » pour le directeur).
+              Retirer la bêta masque la rubrique et met le site public hors ligne ; le contenu déjà saisi est conservé.
+            </p>
+          </div>
+          {beta !== null && (
+            <Button variant="outline" className="gap-2" disabled={changementBeta} onClick={() => setConfirmerBeta(!beta)}>
+              <FlaskConical className="h-4 w-4" />{beta ? 'Retirer de la bêta' : 'Rendre bêta-testeuse'}
+            </Button>
+          )}
+        </CardContent>
+      </Card>
+
+      <AlertDialog open={confirmerBeta !== null} onOpenChange={o => { if (!o && !changementBeta) setConfirmerBeta(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{confirmerBeta ? `Rendre ${d.ecole.nom} bêta-testeuse ?` : `Retirer ${d.ecole.nom} de la bêta ?`}</AlertDialogTitle>
+            <AlertDialogDescription>
+              {confirmerBeta
+                ? "Le directeur verra la rubrique « Site web » et pourra créer et publier le site de l'école."
+                : "La rubrique « Site web » disparaît et le site public n'est plus accessible. Le contenu saisi est conservé si vous réactivez la bêta."}
+              {' '}Ce changement est enregistré dans le journal de la plateforme.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={changementBeta}>Annuler</AlertDialogCancel>
+            <AlertDialogAction disabled={changementBeta} onClick={e => { e.preventDefault(); if (confirmerBeta !== null) void appliquerBeta(confirmerBeta); }}>
+              {changementBeta && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}Confirmer
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

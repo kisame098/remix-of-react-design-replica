@@ -19,7 +19,6 @@
     "audit:securite": "node scripts/audit-securite.mjs",
     "mutations": "node scripts/mutations.mjs",
     "labo:site": "vite --config labo/site-ecole/vite.config.ts",
-    "labo:site:test": "vitest run --config labo/site-ecole/vitest.config.ts",
     "labo:site:types": "tsc -p labo/site-ecole/tsconfig.json --noEmit"
   },
   "dependencies": {

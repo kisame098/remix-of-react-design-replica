@@ -36,6 +36,7 @@ interface SchoolRow {
   subscription_plan: string | null;
   subscription_expires_at: string | null;
   management_mode?: 'classique' | 'formation_pro';
+  beta_testeur?: boolean;
 }
 
 const STATUS_INFO: Record<SubscriptionStatus, { label: string; variant: 'default' | 'secondary' | 'destructive' | 'outline' }> = {
@@ -85,7 +86,7 @@ const PlatformSchools = () => {
     setLoading(true);
     const { data, error } = await sb
       .from('schools')
-      .select('id, name, city, country, created_at, subscription_status, subscription_plan, subscription_expires_at, management_mode')
+      .select('id, name, city, country, created_at, subscription_status, subscription_plan, subscription_expires_at, management_mode, beta_testeur')
       .order('created_at', { ascending: false });
     if (error) {
       toast({ title: 'Erreur', description: error.message, variant: 'destructive' });
@@ -263,6 +264,9 @@ const PlatformSchools = () => {
                         <Link to={`/platform/ecoles/${school.id}`} className="hover:underline text-primary">{school.name}</Link>
                         {school.management_mode === 'formation_pro' && (
                           <span className="ml-2 rounded-full bg-violet-100 text-violet-700 px-2 py-0.5 text-[10px] font-semibold align-middle">Formation pro</span>
+                        )}
+                        {school.beta_testeur && (
+                          <span className="ml-2 rounded-full bg-sky-100 text-sky-700 px-2 py-0.5 text-[10px] font-semibold align-middle">Bêta</span>
                         )}
                         <div className="text-xs text-muted-foreground font-normal">{school.city ?? '—'}</div>
                       </TableCell>

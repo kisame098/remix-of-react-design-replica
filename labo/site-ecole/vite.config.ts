@@ -26,6 +26,7 @@ export default defineConfig({
           content: [
             path.join(ICI, "index.html"),
             path.join(ICI, "src/**/*.{ts,tsx}"),
+            path.join(RACINE, "src/siteEcole/**/*.{ts,tsx}"),
             path.join(RACINE, "src/components/ui/**/*.{ts,tsx}"),
           ],
         }),

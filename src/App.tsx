@@ -41,6 +41,9 @@ import { AuthProvider } from "./contexts/AuthContext";
 // on y va — puis gardé sur l'appareil par l'application installée.
 const ResetPassword         = lazy(() => import("./pages/ResetPassword"));
 const Telecharger           = lazy(() => import("./pages/Telecharger"));
+// Site web de l'école (bêta) : l'éditeur du directeur et le site public.
+const SiteWeb               = lazy(() => import("./pages/SiteWeb"));
+const SitePublic            = lazy(() => import("./pages/SitePublic"));
 const Dashboard             = lazy(() => import("./pages/Dashboard"));
 const StudentRegistration   = lazy(() => import("./pages/StudentRegistration"));
 const ClassManagement       = lazy(() => import("./pages/ClassManagement"));
@@ -126,6 +129,8 @@ const App = () => (
                 <Route path="/auth" element={<Auth />} />
                 <Route path="/telecharger" element={<Telecharger />} />
                 <Route path="/reset-password" element={<ResetPassword />} />
+                {/* Site publié d'une école : ouvert à tous, sans connexion. */}
+                <Route path="/site/:cle" element={<SitePublic />} />
 
                 {/* ── Portail élève / professeur ─────────────────────── */}
                 <Route element={<ProtectedRoute />}>
@@ -149,6 +154,11 @@ const App = () => (
                 </Route>
 
                 {/* ── Caisse mobile (staff "cashier" uniquement) ─────── */}
+                {/* Éditeur du site web : plein écran (hors du tableau de bord), directeur d'une école bêta. */}
+                <Route element={<ProtectedRoute />}>
+                  <Route path="/site-web" element={<RequirePermission adminOnly><SiteWeb /></RequirePermission>} />
+                </Route>
+
                 <Route element={<ProtectedRoute />}>
                   <Route path="/caisse" element={<Caisse />} />
                 </Route>

@@ -81,3 +81,33 @@ describe('PlatformSchoolDetail — mode de gestion', () => {
     expect(await screen.findByRole('button', { name: /Revenir au mode classique/ })).toBeInTheDocument();
   });
 });
+
+describe('PlatformSchoolDetail — bêta-testeur', () => {
+  const repondre = (beta: boolean) => rpc.mockImplementation(async (fn: string, args?: { p_beta?: boolean }) => {
+    if (fn === 'platform_school_detail') return { data: DETAIL, error: null };
+    if (fn === 'platform_school_mode') return { data: 'classique', error: null };
+    if (fn === 'platform_school_beta') return { data: beta, error: null };
+    if (fn === 'platform_set_school_beta') return { data: args?.p_beta, error: null };
+    return { data: null, error: null };
+  });
+
+  it('rend une école bêta-testeuse seulement après confirmation, par le serveur', async () => {
+    rpc.mockReset(); repondre(false);
+    const user = userEvent.setup();
+    ouvrir();
+    await user.click(await screen.findByRole('button', { name: /Rendre bêta-testeuse/ }));
+    expect(screen.getByText(/verra la rubrique « Site web »/)).toBeInTheDocument();
+    expect(rpc).not.toHaveBeenCalledWith('platform_set_school_beta', expect.anything());   // pas avant confirmation
+    await user.click(screen.getByRole('button', { name: 'Confirmer' }));
+    await waitFor(() => expect(rpc).toHaveBeenCalledWith('platform_set_school_beta', { p_school_id: 's1', p_beta: true }));
+    expect(await screen.findByRole('button', { name: /Retirer de la bêta/ })).toBeInTheDocument();
+  });
+
+  it('une école déjà bêta propose de la retirer, en prévenant que le site public sera hors ligne', async () => {
+    rpc.mockReset(); repondre(true);
+    const user = userEvent.setup();
+    ouvrir();
+    await user.click(await screen.findByRole('button', { name: /Retirer de la bêta/ }));
+    expect(screen.getByText(/le site public n'est plus accessible/)).toBeInTheDocument();
+  });
+});
