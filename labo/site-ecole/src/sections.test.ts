@@ -58,4 +58,19 @@ describe('modèles de site', () => {
       for (const id of ids) expect(campus[id], `${page} → ${id}`).toBeDefined();
     }
   });
+
+  it('Baobab présente chaque section à sa façon, a ses sections propres et son propre ordre', () => {
+    const baobab = sectionsDuModele('baobab');
+    const autres = (['institution', 'teranga', 'prestige', 'campus'] as ModeleSite[]).map(sectionsDuModele);
+    for (const id of Object.keys(SECTIONS)) {
+      for (const autre of autres) expect(baobab[id].Composant, id).not.toBe(autre[id].Composant);
+    }
+    for (const id of ['confiance', 'journee', 'evolution', 'question']) {
+      expect(baobab[id], id).toBeDefined();
+      expect(sectionsDuModele('campus')[id], `${id} ne doit pas apparaître dans Campus`).toBeUndefined();
+    }
+    for (const [page, ids] of Object.entries(CONTENU_DEFAUT.pagesBaobab)) {
+      for (const id of ids) expect(baobab[id], `${page} → ${id}`).toBeDefined();
+    }
+  });
 });

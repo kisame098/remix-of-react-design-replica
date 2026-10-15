@@ -14,6 +14,7 @@ import { MODELES_SITE, POLICES, TYPES_RESEAUX, type ModeleSite, type Police, typ
 import { POLICES_TERANGA } from './themes/teranga/GabaritTeranga';
 import { POLICES_PRESTIGE } from './themes/prestige/GabaritPrestige';
 import { POLICES_CAMPUS } from './themes/campus/GabaritCampus';
+import { POLICES_BAOBAB } from './themes/baobab/GabaritBaobab';
 import { STYLE_RESEAU } from './reseaux';
 import { useEdition } from './edition';
 
@@ -136,7 +137,7 @@ function PanneauIdentite({ ouvert, onFermer }: { ouvert: boolean; onFermer: () =
               <Couleur libelle="Couleur d'accent" valeur={id.couleur2} onChange={v => maj('identite.couleur2', v)} />
             </div>
             <div className="grid grid-cols-3 gap-2">
-              {(Object.entries(id.modele === 'teranga' ? POLICES_TERANGA : id.modele === 'prestige' ? POLICES_PRESTIGE : id.modele === 'campus' ? POLICES_CAMPUS : POLICES) as [Police, { nom: string; titres: string }][]).map(([cle, p]) => (
+              {(Object.entries(id.modele === 'teranga' ? POLICES_TERANGA : id.modele === 'prestige' ? POLICES_PRESTIGE : id.modele === 'campus' ? POLICES_CAMPUS : id.modele === 'baobab' ? POLICES_BAOBAB : POLICES) as [Police, { nom: string; titres: string }][]).map(([cle, p]) => (
                 <button key={cle} type="button" onClick={() => maj('identite.police', cle)}
                   className={`rounded-xl border p-3 text-left transition-all ${id.police === cle ? 'border-primary ring-1 ring-primary' : 'hover:border-primary/50'}`}>
                   <span className="block text-xl font-bold" style={{ fontFamily: p.titres }}>Aa</span>
@@ -230,6 +231,20 @@ function Couleur({ libelle, valeur, onChange }: { libelle: string; valeur: strin
 
 /** Petit aperçu dessiné de chaque modèle, pour choisir d'un coup d'œil. */
 function MiniatureModele({ modele }: { modele: ModeleSite }) {
+  if (modele === 'baobab') {
+    return (
+      <span className="block h-24 rounded-lg overflow-hidden bg-white relative border">
+        <span className="absolute right-0 inset-y-0 w-[45%] bg-[#F3F7F4] rounded-bl-2xl" />
+        <span className="absolute left-2 top-5 space-y-1">
+          <span className="block h-2 w-14 rounded bg-[#0D1F19]" /><span className="block h-2 w-9 rounded bg-[#0F5C45]" />
+          <span className="block h-0.5 w-9 rounded bg-[#FF7A3D]" /><span className="block h-3 w-14 rounded-md bg-white border mt-2" />
+        </span>
+        <span className="absolute right-2 top-3 h-11 w-10 rounded-lg bg-[#0F5C45]/70" />
+        <span className="absolute right-8 top-9 h-7 w-7 rounded-md bg-[#FF7A3D]/80 ring-2 ring-white" />
+        <span className="absolute right-3 bottom-2 h-6 w-9 rounded-md bg-[#0F5C45] ring-2 ring-white" />
+      </span>
+    );
+  }
   if (modele === 'campus') {
     return (
       <span className="block h-24 rounded-lg overflow-hidden relative" style={{ background: 'linear-gradient(180deg,#06213d,#0B3A66 45%,#6fa3d8)' }}>

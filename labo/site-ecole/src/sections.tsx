@@ -36,6 +36,13 @@ import {
 import {
   AdmissionC, CalendrierC, ContactC, CyclesDetailC, EtapesC, FaqC, FraisC, GalerieC, HistoireC, InfrastructuresC, ListeActualitesC, PiecesC,
 } from './themes/campus/pages';
+import { EnteteB } from './themes/baobab/GabaritBaobab';
+import {
+  AccordeonB, ActusB, BentoB, ChiffresB, ConfianceB, EvolutionB, HeroB, IconesB, JourneeB, MotB, QuestionB, ResultatsB, SuivezB, TemoignagesB,
+} from './themes/baobab/accueil';
+import {
+  ActivitesB, CalendrierB, ContactB, CyclesEmpilesB, EquipeB, EtapesB, FaqB, FraisB, GalerieB, HistoireB, InfraB, ListeActusB, PiecesB, PreinscriptionB,
+} from './themes/baobab/pages';
 import {
   ActualitesRecentesT, AppelT, ChiffresT, CyclesT, DiaporamaT, ListeEditoriale, MotT, ResultatsT, SuivezNousT, TemoignagesT,
 } from './themes/teranga/accueil';
@@ -160,6 +167,31 @@ const SECTIONS_CAMPUS_SEULES: typeof SECTIONS = {
   'bande-photos': { nom: 'Bande de photos', groupe: 'Campus', Composant: BandePhotosC },
 };
 
+/** Le modèle Baobab : sa présentation de chaque section… */
+const COMPOSANTS_BAOBAB: Record<string, () => ReactNode> = {
+  diaporama: HeroB, chiffres: ChiffresB, 'mot-directeur': MotB, cycles: AccordeonB,
+  atouts: BentoB, resultats: ResultatsB, temoignages: TemoignagesB,
+  'actualites-recentes': ActusB, 'suivez-nous': SuivezB, appel: QuestionB,
+  'entete-ecole': () => <EnteteB c="ecole.entete" />, histoire: HistoireB,
+  valeurs: () => <IconesB c="ecole.valeurs" doux />, equipe: EquipeB, infrastructures: InfraB,
+  'entete-enseignement': () => <EnteteB c="enseignement.entete" />, 'cycles-detail': CyclesEmpilesB,
+  pedagogie: () => <IconesB c="enseignement.pedagogie" doux />,
+  'entete-vie-scolaire': () => <EnteteB c="vieScolaire.entete" />, activites: ActivitesB,
+  services: () => <IconesB c="vieScolaire.services" />, galerie: GalerieB, calendrier: CalendrierB,
+  'entete-admissions': () => <EnteteB c="admissions.entete" />, etapes: EtapesB, pieces: PiecesB, frais: FraisB,
+  preinscription: PreinscriptionB, faq: FaqB,
+  'entete-actualites': () => <EnteteB c="actualites.entete" />, 'liste-actualites': ListeActusB,
+  'entete-contact': () => <EnteteB c="contact.entete" />, coordonnees: ContactB,
+};
+
+/** … et ses sections propres. */
+const SECTIONS_BAOBAB_SEULES: typeof SECTIONS = {
+  confiance: { nom: 'Bandeau de confiance', groupe: 'Baobab', Composant: ConfianceB },
+  journee: { nom: 'Une journée à l\'école', groupe: 'Baobab', Composant: JourneeB },
+  evolution: { nom: 'Évolution des résultats (graphique)', groupe: 'Baobab', Composant: EvolutionB },
+  question: { nom: 'Une question ? (WhatsApp, rendez-vous)', groupe: 'Baobab', Composant: QuestionB },
+};
+
 /** Sections du modèle choisi par l'école (noms et groupes communs aux modèles). */
 export function sectionsDuModele(modele: ModeleSite): typeof SECTIONS {
   const remplacer = (composants: Record<string, () => ReactNode>) =>
@@ -167,12 +199,13 @@ export function sectionsDuModele(modele: ModeleSite): typeof SECTIONS {
   if (modele === 'teranga') return remplacer(COMPOSANTS_TERANGA);
   if (modele === 'prestige') return { ...remplacer(COMPOSANTS_PRESTIGE), ...SECTIONS_PRESTIGE_SEULES };
   if (modele === 'campus') return { ...remplacer(COMPOSANTS_CAMPUS), ...SECTIONS_CAMPUS_SEULES };
+  if (modele === 'baobab') return { ...remplacer(COMPOSANTS_BAOBAB), ...SECTIONS_BAOBAB_SEULES };
   return SECTIONS;
 }
 
-/** Prestige et Campus ont leur propre ordre de sections ; Institution et Teranga partagent le leur. */
+/** Prestige, Campus et Baobab ont leur propre ordre de sections ; Institution et Teranga partagent le leur. */
 export const cleOrdre = (modele: ModeleSite) =>
-  (modele === 'prestige' ? 'pagesPrestige' : modele === 'campus' ? 'pagesCampus' : 'pages') as 'pages' | 'pagesPrestige' | 'pagesCampus';
+  ({ prestige: 'pagesPrestige', campus: 'pagesCampus', baobab: 'pagesBaobab' } as const)[modele as 'prestige'] ?? 'pages';
 
 const cleDePage = (page: string) => page || 'accueil';
 const nomDePage = (cle: string) => PAGES_INTERNES.find(p => p.lien === (cle === 'accueil' ? '#/' : `#/${cle}`))?.nom ?? cle;

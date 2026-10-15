@@ -14,7 +14,7 @@ npm run labo:site
 Site sur http://localhost:8090. Tests : `npm run labo:site:test`. Types :
 `npm run labo:site:types`.
 
-## Quatre modèles au choix
+## Cinq modèles au choix
 
 Même contenu, même façon de modifier, présentation **complètement
 différente**. Le directeur choisit dans « Identité & couleurs » ; ses textes,
@@ -38,6 +38,23 @@ photos et actualités sont conservés quand il change de modèle.
 
 Couleurs conseillées : Institution vert / or, Teranga terracotta / sarcelle,
 Prestige bleu nuit / or patiné (toujours modifiables).
+
+### Baobab — lumineux et chaleureux (création originale)
+
+Vert profond et orange vif sur fond blanc, titres Plus Jakarta Sans très gras
+dont le dernier mot est souligné d'un trait « dessiné à la main » qui se
+trace à l'apparition. Ouverture en écran partagé : titre, petit outil
+« quel cycle ? → voir les tarifs », collage de trois photos avec étiquettes
+flottantes. Bandeau de confiance défilant ; atouts en mosaïque « bento » ;
+cycles en accordéon horizontal ; **une journée à l'école** (7 h 45 levée des
+couleurs → 16 h 30 études surveillées) ; **graphique animé de l'évolution
+des résultats** CFEE / BFEM / Bac sur cinq ans ; témoignages en deux rangées
+qui défilent en sens contraire ; actualités en carrousel ; cycles en cartes
+qui s'empilent au défilement ; **liste des pièces à cocher** par le parent ;
+**tarifs par mois / pour l'année** (inscription + 10 mensualités) ;
+**préinscription en trois étapes** ; menu mobile en feuille qui monte du bas ;
+fenêtre WhatsApp façon discussion ; barre de lecture sous l'en-tête.
+Propre ordre de pages (`contenu.pagesBaobab`).
 
 ### Campus — moderne et rassurant (inspiré de univet.rstheme.com/blue)
 
@@ -123,6 +140,7 @@ Bouton « Modifier le site » en bas de l'écran :
 - `src/EditeurArticle.tsx` — éditeur des articles (TipTap), chargé seulement
   en mode modification.
 - `src/pages/` — les sections du modèle Institution, rangées par page.
+- `src/themes/baobab/` — le modèle Baobab.
 - `src/themes/campus/` — le modèle Campus.
 - `src/themes/prestige/` — le modèle Prestige (gabarit, blason, apparitions,
   compteurs, sections communes et exclusives).

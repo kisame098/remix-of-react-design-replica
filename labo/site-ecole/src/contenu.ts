@@ -15,6 +15,7 @@ export const MODELES_SITE = {
   institution: { nom: 'Institution', description: 'Classique et solennel : photos plein écran, titres à empattements.', couleurs: ['#0B5D3B', '#E8A317'] },
   teranga: { nom: 'Teranga', description: 'Moderne et chaleureux : fond crème, grands titres, motifs inspirés du wax.', couleurs: ['#B4441C', '#0E5E5A'] },
   campus: { nom: 'Campus', description: 'Moderne et rassurant : bleu marine et jaune soleil, cartes nettes, animations soignées.', couleurs: ['#0B3A66', '#F9C23C'] },
+  baobab: { nom: 'Baobab', description: 'Lumineux et chaleureux : vert profond et orange, collage de photos, détails animés.', couleurs: ['#0F5C45', '#FF7A3D'] },
   prestige: { nom: 'Prestige', description: 'Pour les établissements d\'excellence : sobre, éditorial, bleu nuit et or.', couleurs: ['#0F1E3D', '#B08D57'] },
 } as const;
 export type ModeleSite = keyof typeof MODELES_SITE;
@@ -481,6 +482,72 @@ export const CONTENU_DEFAUT = {
     bandePhotos: { bouton: { texte: 'Découvrir la vie scolaire', lien: '#/vie-scolaire' } as LienBouton },
     appelImage: photo('photo-1744809448493-448812255e4d'),
   },
+
+  /** Contenu propre au modèle Baobab. */
+  baobab: {
+    hero: {
+      surtitre: 'Inscriptions 2026-2027 ouvertes',
+      titreDebut: 'Ici, chaque élève',
+      motSouligne: 'grandit',
+      titreFin: 'et réussit.',
+      texte: 'Du préscolaire au baccalauréat, un établissement exigeant et bienveillant, au cœur de Dakar.',
+      image1: photo('photo-1567057419565-4349c49d8a04', 1000),
+      image2: photo('photo-1774870292182-d59afbebf09e', 800),
+      image3: photo('photo-1548102249-acdce64fffbd', 800),
+      etiquette1: '96 % au BFEM',
+      etiquette2: '1 200 élèves',
+    },
+    confiance: [
+      'Programmes officiels du Sénégal',
+      'Préparation CFEE · BFEM · Bac',
+      'Anglais dès le préscolaire',
+      'Cantine et transport scolaire',
+      'Espace parents en ligne',
+    ],
+    bentoImage: photo('photo-1632215861513-130b66fe97f4', 1000),
+    journee: {
+      surtitre: 'Une journée à l\'école',
+      titre: 'De 7 h 45 à 17 h, une journée bien rythmée',
+      texte: 'Un cadre régulier aide chaque enfant à apprendre sereinement.',
+      image: photo('photo-1473649085228-583485e6e4d7', 1200),
+      elements: [
+        { heure: '7 h 45', titre: 'Accueil et levée des couleurs', texte: 'Les élèves sont accueillis dans la cour ; le lundi, levée du drapeau et hymne national.' },
+        { heure: '8 h', titre: 'Cours du matin', texte: 'Français, mathématiques, sciences : les matières fondamentales quand l\'attention est la meilleure.' },
+        { heure: '10 h', titre: 'Récréation', texte: 'Une pause surveillée dans la cour ombragée.' },
+        { heure: '12 h 30', titre: 'Cantine', texte: 'Des repas équilibrés, préparés chaque jour.' },
+        { heure: '15 h', titre: 'Clubs et activités', texte: 'Sport, informatique, lecture, théâtre selon les jours.' },
+        { heure: '16 h 30', titre: 'Études surveillées', texte: 'Les devoirs faits à l\'école, avec un encadreur.' },
+      ],
+    },
+    evolution: {
+      surtitre: 'Nos résultats',
+      titre: 'Cinq ans de progression',
+      texte: 'Taux de réussite aux examens officiels, session après session.',
+      annees: [
+        { annee: '2022', cfee: '94', bfem: '86', bac: '78' },
+        { annee: '2023', cfee: '96', bfem: '89', bac: '81' },
+        { annee: '2024', cfee: '97', bfem: '91', bac: '84' },
+        { annee: '2025', cfee: '99', bfem: '94', bac: '87' },
+        { annee: '2026', cfee: '100', bfem: '96', bac: '89' },
+      ],
+    },
+    question: {
+      titre: 'Une question avant d\'inscrire votre enfant ?',
+      texte: 'Notre équipe vous répond sur WhatsApp ou vous reçoit pour une visite de l\'école.',
+      bouton: { texte: 'Prendre rendez-vous', lien: '#/contact' } as LienBouton,
+    },
+  },
+
+  /** Ordre des sections du modèle Baobab. */
+  pagesBaobab: {
+    accueil: ['diaporama', 'confiance', 'atouts', 'cycles', 'chiffres', 'journee', 'evolution', 'mot-directeur', 'temoignages', 'actualites-recentes', 'question'],
+    ecole: ['entete-ecole', 'histoire', 'valeurs', 'equipe', 'infrastructures', 'question'],
+    enseignement: ['entete-enseignement', 'cycles-detail', 'journee', 'pedagogie', 'evolution', 'question'],
+    'vie-scolaire': ['entete-vie-scolaire', 'activites', 'services', 'galerie', 'calendrier'],
+    admissions: ['entete-admissions', 'etapes', 'frais', 'pieces', 'preinscription', 'faq'],
+    actualites: ['entete-actualites', 'liste-actualites', 'suivez-nous'],
+    contact: ['entete-contact', 'coordonnees', 'faq'],
+  } as Record<string, string[]>,
 
   /** Ordre des sections du modèle Campus : il a sa propre structure. */
   pagesCampus: {

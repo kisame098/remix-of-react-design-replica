@@ -6,6 +6,7 @@ import { FournisseurEdition, useEdition } from './edition';
 import { GabaritTeranga } from './themes/teranga/GabaritTeranga';
 import { GabaritPrestige } from './themes/prestige/GabaritPrestige';
 import { GabaritCampus } from './themes/campus/GabaritCampus';
+import { GabaritBaobab } from './themes/baobab/GabaritBaobab';
 import { Gabarit } from './Gabarit';
 import BarreEdition from './BarreEdition';
 import { PageSections } from './sections';
@@ -41,6 +42,7 @@ function Habillage({ page, article, children }: { page: string; article: boolean
   const modele = contenu.identite.modele;
   if (modele === 'prestige') return <GabaritPrestige page={page} sansBandeau={article}>{children}</GabaritPrestige>;
   if (modele === 'campus') return <GabaritCampus page={page} sansBandeau={article}>{children}</GabaritCampus>;
+  if (modele === 'baobab') return <GabaritBaobab page={page}>{children}</GabaritBaobab>;
   const Composant = modele === 'teranga' ? GabaritTeranga : Gabarit;
   return <Composant page={page}>{children}</Composant>;
 }
