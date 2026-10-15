@@ -72,8 +72,9 @@ export const referencementDe = (chemin: string): Referencement => {
   const publique = PAGES_PUBLIQUES[chemin];
   if (publique) return publique;
 
-  // Site publié d'une école : public et indexable (la page remplace ensuite le titre par le nom de l'école).
-  if (/^\/site\/[^/]+\/?$/.test(chemin)) return { titre: `Site de l'école | ${NOM_DU_SITE}`, indexer: true };
+  // Site publié d'une école : son adresse officielle, celle que Google indexe, est
+  // <adresse>.senclass.com. Cette copie sur senclass.com n'est pas proposée (doublon).
+  if (/^\/site\/[^/]+(\/.*)?$/.test(chemin)) return { titre: `Site de l'école | ${NOM_DU_SITE}`, indexer: false };
 
   // Le préfixe le plus long l'emporte : /portail/notes/42 → « Mes notes ».
   const privee = PAGES_PRIVEES
