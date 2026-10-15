@@ -43,6 +43,7 @@ const ResetPassword         = lazy(() => import("./pages/ResetPassword"));
 const Telecharger           = lazy(() => import("./pages/Telecharger"));
 // Site web de l'école (bêta) : l'éditeur du directeur et le site public.
 const SiteWeb               = lazy(() => import("./pages/SiteWeb"));
+const SiteWebAccueil        = lazy(() => import("./pages/SiteWebAccueil"));
 const SitePublic            = lazy(() => import("./pages/SitePublic"));
 const Dashboard             = lazy(() => import("./pages/Dashboard"));
 const StudentRegistration   = lazy(() => import("./pages/StudentRegistration"));
@@ -156,7 +157,7 @@ const App = () => (
                 {/* ── Caisse mobile (staff "cashier" uniquement) ─────── */}
                 {/* Éditeur du site web : plein écran (hors du tableau de bord), directeur d'une école bêta. */}
                 <Route element={<ProtectedRoute />}>
-                  <Route path="/site-web" element={<RequirePermission adminOnly><SiteWeb /></RequirePermission>} />
+                  <Route path="/site-web/editeur" element={<RequirePermission adminOnly><SiteWeb /></RequirePermission>} />
                 </Route>
 
                 <Route element={<ProtectedRoute />}>
@@ -183,6 +184,8 @@ const App = () => (
                 <Route element={<ProtectedRoute />}>
                   <Route element={<DashboardLayout />}>
                     <Route path="/dashboard" element={<Dashboard />} />
+                    {/* Site web (bêta) : état, mise en ligne / hors ligne ; l'éditeur est plein écran (/site-web/editeur). */}
+                    <Route path="/site-web" element={<RequirePermission adminOnly><SiteWebAccueil /></RequirePermission>} />
                     <Route path="/inscription" element={<RequirePermission permission="students"><StudentRegistration /></RequirePermission>} />
                     <Route path="/eleves" element={<RequirePermission permission="students"><StudentManagement /></RequirePermission>} />
                     <Route path="/inscription-prof" element={<RequirePermission permission="teachers"><TeacherRegistration /></RequirePermission>} />

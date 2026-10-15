@@ -54,6 +54,26 @@ export function siteDeDepart(school: Pick<School, 'name' | 'logo_url' | 'phone' 
   return c;
 }
 
+/** Ce que montre la page « Site web » : le travail en cours, la version en ligne (null = hors ligne) et sa date. */
+export interface EtatSite {
+  brouillon: unknown;
+  publie: unknown;
+  publie_le: string | null;
+}
+
+export async function etatDuSite(schoolId: string): Promise<EtatSite | null> {
+  const { data, error } = await sb.from('school_sites').select('brouillon, publie, publie_le').eq('school_id', schoolId).maybeSingle();
+  if (error) throw error;
+  return data ?? null;
+}
+
+/**
+ * Des modifications attendent d'être mises en ligne. Les deux versions sortent
+ * du même type de colonne (jsonb, clés toujours rangées pareil) : le texte suffit à les comparer.
+ */
+export const modificationsNonPubliees = (site: EtatSite): boolean =>
+  site.publie != null && JSON.stringify(site.brouillon) !== JSON.stringify(site.publie);
+
 export async function chargerSite(schoolId: string): Promise<SiteEnregistre | null> {
   const { data, error } = await sb.from('school_sites').select('brouillon, publie_le').eq('school_id', schoolId).maybeSingle();
   if (error) throw error;
