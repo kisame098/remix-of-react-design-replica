@@ -2,20 +2,15 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowLeft, Check, CloudOff, ExternalLink, Globe, Loader2, Rocket } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import {
-  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription,
-  AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
-} from '@/components/ui/alert-dialog';
 import { useAuth } from '@/hooks/useAuth';
-import { toast } from '@/hooks/use-toast';
 import SiteEcole from '@/siteEcole/SiteEcole';
-import { adresseSiteEcole, suggestionAdresse } from '@/lib/hoteEcole';
-import { ChampAdresse } from '@/components/siteWeb/ChampAdresse';
+import { adresseSiteEcole } from '@/lib/hoteEcole';
+import { FenetrePublier } from '@/components/siteWeb/FenetrePublier';
 import { GalerieModeles } from '@/siteEcole/ChoixModele';
 import { contenuDepuis } from '@/siteEcole/edition';
 import type { Contenu } from '@/siteEcole/contenu';
 import {
-  accesSiteWeb, chargerSite, enregistrerBrouillon, publierSite, siteDeDepart, slugDeLEcole, televerserPhoto,
+  accesSiteWeb, chargerSite, enregistrerBrouillon, siteDeDepart, slugDeLEcole, televerserPhoto,
 } from '@/lib/siteWeb';
 
 type Etat = 'enregistre' | 'en_cours' | 'erreur';
@@ -23,6 +18,7 @@ type Etat = 'enregistre' | 'en_cours' | 'erreur';
 /**
  * L'éditeur du site web de l'école (bêta). Plein écran : le site s'affiche tel
  * que les visiteurs le verront, et le directeur le modifie directement dessus.
+ * On y arrive depuis la page « Site web » (SiteWebAccueil), où l'on met aussi le site en ligne ou hors ligne.
  */
 export default function SiteWeb() {
   const { school, accountRole } = useAuth();
@@ -34,10 +30,6 @@ export default function SiteWeb() {
   const [publieLe, setPublieLe] = useState<string | null>(null);
   const [slug, setSlug] = useState<string | null>(null);
   const [confirmer, setConfirmer] = useState(false);
-  const [publication, setPublication] = useState(false);
-  /** L'adresse <adresse>.senclass.com choisie dans la fenêtre « Publier ». */
-  const [adresseChoisie, setAdresseChoisie] = useState('');
-  const [adresseValable, setAdresseValable] = useState(false);
   const existe = useRef(false);
   const minuteur = useRef<ReturnType<typeof setTimeout>>();
   const aEnregistrer = useRef<Contenu | null>(null);
@@ -98,22 +90,7 @@ export default function SiteWeb() {
 
   const televerser = useCallback((f: File) => televerserPhoto(school!.id, f), [school]);
 
-  const publier = async () => {
-    setPublication(true);
-    try {
-      clearTimeout(minuteur.current);
-      await enregistrer();
-      const s = await publierSite(adresseChoisie);
-      setSlug(s);
-      setPublieLe(new Date().toISOString());
-      toast({ title: 'Site publié', description: `Votre site est en ligne : ${adresseSiteEcole(s, location.hostname, location.origin)}` });
-    } catch (e) {
-      toast({ title: 'Publication impossible', description: (e as { message?: string })?.message ?? 'Erreur inconnue', variant: 'destructive' });
-    } finally {
-      setPublication(false);
-      setConfirmer(false);
-    }
-  };
+  const avantPublication = useCallback(() => { clearTimeout(minuteur.current); return enregistrer(); }, [enregistrer]);
 
   if (!autorise) {
     return (
@@ -140,7 +117,7 @@ export default function SiteWeb() {
               <h1 className="text-3xl font-bold mt-3">Choisissez le modèle de votre site</h1>
               <p className="text-muted-foreground mt-1.5 max-w-2xl">Chaque aperçu montre déjà votre école (nom, logo, coordonnées). Vous pourrez tout modifier ensuite — y compris changer de modèle à tout moment, sans rien perdre.</p>
             </div>
-            <Button asChild variant="outline"><Link to="/dashboard"><ArrowLeft className="h-4 w-4 mr-1.5" />Tableau de bord</Link></Button>
+            <Button asChild variant="outline"><Link to="/site-web"><ArrowLeft className="h-4 w-4 mr-1.5" />Retour</Link></Button>
           </div>
           <GalerieModeles contenu={siteDeDepart(school)} choixCouleurs={false} onChoisir={m => {
             const depart = siteDeDepart(school, m);
@@ -170,11 +147,11 @@ export default function SiteWeb() {
           <a href={adresse} target="_blank" rel="noreferrer" aria-label="Voir le site en ligne"><ExternalLink className="h-4 w-4" /></a>
         </Button>
       )}
-      <Button className="gap-1.5 rounded-xl" onClick={() => setConfirmer(true)} disabled={publication}>
-        {publication ? <Loader2 className="h-4 w-4 animate-spin" /> : <Rocket className="h-4 w-4" />}{publieLe ? 'Mettre à jour' : 'Publier'}
+      <Button className="gap-1.5 rounded-xl" onClick={() => setConfirmer(true)}>
+        <Rocket className="h-4 w-4" />{publieLe ? 'Mettre à jour' : 'Mettre en ligne'}
       </Button>
-      <Button asChild variant="ghost" size="icon" className="rounded-xl" title="Retour au tableau de bord">
-        <Link to="/dashboard" aria-label="Retour au tableau de bord"><ArrowLeft className="h-4 w-4" /></Link>
+      <Button asChild variant="ghost" size="icon" className="rounded-xl" title="Fermer l'éditeur">
+        <Link to="/site-web" aria-label="Fermer l'éditeur"><ArrowLeft className="h-4 w-4" /></Link>
       </Button>
     </>
   );
@@ -189,31 +166,17 @@ export default function SiteWeb() {
         alerte={etat === 'erreur' ? 'Le dernier changement n\'a pas pu être enregistré. Vérifiez la connexion internet.' : null}
         actions={actions}
       />
-      <AlertDialog open={confirmer} onOpenChange={o => !publication && setConfirmer(o)}>
-        <AlertDialogContent className="font-sans max-w-lg">
-          <AlertDialogHeader>
-            <AlertDialogTitle>{publieLe ? 'Mettre à jour le site en ligne ?' : 'Publier votre site'}</AlertDialogTitle>
-            <AlertDialogDescription>
-              {publieLe
-                ? 'Les visiteurs verront la version que vous avez sous les yeux.'
-                : 'Choisissez l\'adresse de votre site : c\'est elle que vous partagerez (WhatsApp, Facebook, affiches…).'}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          {confirmer && school && (
-            <ChampAdresse
-              actuelle={slug}
-              suggestion={slug ?? suggestionAdresse(school.name)}
-              onChange={(a, ok) => { setAdresseChoisie(a); setAdresseValable(ok); }}
-            />
-          )}
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={publication}>Annuler</AlertDialogCancel>
-            <AlertDialogAction disabled={publication || !adresseValable} onClick={e => { e.preventDefault(); void publier(); }}>
-              {publication && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}{publieLe ? 'Mettre à jour' : 'Publier'}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      {school && (
+        <FenetrePublier
+          ouvert={confirmer}
+          onFermer={() => setConfirmer(false)}
+          enLigne={!!publieLe}
+          slug={slug}
+          nomEcole={school.name}
+          avantPublication={avantPublication}
+          onPublie={s => { setSlug(s); setPublieLe(new Date().toISOString()); }}
+        />
+      )}
     </>
   );
 }
