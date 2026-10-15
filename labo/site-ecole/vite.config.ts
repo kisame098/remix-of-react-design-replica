@@ -12,6 +12,8 @@ const RACINE = path.resolve(ICI, "../..");
 // SaaS, mais n'emprunte ni son service worker ni ses réglages de déploiement.
 export default defineConfig({
   root: ICI,
+  // Les photos des modèles (public/site-ecole) viennent du SaaS.
+  publicDir: path.join(RACINE, "public"),
   plugins: [react()],
   resolve: {
     alias: { "@": path.resolve(RACINE, "src") },

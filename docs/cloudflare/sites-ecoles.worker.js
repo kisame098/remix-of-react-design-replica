@@ -51,7 +51,7 @@ export default {
     if (!type.includes('text/html')) return reponse;
 
     const site = await lireSite(slug);
-    const page = site && pageDe(site, url.pathname);
+    const page = site && pageDe(site, url.pathname, hote);
     const r = new Response(reponse.body, reponse);
     r.headers.delete('x-robots-tag');
     if (!page) {
@@ -94,19 +94,23 @@ async function lireSite(slug) {
 }
 
 const articles = site => (site.actualites?.elements || []).filter(a => a && a.id);
-const imageWeb = (...urls) => urls.find(u => typeof u === 'string' && /^https:\/\//.test(u)) || '';
+// Les photos des modèles sont servies par l'application (« /site-ecole/… ») : adresse complète exigée par les aperçus.
+const imageWeb = (hote, ...urls) => {
+  const u = urls.find(x => typeof x === 'string' && (/^https:\/\//.test(x) || /^\/[^/]/.test(x))) || '';
+  return u.startsWith('/') ? `https://${hote}${u}` : u;
+};
 const court = (s, n = 160) => { const t = String(s || '').replace(/\s+/g, ' ').trim(); return t.length > n ? `${t.slice(0, n - 1).trimEnd()}…` : t; };
 
 /** La page demandée : titre, description, image. null si elle n'existe pas. */
-function pageDe(site, chemin) {
+function pageDe(site, chemin, hote) {
   const id = site.identite || {};
   const nom = id.nom || 'École';
   const parties = chemin.replace(/^\/+|\/+$/g, '').split('/').map(p => { try { return decodeURIComponent(p); } catch { return p; } });
   const [cle = '', sous = ''] = parties;
   if (parties.length > 2) return null;
 
-  const logo = imageWeb(id.logo);
-  const accueil = imageWeb(site.accueil?.diapos?.[0]?.image, logo);
+  const logo = imageWeb(hote, id.logo);
+  const accueil = imageWeb(hote, site.accueil?.diapos?.[0]?.image, logo);
   const lieu = id.adresse ? ` ${id.adresse}.` : '';
 
   if (cle === 'actualites' && sous) {
@@ -115,7 +119,7 @@ function pageDe(site, chemin) {
     return {
       chemin: `/actualites/${encodeURIComponent(a.id)}`, titre: `${a.titre} | ${nom}`, article: a,
       description: court(a.texte || String(a.contenu || '').replace(/<[^>]+>/g, ' ')) || `${a.titre} — ${nom}.`,
-      image: imageWeb(a.image, accueil),
+      image: imageWeb(hote, a.image, accueil),
     };
   }
   const p = PAGES.find(x => x[0] === cle);
@@ -131,7 +135,7 @@ function pageDe(site, chemin) {
   return {
     chemin: `/${cle}`, titre: `${p[1]} | ${nom}`,
     description: court(`${entete.texte ? `${entete.texte} ` : ''}${p[1]} — ${nom}.${lieu}`),
-    image: imageWeb(entete.image, accueil),
+    image: imageWeb(hote, entete.image, accueil),
   };
 }
 
@@ -141,7 +145,7 @@ function ficheEcole(site, hote, page) {
   const ecole = {
     '@type': 'School', '@id': `https://${hote}/#ecole`, name: id.nom, url: `https://${hote}/`,
     ...(id.slogan ? { slogan: id.slogan } : {}),
-    ...(imageWeb(id.logo) ? { logo: imageWeb(id.logo) } : {}),
+    ...(imageWeb(hote, id.logo) ? { logo: imageWeb(hote, id.logo) } : {}),
     ...(page.image ? { image: page.image } : {}),
     ...(id.telephone ? { telephone: id.telephone } : {}),
     ...(id.email ? { email: id.email } : {}),

@@ -4,10 +4,13 @@
  * modification) ; ce fichier n'est que le modèle de départ.
  *
  * Les noms, chiffres, montants et coordonnées sont des EXEMPLES à remplacer
- * par l'école. Photos : Unsplash (licence libre, usage commercial permis).
+ * par l'école. Photos : Unsplash (licence libre, usage commercial permis) et
+ * images créées pour SenClass (public/site-ecole).
  */
 
 const photo = (id: string, largeur = 1600) => `https://images.unsplash.com/${id}?auto=format&fit=crop&w=${largeur}&q=80`;
+/** Photos créées pour SenClass (scènes d'écoles sénégalaises), servies par l'application elle-même. */
+const ia = (nom: string) => `/site-ecole/${nom}.webp`;
 const portrait = (id: string) => `https://images.unsplash.com/${id}?auto=format&fit=crop&w=600&h=700&crop=faces&q=80`;
 
 /** Modèles de site : même contenu, présentation complètement différente. */
@@ -90,7 +93,7 @@ export const CONTENU_DEFAUT = {
         texte: 'Du préscolaire au baccalauréat, un enseignement de qualité dans un cadre sûr, discipliné et bienveillant.',
       },
       {
-        image: photo('photo-1694286068561-3233c946e9be'),
+        image: ia('prescolaire'),
         surtitre: 'Préscolaire et élémentaire',
         titre: 'Les premiers pas de votre enfant entre de bonnes mains',
         texte: 'Des classes à effectif réduit et des enseignants attentifs à chaque élève.',
@@ -183,7 +186,7 @@ export const CONTENU_DEFAUT = {
       surtitre: 'Notre histoire',
       titre: 'Plus de vingt ans au service de l\'éducation',
       texte: 'Fondé en 2005 avec une seule classe de préscolaire, le Groupe Scolaire Excellence accueille aujourd\'hui plus de mille élèves, du préscolaire au baccalauréat.\n\nNotre croissance repose sur la confiance des familles et sur un principe simple : exiger beaucoup de chaque élève, et lui donner les moyens de réussir.',
-      image: photo('photo-1473649085228-583485e6e4d7', 1200),
+      image: ia('cour-recreation'),
     },
     valeurs: {
       surtitre: 'Nos valeurs',
@@ -209,9 +212,9 @@ export const CONTENU_DEFAUT = {
       surtitre: 'Nos infrastructures',
       titre: 'Un cadre pensé pour apprendre',
       elements: [
-        { image: photo('photo-1567057420215-0afa9aa9253a', 900), titre: 'Salles de classe', texte: 'Spacieuses, ventilées et équipées.' },
-        { image: photo('photo-1653566031471-85365f8d0ae0', 900), titre: 'Salle informatique', texte: 'Postes connectés pour tous les niveaux.' },
-        { image: photo('photo-1758061335235-a5ad2b63598d', 900), titre: 'Cour ombragée', texte: 'Un espace de récréation sûr et surveillé.' },
+        { image: ia('salle-de-classe'), titre: 'Salles de classe', texte: 'Spacieuses, ventilées et équipées.' },
+        { image: ia('salle-informatique'), titre: 'Salle informatique', texte: 'Postes connectés pour tous les niveaux.' },
+        { image: ia('cour'), titre: 'Cour ombragée', texte: 'Un espace de récréation sûr et surveillé.' },
         { image: photo('photo-1745012010615-47abbeb3e906', 900), titre: 'Terrain de sport', texte: 'Football, basket et athlétisme.' },
       ],
     },
@@ -221,7 +224,7 @@ export const CONTENU_DEFAUT = {
     entete: { titre: 'Enseignement', texte: 'Programmes officiels du Sénégal, renforcés.', image: photo('photo-1698827623362-f10eadf55a18') },
     cycles: [
       {
-        image: photo('photo-1567057420215-0afa9aa9253a', 1000),
+        image: ia('prescolaire-atelier'),
         nom: 'Préscolaire',
         niveaux: 'Petite, Moyenne et Grande section',
         age: 'De 3 à 5 ans',
@@ -229,7 +232,7 @@ export const CONTENU_DEFAUT = {
         points: ['Effectif réduit par classe', 'Initiation à l\'anglais', 'Activités artistiques et motricité'],
       },
       {
-        image: photo('photo-1473649085228-583485e6e4d7', 1000),
+        image: ia('elementaire'),
         nom: 'Élémentaire',
         niveaux: 'Du CI au CM2',
         age: 'De 6 à 11 ans',
@@ -245,7 +248,7 @@ export const CONTENU_DEFAUT = {
         points: ['Examens blancs du BFEM', 'Cours de renforcement', 'Anglais, arabe, espagnol'],
       },
       {
-        image: photo('photo-1655720348590-c739c860beed', 1000),
+        image: ia('laboratoire'),
         nom: 'Secondaire',
         niveaux: 'De la Seconde à la Terminale · Séries L et S',
         age: 'De 16 à 18 ans',
@@ -272,9 +275,9 @@ export const CONTENU_DEFAUT = {
       titre: 'Au-delà de la salle de classe',
       elements: [
         { image: photo('photo-1745012010615-47abbeb3e906', 900), titre: 'Sport', texte: 'Football, basket, athlétisme et tournois inter-écoles.' },
-        { image: photo('photo-1653566031471-85365f8d0ae0', 900), titre: 'Club informatique', texte: 'Bureautique, programmation et usage responsable d\'Internet.' },
-        { image: photo('photo-1694286068561-3233c946e9be', 900), titre: 'Club lecture', texte: 'Bibliothèque, concours de lecture et d\'orthographe.' },
-        { image: photo('photo-1740986188963-f99c42d5bad4', 900), titre: 'Sorties pédagogiques', texte: 'Musées, île de Gorée, parcs et entreprises.' },
+        { image: ia('club-informatique'), titre: 'Club informatique', texte: 'Bureautique, programmation et usage responsable d\'Internet.' },
+        { image: ia('bibliotheque'), titre: 'Club lecture', texte: 'Bibliothèque, concours de lecture et d\'orthographe.' },
+        { image: ia('sortie-goree'), titre: 'Sorties pédagogiques', texte: 'Musées, île de Gorée, parcs et entreprises.' },
       ],
     },
     services: {
@@ -294,11 +297,11 @@ export const CONTENU_DEFAUT = {
         { image: photo('photo-1567057419565-4349c49d8a04', 900) },
         { image: photo('photo-1548102249-acdce64fffbd', 900) },
         { image: photo('photo-1745012010615-47abbeb3e906', 900) },
-        { image: photo('photo-1694286068561-3233c946e9be', 900) },
+        { image: ia('semaine-culturelle') },
         { image: photo('photo-1744809448493-448812255e4d', 900) },
         { image: photo('photo-1632215861513-130b66fe97f4', 900) },
         { image: photo('photo-1567057420215-0afa9aa9253a', 900) },
-        { image: photo('photo-1653566031471-85365f8d0ae0', 900) },
+        { image: ia('salle-informatique') },
       ],
     },
     calendrier: {
@@ -373,7 +376,7 @@ export const CONTENU_DEFAUT = {
     entete: { titre: 'Actualités', texte: 'Événements, résultats et vie de l\'établissement.', image: photo('photo-1632215863479-201029d93143') },
     elements: [
       {
-        id: 'resultats-bac-2026', image: photo('photo-1621352152645-61f4835b081b', 1400), date: '20 juillet 2026', categorie: 'Résultats',
+        id: 'resultats-bac-2026', image: ia('resultats-bac'), date: '20 juillet 2026', categorie: 'Résultats',
         titre: 'Excellents résultats au Baccalauréat 2026', texte: 'Félicitations à nos bacheliers ! 89 % de réussite et plusieurs mentions.',
         contenu: '<p>Les résultats du <strong>Baccalauréat 2026</strong> sont tombés, et nos élèves ont une nouvelle fois fait honneur à l\'établissement.</p><h2>Les chiffres de la session</h2><ul><li><strong>89 %</strong> de réussite toutes séries confondues</li><li>Série S : 92 % · Série L : 86 %</li><li>14 mentions, dont 3 mentions Très bien</li></ul><p>Ce succès est celui des élèves, de leurs familles et de toute l\'équipe pédagogique, mobilisée toute l\'année : cours de renforcement, Bac blancs chaque trimestre et suivi personnalisé.</p><blockquote><p>« Nous sommes fiers de nos élèves. Ces résultats récompensent une année de travail sérieux. » — La direction</p></blockquote><p>La cérémonie de remise des prix aura lieu à la rentrée. Les familles recevront une invitation.</p>',
       },
@@ -383,7 +386,7 @@ export const CONTENU_DEFAUT = {
         contenu: '<p>Notre équipe de football des cadets a remporté la finale du tournoi inter-écoles, au terme d\'un match disputé.</p><p>Bravo aux joueurs et à leur encadreur pour cette saison exemplaire, où le fair-play a été aussi remarqué que le jeu.</p>',
       },
       {
-        id: 'semaine-culturelle', image: photo('photo-1694286068561-3233c946e9be', 1400), date: '28 mars 2026', categorie: 'Vie scolaire',
+        id: 'semaine-culturelle', image: ia('semaine-culturelle'), date: '28 mars 2026', categorie: 'Vie scolaire',
         titre: 'Semaine culturelle : lecture, théâtre et danse', texte: 'Une semaine riche en découvertes pour tous les élèves.',
         contenu: '<p>Pendant une semaine, les élèves de tous les cycles ont présenté leurs talents : concours de lecture, pièces de théâtre, poésie et danses traditionnelles.</p><p>Merci aux parents venus nombreux pour la journée de clôture.</p>',
       },
@@ -474,8 +477,8 @@ export const CONTENU_DEFAUT = {
       titre: 'Les prochains rendez-vous',
       elements: [
         { image: photo('photo-1632215863479-201029d93143', 700), date: '12 décembre 2026', heure: '9 h – 13 h', titre: 'Journée portes ouvertes', lieu: 'Campus de Sacré-Cœur' },
-        { image: photo('photo-1621352152645-61f4835b081b', 700), date: '18 juillet 2027', heure: '10 h – 13 h', titre: 'Remise des prix d\'excellence', lieu: 'Grande salle polyvalente' },
-        { image: photo('photo-1694286068561-3233c946e9be', 700), date: '20 juin 2027', heure: '9 h – 18 h', titre: 'Kermesse de fin d\'année', lieu: 'Cour de l\'école' },
+        { image: ia('remise-des-prix'), date: '18 juillet 2027', heure: '10 h – 13 h', titre: 'Remise des prix d\'excellence', lieu: 'Grande salle polyvalente' },
+        { image: ia('kermesse'), date: '20 juin 2027', heure: '9 h – 18 h', titre: 'Kermesse de fin d\'année', lieu: 'Cour de l\'école' },
         { image: photo('photo-1744809448493-448812255e4d', 700), date: '7 novembre 2026', heure: '15 h – 17 h', titre: 'Réunion parents-professeurs', lieu: 'Salles de classe' },
       ],
     },
@@ -509,7 +512,7 @@ export const CONTENU_DEFAUT = {
       surtitre: 'Une journée à l\'école',
       titre: 'De 7 h 45 à 17 h, une journée bien rythmée',
       texte: 'Un cadre régulier aide chaque enfant à apprendre sereinement.',
-      image: photo('photo-1473649085228-583485e6e4d7', 1200),
+      image: ia('cours'),
       elements: [
         { heure: '7 h 45', titre: 'Accueil et levée des couleurs', texte: 'Les élèves sont accueillis dans la cour ; le lundi, levée du drapeau et hymne national.' },
         { heure: '8 h', titre: 'Cours du matin', texte: 'Français, mathématiques, sciences : les matières fondamentales quand l\'attention est la meilleure.' },
