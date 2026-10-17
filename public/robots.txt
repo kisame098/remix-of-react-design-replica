@@ -30,3 +30,5 @@ Disallow: /formation
 Disallow: /reset-password
 
 Sitemap: https://senclass.com/sitemap.xml
+# Les sites des écoles (<adresse>.senclass.com), servis par le Worker « sites-ecoles ».
+Sitemap: https://senclass.com/sitemap-ecoles.xml

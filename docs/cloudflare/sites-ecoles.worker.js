@@ -12,6 +12,9 @@
 //         (schema.org) — page par page et article par article ;
 //       - sert le robots.txt et le plan du site (sitemap.xml) de l'école ;
 //       - adresse inconnue ou site non publié : vraie réponse 404, non indexée.
+//   • Sert aussi https://senclass.com/sitemap-ecoles.xml : l'index de tous les
+//     plans de site publiés (route Cloudflare dédiée senclass.com/sitemap-ecoles.xml),
+//     envoyé une fois à Google Search Console → chaque nouveau site est découvert.
 //   • Les sous-domaines de SenClass (www, maj, send…) ne sont pas touchés :
 //     même liste que src/lib/hoteEcole.ts (SOUS_DOMAINES_RESERVES).
 // ═══════════════════════════════════════════════════════════════════════════
@@ -35,7 +38,15 @@ export default {
     const url = new URL(request.url);
     const hote = url.hostname;
     const slug = hote.split('.')[0];
-    if (hote === 'senclass.com' || RESERVES.has(slug)) return fetch(request);
+    if (hote === 'senclass.com' || hote === 'www.senclass.com') {
+      if (url.pathname === '/sitemap-ecoles.xml') {
+        const sites = await listeSites();
+        if (!sites) return texte('Liste indisponible', 'text/plain', 503);
+        return texte(indexDesPlans(sites), 'application/xml', 200, 3600);
+      }
+      return fetch(request);
+    }
+    if (RESERVES.has(slug)) return fetch(request);
 
     if (url.pathname === '/robots.txt') {
       return texte(`User-agent: *\nAllow: /\n\nSitemap: https://${hote}/sitemap.xml\n`, 'text/plain');
@@ -43,7 +54,8 @@ export default {
     if (url.pathname === '/sitemap.xml') {
       const site = await lireSite(slug);
       if (!site) return texte('Site introuvable', 'text/plain', 404);
-      return texte(planDuSite(site, hote), 'application/xml');
+      const publie = (await listeSites())?.find(x => x.slug === slug)?.publie_le;
+      return texte(planDuSite(site, hote, publie), 'application/xml');
     }
 
     const reponse = await depuisOrigine(request, url, hote);
@@ -88,6 +100,21 @@ async function lireSite(slug) {
     if (!r.ok) return null;
     const site = await r.json();
     return site && typeof site === 'object' ? site : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Les sites publiés : [{ slug, publie_le }] (null si Supabase ne répond pas), gardés cinq minutes en cache. */
+async function listeSites() {
+  try {
+    const r = await fetch(`${SUPABASE}/rest/v1/rpc/sites_publies`, {
+      headers: { apikey: CLE_PUBLIQUE, authorization: `Bearer ${CLE_PUBLIQUE}` },
+      cf: { cacheTtl: 300, cacheEverything: true },
+    });
+    if (!r.ok) return null;
+    const sites = await r.json();
+    return Array.isArray(sites) ? sites.filter(x => x && /^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$/.test(x.slug)) : null;
   } catch {
     return null;
   }
@@ -190,16 +217,25 @@ function reecrireEntete(reponse, site, page, adresse) {
     .transform(reponse);
 }
 
-function planDuSite(site, hote) {
-  const echapper = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;');
+const echapper = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;');
+/** « <lastmod> » d'après la date de publication (rien si elle manque ou est illisible). */
+const dateModif = d => { const t = d && new Date(d); return t && !isNaN(t) ? `<lastmod>${t.toISOString()}</lastmod>` : ''; };
+
+/** Index de sitemaps : un plan par site publié. */
+function indexDesPlans(sites) {
+  return `<?xml version="1.0" encoding="UTF-8"?>\n<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${
+    sites.map(x => `  <sitemap><loc>https://${x.slug}.senclass.com/sitemap.xml</loc>${dateModif(x.publie_le)}</sitemap>`).join('\n')}\n</sitemapindex>\n`;
+}
+
+function planDuSite(site, hote, publie) {
   const adresses = [
     ...PAGES.map(([cle]) => `https://${hote}/${cle}`),
     ...articles(site).map(a => `https://${hote}/actualites/${encodeURIComponent(a.id)}`),
   ];
   return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${
-    adresses.map(u => `  <url><loc>${echapper(u)}</loc></url>`).join('\n')}\n</urlset>\n`;
+    adresses.map(u => `  <url><loc>${echapper(u)}</loc>${dateModif(publie)}</url>`).join('\n')}\n</urlset>\n`;
 }
 
-function texte(corps, type, status = 200) {
-  return new Response(corps, { status, headers: { 'content-type': `${type}; charset=utf-8`, 'cache-control': 'public, max-age=300' } });
+function texte(corps, type, status = 200, duree = 300) {
+  return new Response(corps, { status, headers: { 'content-type': `${type}; charset=utf-8`, 'cache-control': `public, max-age=${duree}` } });
 }
