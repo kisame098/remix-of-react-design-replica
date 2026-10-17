@@ -86,7 +86,6 @@ export default function SiteWebAccueil() {
         <div>
           <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
             Site web
-            <span className="rounded-full bg-sky-100 text-sky-700 px-2 py-0.5 text-[11px] font-semibold">Bêta</span>
           </h1>
           <p className="text-sm text-muted-foreground mt-0.5">Le site internet de votre école, sur sa propre adresse</p>
         </div>

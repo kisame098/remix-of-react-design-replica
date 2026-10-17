@@ -41,7 +41,7 @@ import { AuthProvider } from "./contexts/AuthContext";
 // on y va — puis gardé sur l'appareil par l'application installée.
 const ResetPassword         = lazy(() => import("./pages/ResetPassword"));
 const Telecharger           = lazy(() => import("./pages/Telecharger"));
-// Site web de l'école (bêta) : l'éditeur du directeur et le site public.
+// Site web de l'école : l'éditeur du directeur et le site public.
 const SiteWeb               = lazy(() => import("./pages/SiteWeb"));
 const SiteWebAccueil        = lazy(() => import("./pages/SiteWebAccueil"));
 const SitePublic            = lazy(() => import("./pages/SitePublic"));
@@ -155,7 +155,7 @@ const App = () => (
                 </Route>
 
                 {/* ── Caisse mobile (staff "cashier" uniquement) ─────── */}
-                {/* Éditeur du site web : plein écran (hors du tableau de bord), directeur d'une école bêta. */}
+                {/* Éditeur du site web : plein écran (hors du tableau de bord), directeur de l'école. */}
                 <Route element={<ProtectedRoute />}>
                   <Route path="/site-web/editeur" element={<RequirePermission adminOnly><SiteWeb /></RequirePermission>} />
                 </Route>
@@ -184,7 +184,7 @@ const App = () => (
                 <Route element={<ProtectedRoute />}>
                   <Route element={<DashboardLayout />}>
                     <Route path="/dashboard" element={<Dashboard />} />
-                    {/* Site web (bêta) : état, mise en ligne / hors ligne ; l'éditeur est plein écran (/site-web/editeur). */}
+                    {/* Site web : état, mise en ligne / hors ligne ; l'éditeur est plein écran (/site-web/editeur). */}
                     <Route path="/site-web" element={<RequirePermission adminOnly><SiteWebAccueil /></RequirePermission>} />
                     <Route path="/inscription" element={<RequirePermission permission="students"><StudentRegistration /></RequirePermission>} />
                     <Route path="/eleves" element={<RequirePermission permission="students"><StudentManagement /></RequirePermission>} />

@@ -7,7 +7,7 @@ const etatDuSite = vi.fn();
 const depublierSite = vi.fn();
 const publierSite = vi.fn();
 vi.mock('@/hooks/useAuth', () => ({
-  useAuth: () => ({ school: { id: 's1', name: 'Groupe Scolaire Excellence', beta_testeur: true }, accountRole: 'admin' }),
+  useAuth: () => ({ school: { id: 's1', name: 'Groupe Scolaire Excellence' }, accountRole: 'admin' }),
 }));
 vi.mock('@/hooks/use-toast', () => ({ toast: vi.fn() }));
 vi.mock('@/lib/siteWeb', async () => {

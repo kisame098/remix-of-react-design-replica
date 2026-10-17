@@ -16,7 +16,7 @@ import {
 type Etat = 'enregistre' | 'en_cours' | 'erreur';
 
 /**
- * L'éditeur du site web de l'école (bêta). Plein écran : le site s'affiche tel
+ * L'éditeur du site web de l'école. Plein écran : le site s'affiche tel
  * que les visiteurs le verront, et le directeur le modifie directement dessus.
  * On y arrive depuis la page « Site web » (SiteWebAccueil), où l'on met aussi le site en ligne ou hors ligne.
  */
@@ -113,7 +113,7 @@ export default function SiteWeb() {
         <div className="max-w-7xl mx-auto px-5 py-10">
           <div className="flex items-start justify-between gap-4 flex-wrap mb-8">
             <div>
-              <p className="inline-flex items-center gap-1.5 rounded-full bg-sky-100 text-sky-700 px-2.5 py-1 text-xs font-semibold"><Globe className="h-3.5 w-3.5" />Site web de l'école · Bêta</p>
+              <p className="inline-flex items-center gap-1.5 rounded-full bg-sky-100 text-sky-700 px-2.5 py-1 text-xs font-semibold"><Globe className="h-3.5 w-3.5" />Site web de l'école</p>
               <h1 className="text-3xl font-bold mt-3">Choisissez le modèle de votre site</h1>
               <p className="text-muted-foreground mt-1.5 max-w-2xl">Chaque aperçu montre déjà votre école (nom, logo, coordonnées). Vous pourrez tout modifier ensuite — y compris changer de modèle à tout moment, sans rien perdre.</p>
             </div>

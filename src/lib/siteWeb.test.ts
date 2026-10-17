@@ -7,13 +7,13 @@ import { accesSiteWeb, menuPourMode } from './modeGestion';
 import { CONTENU_DEFAUT, MODELES_SITE } from '@/siteEcole/contenu';
 import { avecModele } from '@/siteEcole/ChoixModele';
 
-describe('site web de l\'école — accès bêta', () => {
-  it('seul le directeur d\'une école bêta-testeuse y a accès', () => {
+describe('site web de l\'école — accès', () => {
+  it('ouvert au directeur de toute école, bêta-testeuse ou non ; jamais aux autres comptes', () => {
     expect(accesSiteWeb({ beta_testeur: true }, 'admin')).toBe(true);
-    expect(accesSiteWeb({ beta_testeur: true }, 'staff')).toBe(false);
-    expect(accesSiteWeb({ beta_testeur: true }, 'teacher')).toBe(false);
-    expect(accesSiteWeb({ beta_testeur: false }, 'admin')).toBe(false);
-    expect(accesSiteWeb({}, 'admin')).toBe(false);
+    expect(accesSiteWeb({ beta_testeur: false }, 'admin')).toBe(true);
+    expect(accesSiteWeb({}, 'admin')).toBe(true);
+    expect(accesSiteWeb({}, 'staff')).toBe(false);
+    expect(accesSiteWeb({}, 'teacher')).toBe(false);
     expect(accesSiteWeb(null, 'admin')).toBe(false);
   });
 
@@ -21,7 +21,8 @@ describe('site web de l\'école — accès bêta', () => {
     for (const mode of ['classique', 'formation_pro'] as const) {
       expect(menuPourMode(mode).some(i => i.url === '/site-web')).toBe(false);
       const item = menuPourMode(mode, { siteWeb: true }).find(i => i.url === '/site-web');
-      expect(item?.beta).toBe(true);
+      expect(item).toBeDefined();
+      expect(item?.beta).toBeFalsy();
     }
   });
 });

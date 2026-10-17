@@ -96,18 +96,19 @@ describe('PlatformSchoolDetail — bêta-testeur', () => {
     const user = userEvent.setup();
     ouvrir();
     await user.click(await screen.findByRole('button', { name: /Rendre bêta-testeuse/ }));
-    expect(screen.getByText(/verra la rubrique « Site web »/)).toBeInTheDocument();
+    expect(screen.getByText(/verra les prochaines nouveautés en test/)).toBeInTheDocument();
     expect(rpc).not.toHaveBeenCalledWith('platform_set_school_beta', expect.anything());   // pas avant confirmation
     await user.click(screen.getByRole('button', { name: 'Confirmer' }));
     await waitFor(() => expect(rpc).toHaveBeenCalledWith('platform_set_school_beta', { p_school_id: 's1', p_beta: true }));
     expect(await screen.findByRole('button', { name: /Retirer de la bêta/ })).toBeInTheDocument();
   });
 
-  it('une école déjà bêta propose de la retirer, en prévenant que le site public sera hors ligne', async () => {
+  it('une école déjà bêta propose de la retirer ; son site web n\'en dépend plus', async () => {
     rpc.mockReset(); repondre(true);
     const user = userEvent.setup();
     ouvrir();
     await user.click(await screen.findByRole('button', { name: /Retirer de la bêta/ }));
-    expect(screen.getByText(/le site public n'est plus accessible/)).toBeInTheDocument();
+    expect(screen.getByText(/ne verra plus les nouveautés en test/)).toBeInTheDocument();
+    expect(screen.queryByText(/site public/)).not.toBeInTheDocument();
   });
 });

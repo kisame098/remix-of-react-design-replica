@@ -227,8 +227,8 @@ const PlatformSchoolDetail = () => {
           <div className="text-sm">
             <p>Accès aux nouveautés en test : <span className="font-semibold">{beta === null ? '—' : beta ? 'oui' : 'non'}</span></p>
             <p className="text-xs text-muted-foreground mt-1 max-w-xl">
-              Une école bêta-testeuse voit les nouveautés avant les autres — pour l'instant le <strong>site web de l'école</strong> (rubrique « Site web » pour le directeur).
-              Retirer la bêta masque la rubrique et met le site public hors ligne ; le contenu déjà saisi est conservé.
+              Une école bêta-testeuse voit les nouveautés en test avant les autres. Aucune pour l'instant :
+              le <strong>site web de l'école</strong> est désormais ouvert à toutes les écoles.
             </p>
           </div>
           {beta !== null && (
@@ -245,8 +245,8 @@ const PlatformSchoolDetail = () => {
             <AlertDialogTitle>{confirmerBeta ? `Rendre ${d.ecole.nom} bêta-testeuse ?` : `Retirer ${d.ecole.nom} de la bêta ?`}</AlertDialogTitle>
             <AlertDialogDescription>
               {confirmerBeta
-                ? "Le directeur verra la rubrique « Site web » et pourra créer et publier le site de l'école."
-                : "La rubrique « Site web » disparaît et le site public n'est plus accessible. Le contenu saisi est conservé si vous réactivez la bêta."}
+                ? "L'école verra les prochaines nouveautés en test avant les autres écoles."
+                : "L'école ne verra plus les nouveautés en test. Rien de ce qu'elle a saisi n'est effacé."}
               {' '}Ce changement est enregistré dans le journal de la plateforme.
             </AlertDialogDescription>
           </AlertDialogHeader>
