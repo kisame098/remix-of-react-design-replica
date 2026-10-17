@@ -10,7 +10,7 @@ import { cheminDepuisLien, routeDepuisChemin, routeDepuisHash } from './utilitai
 
 /**
  * Le site d'une école, complet. Le même composant sert :
- *   - dans le SaaS (directeur d'une école bêta) : modifiable, enregistré dans Supabase ;
+ *   - dans le SaaS (directeur de l'école) : modifiable, enregistré dans Supabase ;
  *   - sur le site public (/site/:cle) : en lecture seule ;
  *   - dans le labo : modifiable, enregistré dans le navigateur.
  * Les liens internes s'écrivent « #/admissions ». Dans l'éditeur, les pages restent

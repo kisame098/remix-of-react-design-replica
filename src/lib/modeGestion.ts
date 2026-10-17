@@ -93,13 +93,13 @@ export const RUBRIQUE_FINANCEMENTS: ItemMenu = {
 };
 
 /**
- * Site web de l'école : n'apparaît que pour le directeur d'une école que le chef
- * du système a déclarée bêta-testeuse.
+ * Site web de l'école : ouvert à toutes les écoles (gratuites comme payantes),
+ * pour le directeur seulement.
  */
-export const accesSiteWeb = (school: { beta_testeur?: boolean | null } | null | undefined, accountRole: string | null | undefined): boolean =>
-  !!school?.beta_testeur && accountRole === 'admin';
+export const accesSiteWeb = (school: object | null | undefined, accountRole: string | null | undefined): boolean =>
+  !!school && accountRole === 'admin';
 
-export const RUBRIQUE_SITE_WEB: ItemMenu = { title: 'Site web', url: '/site-web', icon: 'siteweb', beta: true };
+export const RUBRIQUE_SITE_WEB: ItemMenu = { title: 'Site web', url: '/site-web', icon: 'siteweb' };
 
 export const menuPourMode = (mode: ModeGestion, options: { financements?: boolean; siteWeb?: boolean } = {}): ItemMenu[] => {
   const siteWeb = options.siteWeb ? [RUBRIQUE_SITE_WEB] : [];

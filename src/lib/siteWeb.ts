@@ -5,12 +5,12 @@ import { contenuDepuis } from '@/siteEcole/edition';
 import { ecrire } from '@/siteEcole/chemin';
 
 // ═══════════════════════════════════════════════════════════════════════════
-// SITE WEB DE L'ÉCOLE (bêta)
+// SITE WEB DE L'ÉCOLE
 //
-// Ouvert aux seules écoles que le chef du système a déclarées « bêta-testeuses »
-// (schools.beta_testeur). Le directeur modifie un BROUILLON enregistré au fil de
-// l'eau ; « Publier » le copie en version publique, lisible par tous à
-// /site/<slug>. Voir docs/sql/site_web_beta.sql.
+// Ouvert à toutes les écoles (docs/sql/site_web_ouvert.sql). Le directeur
+// modifie un BROUILLON enregistré au fil de l'eau ; « Publier » le copie en
+// version publique, lisible par tous à <adresse>.senclass.com.
+// Voir docs/sql/site_web_beta.sql.
 // ═══════════════════════════════════════════════════════════════════════════
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -18,7 +18,7 @@ const sb = supabase as any;
 
 export const BUCKET_SITES = 'sites-ecoles';
 
-/** La rubrique « Site web » n'existe que pour le directeur d'une école bêta (règle dans lib/modeGestion, chargée par le menu). */
+/** La rubrique « Site web » est réservée au directeur (règle dans lib/modeGestion, chargée par le menu). */
 export { accesSiteWeb } from '@/lib/modeGestion';
 
 export interface SiteEnregistre {
