@@ -85,7 +85,7 @@ export function Logo({ clair = false }: { clair?: boolean }) {
         ? <img src={id.logo} alt={id.nom} className="h-12 w-12 object-contain flex-shrink-0" />
         : <span className={`h-12 w-12 rounded-full flex-shrink-0 flex items-center justify-center font-bold text-lg titre ${clair ? 'bg-white text-[var(--c1)]' : 'bg-[var(--c1)] text-white'} ring-2 ring-[var(--c2)] ring-offset-2 ${clair ? 'ring-offset-[var(--c1)]' : ''}`}>{initiales}</span>}
       <span className="min-w-0">
-        <span className={`block titre font-bold text-lg leading-tight truncate ${clair ? 'text-white' : 'text-[var(--c1)]'}`}>{id.nom}</span>
+        <span title={id.nom} className={`titre font-bold text-lg leading-tight line-clamp-2 break-words ${clair ? 'text-white' : 'text-[var(--c1)]'}`}>{id.nom}</span>
         <span className={`block text-xs truncate ${clair ? 'text-white/70' : 'text-gray-500'}`}>{id.slogan}</span>
       </span>
     </a>

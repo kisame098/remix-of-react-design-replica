@@ -71,7 +71,7 @@ export function LogoTeranga({ clair = false }: { clair?: boolean }) {
       {id.logo
         ? <img src={id.logo} alt={id.nom} className="h-10 w-10 object-contain flex-shrink-0" />
         : <span className="h-10 w-10 rounded-2xl rotate-6 flex-shrink-0 flex items-center justify-center font-extrabold titre text-white bg-[var(--c1)]"><span className="-rotate-6">{initiales}</span></span>}
-      <span className={`titre font-extrabold text-[17px] leading-tight truncate max-w-[220px] xl:max-w-[170px] 2xl:max-w-[260px] ${clair ? 'text-white' : ''}`}>{id.nom}</span>
+      <span title={id.nom} className={`titre font-extrabold text-[17px] leading-tight line-clamp-2 break-words max-w-[220px] xl:max-w-[200px] 2xl:max-w-[260px] ${clair ? 'text-white' : ''}`}>{id.nom}</span>
     </a>
   );
 }
