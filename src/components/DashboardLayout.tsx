@@ -4,6 +4,7 @@ import { DashboardSidebar } from './DashboardSidebar';
 import { ChargementPage } from './ChargementPage';
 import { BandeauDonneesEnregistrees } from './BandeauDonneesEnregistrees';
 import { BandeauAbonnement } from './BandeauAbonnement';
+import { AnnonceSiteWeb } from './AnnonceSiteWeb';
 import { useSchool } from '@/contexts/SchoolContext';
 
 export const DashboardLayout = () => {
@@ -17,6 +18,8 @@ export const DashboardLayout = () => {
       <main className="flex-1 min-h-0 overflow-y-auto relative">
         {/* Fin d'essai ou d'abonnement proche : visible sur tous les écrans de l'école. */}
         <BandeauAbonnement />
+        {/* Lancement du Site web : annonce aux directeurs pendant 24 h. */}
+        <AnnonceSiteWeb />
         {instantaneLe && (
           <div className="px-4 pt-4 md:px-6">
             <BandeauDonneesEnregistrees enregistreLe={instantaneLe} />
