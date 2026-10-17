@@ -11,6 +11,8 @@
 //         (canonical), aperçu de partage WhatsApp/Facebook, fiche « École »
 //         (schema.org) — page par page et article par article ;
 //       - sert le robots.txt et le plan du site (sitemap.xml) de l'école ;
+//       - sert le logo de l'école comme icône du site (/icone-ecole, /favicon.ico),
+//         celle que Google affiche à côté du résultat ;
 //       - adresse inconnue ou site non publié : vraie réponse 404, non indexée.
 //   • Sert aussi https://senclass.com/sitemap-ecoles.xml : l'index de tous les
 //     plans de site publiés (route Cloudflare dédiée senclass.com/sitemap-ecoles.xml),
@@ -56,6 +58,11 @@ export default {
       if (!site) return texte('Site introuvable', 'text/plain', 404);
       const publie = (await listeSites())?.find(x => x.slug === slug)?.publie_le;
       return texte(planDuSite(site, hote, publie), 'application/xml');
+    }
+
+    if (url.pathname === '/icone-ecole' || url.pathname === '/favicon.ico') {
+      const icone = await iconeEcole(await lireSite(slug));
+      if (icone) return icone;
     }
 
     const reponse = await depuisOrigine(request, url, hote);
@@ -120,6 +127,31 @@ async function listeSites() {
   }
 }
 
+/**
+ * Le logo de l'école, tel quel, comme icône du site (null : pas de logo, on garde celle de SenClass).
+ * Le logo est souvent enregistré en « data:image/…;base64 » (réglages de l'école) : on le décode.
+ */
+async function iconeEcole(site) {
+  const logo = site?.identite?.logo;
+  if (typeof logo !== 'string' || !logo) return null;
+  const entetes = { 'cache-control': 'public, max-age=3600' };
+  const integre = /^data:(image\/[a-z0-9.+-]+);base64,(.+)$/i.exec(logo);
+  if (integre) {
+    try {
+      const octets = Uint8Array.from(atob(integre[2]), c => c.charCodeAt(0));
+      return new Response(octets, { headers: { ...entetes, 'content-type': integre[1] } });
+    } catch {
+      return null;
+    }
+  }
+  const adresse = /^https:\/\//.test(logo) ? logo : /^\/[^/]/.test(logo) ? `https://${ORIGINE}${logo}` : null;
+  if (!adresse) return null;
+  const r = await fetch(adresse, { cf: { cacheTtl: 3600, cacheEverything: true } });
+  const type = r.headers.get('content-type') || '';
+  if (!r.ok || !type.startsWith('image/')) return null;
+  return new Response(r.body, { headers: { ...entetes, 'content-type': type } });
+}
+
 const articles = site => (site.actualites?.elements || []).filter(a => a && a.id);
 // Les photos des modèles sont servies par l'application (« /site-ecole/… ») : adresse complète exigée par les aperçus.
 const imageWeb = (hote, ...urls) => {
@@ -172,7 +204,7 @@ function ficheEcole(site, hote, page) {
   const ecole = {
     '@type': 'School', '@id': `https://${hote}/#ecole`, name: id.nom, url: `https://${hote}/`,
     ...(id.slogan ? { slogan: id.slogan } : {}),
-    ...(imageWeb(hote, id.logo) ? { logo: imageWeb(hote, id.logo) } : {}),
+    ...(id.logo ? { logo: `https://${hote}/icone-ecole` } : {}),
     ...(page.image ? { image: page.image } : {}),
     ...(id.telephone ? { telephone: id.telephone } : {}),
     ...(id.email ? { email: id.email } : {}),
@@ -196,7 +228,21 @@ function reecrireEntete(reponse, site, page, adresse) {
   const nom = site.identite?.nom || 'École';
   const attribut = valeur => ({ element: e => e.setAttribute('content', valeur) });
   const retirer = { element: e => e.remove() };
+  // Avec un logo : une seule icône, celle de l'école ; sans logo, celles de SenClass restent.
+  let premiere = true;
+  const icone = {
+    element: e => {
+      if (!premiere) return e.remove();
+      premiere = false;
+      e.setAttribute('href', '/icone-ecole');
+      e.removeAttribute('type');
+      e.removeAttribute('sizes');
+    },
+  };
+  const avecLogo = typeof site.identite?.logo === 'string' && site.identite.logo !== '';
   return new HTMLRewriter()
+    .on('link[rel="icon"]', avecLogo ? icone : {})
+    .on('link[rel="apple-touch-icon"]', avecLogo ? { element: e => e.setAttribute('href', '/icone-ecole') } : {})
     .on('title', { element: e => e.setInnerContent(page.titre) })
     .on('meta[name="description"]', attribut(page.description))
     .on('meta[name="robots"]', attribut('index, follow, max-image-preview:large'))
