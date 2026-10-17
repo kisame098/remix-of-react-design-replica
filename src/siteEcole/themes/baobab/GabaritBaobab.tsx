@@ -100,12 +100,13 @@ function Annonce() {
   );
 }
 
+/** Logo + nom de l'école. Le nom n'est jamais écrasé par le menu : trop long, il passe sur deux lignes. */
 export function LogoBaobab({ clair = false }: { clair?: boolean }) {
   const { contenu } = useEdition();
   const id = contenu.identite;
   const initiales = id.nom.split(/\s+/).filter(m => m.length > 2).slice(0, 2).map(m => m[0]).join('').toUpperCase();
   return (
-    <a href="#/" className="flex items-center gap-3 min-w-0">
+    <a href="#/" className="flex items-center gap-3 min-w-0 xl:flex-shrink-0">
       {id.logo ? <img src={id.logo} alt={id.nom} className="h-12 w-12 object-contain flex-shrink-0" /> : (
         <span className="relative h-12 w-12 flex-shrink-0">
           <span className="absolute inset-0 rounded-2xl bg-[var(--c1)] rotate-6" />
@@ -114,8 +115,8 @@ export function LogoBaobab({ clair = false }: { clair?: boolean }) {
         </span>
       )}
       <span className="min-w-0 leading-tight">
-        <span className={`block titre font-extrabold text-[19px] truncate max-w-[250px] xl:max-w-[210px] 2xl:max-w-[280px] ${clair ? 'text-white' : ''}`}>{id.nom}</span>
-        <span className={`block text-xs font-medium truncate ${clair ? 'text-white/60' : 'text-[#6b7a73]'}`}>{id.slogan}</span>
+        <span title={id.nom} className={`titre font-extrabold text-[19px] xl:text-[17px] line-clamp-2 break-words max-w-[250px] xl:max-w-[190px] ${clair ? 'text-white' : ''}`}>{id.nom}</span>
+        <span className={`block text-xs font-medium truncate max-w-[250px] xl:max-w-[190px] ${clair ? 'text-white/60' : 'text-[#6b7a73]'}`}>{id.slogan}</span>
       </span>
     </a>
   );
@@ -141,22 +142,22 @@ function EnTete({ page }: { page: string }) {
   return (
     <>
       <header className={`sticky ${edition ? 'top-9' : 'top-0'} z-40 bg-white/90 backdrop-blur-xl transition-shadow duration-300 ${defile ? 'shadow-[0_10px_30px_-18px_rgba(13,31,25,0.35)]' : ''}`}>
-        <Boite className={`flex items-center gap-6 transition-[height] duration-300 ${defile ? 'h-[72px]' : 'h-[88px]'}`}>
+        <Boite className={`flex items-center gap-6 xl:gap-4 transition-[height] duration-300 ${defile ? 'h-[72px]' : 'h-[88px]'}`}>
           <LogoBaobab />
-          <nav className="hidden xl:flex items-center gap-0.5 mx-auto whitespace-nowrap">
+          <nav className="hidden xl:flex items-center mx-auto whitespace-nowrap">
             {PAGES_INTERNES.map(p => {
               const actif = p.lien === `#/${page}` || (p.lien === '#/' && page === '');
               return (
-                <a key={p.lien} href={p.lien} className={`relative px-3 py-2 rounded-xl text-[15px] font-semibold transition-colors ${actif ? 'text-[var(--c1)]' : 'text-[#43514b] hover:text-[var(--c1)] hover:bg-[var(--doux)]'}`}>
+                <a key={p.lien} href={p.lien} className={`relative px-2.5 py-2 rounded-xl text-[15px] font-semibold transition-colors ${actif ? 'text-[var(--c1)]' : 'text-[#43514b] hover:text-[var(--c1)] hover:bg-[var(--doux)]'}`}>
                   {p.nom}
                   {actif && <span className="absolute left-1/2 -translate-x-1/2 -bottom-1 h-1.5 w-1.5 rounded-full bg-[var(--c2)]" />}
                 </a>
               );
             })}
           </nav>
-          <a href={`tel:${id.telephone.replace(/\s/g, '')}`} className="hidden 2xl:flex items-center gap-3 group whitespace-nowrap">
-            <span className="h-11 w-11 rounded-xl bg-[var(--doux)] text-[var(--c1)] flex items-center justify-center group-hover:bg-[var(--c1)] group-hover:text-white transition-colors"><Phone className="h-5 w-5" /></span>
-            <span className="leading-tight"><span className="block text-xs text-[#6b7a73]">Appelez-nous</span><span className="block font-bold text-[15px]">{id.telephone}</span></span>
+          {/* Le numéro complet prendrait la place du nom de l'école : une icône suffit à côté du menu. */}
+          <a href={`tel:${id.telephone.replace(/\s/g, '')}`} title={`Appelez-nous : ${id.telephone}`} aria-label={`Appelez-nous : ${id.telephone}`} className="hidden xl:flex flex-shrink-0 h-11 w-11 rounded-xl bg-[var(--doux)] text-[var(--c1)] items-center justify-center hover:bg-[var(--c1)] hover:text-white transition-colors">
+            <Phone className="h-5 w-5" />
           </a>
           <Bouton c="identite.espaceParents" className="hidden md:inline-flex items-center h-12 px-6 rounded-xl bg-[var(--c1)] text-white font-bold whitespace-nowrap hover:bg-[var(--c2)] transition-colors ml-auto xl:ml-0" />
           <button type="button" onClick={() => setMenu(true)} aria-label="Ouvrir le menu" className="xl:hidden ml-auto md:ml-0 h-12 w-12 rounded-xl bg-[var(--doux)] flex flex-col items-center justify-center gap-1.5">
