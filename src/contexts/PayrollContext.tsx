@@ -5,6 +5,7 @@ import React, {
 import { supabase } from '@/integrations/supabase/client';
 import { fetchAllRows } from '@/lib/fetchAllRows';
 import { useAuth } from './AuthContext';
+import { nomDuCompte } from '@/lib/nomCompte';
 import {
   PayrollEmployee, SalaryPayment, PayeeType, PayrollMonthKey,
 } from '@/types/payroll';
@@ -82,7 +83,7 @@ const PayrollContext = createContext<PayrollContextType | null>(null);
 
 // ─── Provider ─────────────────────────────────────────────────────────────────
 export const PayrollProvider = ({ children }: { children: ReactNode }) => {
-  const { school, profile } = useAuth();
+  const { school, profile, user } = useAuth();
   const enLigne = useEnLigne();
   const schoolId: string | null = school?.id ?? null;
 
@@ -223,14 +224,14 @@ export const PayrollProvider = ({ children }: { children: ReactNode }) => {
   // Annulation = pièce comptable qui reste, jamais une suppression — passe
   // uniquement par le RPC audité `cancel_salary_payment` (trace qui/quand en base).
   const cancelSalaryPayment = useCallback(async (id: string) => {
-    const cancelledBy = profile?.full_name || profile?.email || undefined;
+    const cancelledBy = nomDuCompte(profile, user);
     const { data, error } = await supabase.rpc('cancel_salary_payment' as never, {
       p_payment_id: id,
       p_cancelled_by: cancelledBy ?? '',
     } as never);
     if (error) throw error;
     if (data) setSalaryPayments(prev => prev.map(p => p.id === id ? mapSalaryPayment(data) : p));
-  }, [profile]);
+  }, [profile, user]);
 
   const getPaymentsForEmployee = useCallback((payeeType: PayeeType, id: string): SalaryPayment[] =>
     salaryPayments.filter(p =>

@@ -24,6 +24,7 @@ import { useElementsAPayer } from '@/hooks/useElementsAPayer';
 import { useFinancements } from '@/contexts/FinancementsContext';
 import { partager } from '@/lib/priseEnCharge';
 import { useAnnulerPaiement } from '@/hooks/useAnnulerPaiement';
+import { nomDuCompte } from '@/lib/nomCompte';
 import { resteAPayer } from '@/lib/paiementPartiel';
 import { montantEleve } from '@/lib/tarifsEleve';
 import { mensualiteDuMois } from '@/lib/mensualites';
@@ -53,7 +54,7 @@ type Tab = 'scan' | 'history' | 'cancel';
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 const Caisse = () => {
-  const { school, profile, accountRole, staffPermissions, signOut } = useAuth();
+  const { school, profile, user, accountRole, staffPermissions, signOut } = useAuth();
   const { students, tousLesEleves, studentsLoading } = useSchool();
   const {
     payments, annexServices, getTuitionConfig,
@@ -177,7 +178,7 @@ const Caisse = () => {
         monthKey:        matched.item.monthKey,
         amount:          matched.item.amount,
         method,
-        receivedBy:      profile?.full_name || profile?.email || undefined,
+        receivedBy:      nomDuCompte(profile, user),
       });
       setJustPaid(true);
       setTimeout(resetScan, 1800);

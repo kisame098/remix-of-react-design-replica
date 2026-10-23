@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { usePayroll } from '@/contexts/PayrollContext';
 import { useAuth } from '@/contexts/AuthContext';
+import { nomDuCompte } from '@/lib/nomCompte';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -47,7 +48,7 @@ export const RecordSalaryPaymentDialog = ({
   paymentType, defaultAmountDue, defaultHoursWorked,
 }: RecordSalaryPaymentDialogProps) => {
   const { recordSalaryPayment } = usePayroll();
-  const { profile } = useAuth();
+  const { profile, user } = useAuth();
 
   const needsManualAmount = defaultAmountDue === null;
   const needsManualHours = payeeType === 'staff' && paymentType === 'hourly';
@@ -97,7 +98,7 @@ export const RecordSalaryPaymentDialog = ({
         method,
         reference: reference.trim() || undefined,
         note: note.trim() || undefined,
-        confirmedBy: profile?.full_name || profile?.email || undefined,
+        confirmedBy: nomDuCompte(profile, user),
       });
       toast({ title: 'Paiement enregistré ✓', description: `${fmt(paid)} versé à ${payeeName} via ${PAYMENT_METHOD_LABELS[method]}` });
       onOpenChange(false);

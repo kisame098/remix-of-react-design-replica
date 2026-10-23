@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
+import { nomDuCompte } from '@/lib/nomCompte';
 import type { Student } from '@/contexts/SchoolContext';
 import { estFormationPro } from '@/lib/modeGestion';
 import {
@@ -191,8 +192,8 @@ interface FinancementsContextType {
 const FinancementsContext = createContext<FinancementsContextType | null>(null);
 
 export const FinancementsProvider = ({ children }: { children: ReactNode }) => {
-  const { school, isSchoolAccessBlocked, profile } = useAuth();
-  const parNom = profile?.full_name || profile?.email || undefined;
+  const { school, isSchoolAccessBlocked, profile, user } = useAuth();
+  const parNom = nomDuCompte(profile, user);
   const schoolId: string | null = school?.id ?? null;
   const reglages = useMemo(() => lireReglagesFinancements(school?.settings), [school?.settings]);
   const actif = estFormationPro(school) && reglages.actif && !isSchoolAccessBlocked;

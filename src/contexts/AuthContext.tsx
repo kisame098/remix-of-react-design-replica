@@ -145,13 +145,21 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       return;
     }
     try {
-      // 1. Profil utilisateur
-      const { data: profileData } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', userId)
-        .maybeSingle();
-      setProfile(profileData as Profile | null);
+      // 1. Profil utilisateur — il donne le nom écrit dans « Encaissé par ».
+      // Une lecture en ÉCHEC n'est pas une absence de profil : l'ignorer
+      // laissait l'onglet sans profil toute sa vie (rôle chargé, tout semblait
+      // marcher), et ses encaissements partaient sans nom (reçus 266, 300 et
+      // 301 de La Recherche, octobre 2026). On réessaie une fois, puis on garde
+      // le profil déjà connu — ou celui gardé sur l'appareil — plutôt que null.
+      const lireProfil = () => supabase.from('profiles').select('*').eq('id', userId).maybeSingle();
+      let profil = await lireProfil();
+      if (profil.error) profil = await lireProfil();
+      if (!profil.error) {
+        setProfile(profil.data as Profile | null);
+      } else {
+        const connu = lire<IdentiteMemorisee>(userId, 'identite')?.donnees.profile as Profile | null | undefined;
+        setProfile(prev => prev ?? connu ?? null);
+      }
 
       // 1bis. Compte "chef du système" ? N'appartient à aucune école — vérifié
       // AVANT la logique école, car get_my_school_id() renverrait NULL pour lui
