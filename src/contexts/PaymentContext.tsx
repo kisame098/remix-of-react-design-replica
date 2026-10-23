@@ -16,6 +16,7 @@ import { indexerAjustements, type AjustementTarif, type ModeAjustement } from '@
 import { findPreviousSchoolYear } from '@/lib/schoolYears';
 import { useEnLigne } from '@/hooks/useEnLigne';
 import { useInstantaneHorsLigne } from '@/hooks/useInstantaneHorsLigne';
+import { nomDuCompte } from '@/lib/nomCompte';
 
 // ─── Mappers DB → TypeScript ──────────────────────────────────────────────────
 
@@ -175,7 +176,7 @@ const PaymentContext = createContext<PaymentContextType | null>(null);
 
 // ─── Provider ─────────────────────────────────────────────────────────────────
 export const PaymentProvider = ({ children }: { children: ReactNode }) => {
-  const { school, profile } = useAuth();
+  const { school, profile, user } = useAuth();
   const { currentYear, schoolYears } = useSchoolYear();
   const enLigne = useEnLigne();
   const schoolId: string | null = school?.id ?? null;
@@ -597,14 +598,14 @@ export const PaymentProvider = ({ children }: { children: ReactNode }) => {
   // Annulation = pièce comptable qui reste, jamais une suppression — passe
   // uniquement par le RPC audité `cancel_payment` (trace qui/quand en base).
   const cancelPayment = useCallback(async (id: string) => {
-    const cancelledBy = profile?.full_name || profile?.email || undefined;
+    const cancelledBy = nomDuCompte(profile, user);
     const { data, error } = await supabase.rpc('cancel_payment', {
       p_payment_id: id,
       p_cancelled_by: cancelledBy ?? '',
     });
     if (error) throw error;
     if (data) setPayments(prev => prev.map(p => p.id === id ? mapPayment(data) : p));
-  }, [profile]);
+  }, [profile, user]);
 
   const getStudentPayments = useCallback((studentId: string): Payment[] =>
     payments.filter(p => p.studentId === studentId && p.academicYearLabel === yearLabel),

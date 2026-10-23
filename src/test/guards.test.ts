@@ -441,3 +441,31 @@ describe('garde-fou : une dispense s\'applique partout à la fois', () => {
     expect(file!.code).toContain('elementaryLineSettings');
   });
 });
+
+// ── 12. « Encaissé par » n'est jamais vide ──────────────────────────────────
+
+describe('garde-fou : la trace de qui a encaissé ou annulé ne peut pas être vide', () => {
+  // Le nom venait de la seule fiche profil : un onglet qui n'avait pas pu la
+  // lire encaissait « Non renseigné » (reçus 266, 300, 301, octobre 2026).
+  // nomDuCompte retombe sur l'e-mail de connexion, qui existe toujours.
+  const TRACE = /\b(receivedBy|confirmedBy|cancelledBy|parNom)\s*[:=]\s*profile\?\./;
+
+  it('aucun écran ne tire le nom de la seule fiche profil', () => {
+    for (const f of SOURCES) {
+      expect(TRACE.test(f.code), `${f.path} écrit une trace depuis profile seul : utiliser nomDuCompte(profile, user)`).toBe(false);
+    }
+  });
+
+  it.each([
+    'src/components/payment/PaymentEntry.tsx',
+    'src/pages/Caisse.tsx',
+    'src/contexts/PaymentContext.tsx',
+    'src/contexts/PayrollContext.tsx',
+    'src/components/payroll/RecordSalaryPaymentDialog.tsx',
+    'src/contexts/FinancementsContext.tsx',
+  ])('%s passe par nomDuCompte', (path) => {
+    const file = SOURCES.find(f => f.path === path);
+    expect(file, `${path} introuvable`).toBeDefined();
+    expect(file!.code).toContain('nomDuCompte(profile, user)');
+  });
+});

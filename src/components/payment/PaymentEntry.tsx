@@ -29,6 +29,7 @@ import { useFinancements } from '@/contexts/FinancementsContext';
 import { buildPayableItems, type PayableItem } from '@/lib/dueItems';
 import { deciderVersement } from '@/lib/paiementPartiel';
 import { cn } from '@/lib/utils';
+import { nomDuCompte } from '@/lib/nomCompte';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 const fmt = (n: number) => new Intl.NumberFormat('fr-FR').format(n) + ' FCFA';
@@ -152,7 +153,7 @@ const PaymentEntry = ({ initialMode = 'search' }: { initialMode?: 'search' | 'sc
     addPayment,
   } = usePayment();
   const { currentYear } = useSchoolYear();
-  const { school, profile } = useAuth();
+  const { school, profile, user } = useAuth();
   const { montrerRecu, dialogueRecu } = useRecus();
   const billingTiming = (school?.settings?.tuitionBillingTiming as TuitionBillingTiming) ?? DEFAULT_TUITION_BILLING_TIMING;
   const academicMonths = useMemo(
@@ -369,7 +370,7 @@ const PaymentEntry = ({ initialMode = 'search' }: { initialMode?: 'search' | 'sc
           method,
           reference:      reference.trim() || undefined,
           note:           note.trim() || undefined,
-          receivedBy:     profile?.full_name || profile?.email || undefined,
+          receivedBy:     nomDuCompte(profile, user),
         }));
       }
       const total = new Intl.NumberFormat('fr-FR').format(selectedTotal);
