@@ -432,9 +432,10 @@ const Facturation = () => {
           description={impression.description}
           nomFichier={impression.nomFichier}
           typeDocument="facture"
-          generer={async ({ economique }) => {
+          deuxParFeuille="facture"
+          generer={async ({ economique, deuxParFeuille }) => {
             const { genererFacturesPdf } = await import('@/lib/facturePdf');
-            return genererFacturesPdf(infosEcole(school), impression.docs, undefined, { economique });
+            return genererFacturesPdf(infosEcole(school), impression.docs, undefined, { economique, deuxParFeuille });
           }}
         />
       )}

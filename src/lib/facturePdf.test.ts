@@ -65,3 +65,38 @@ describe('facture PDF', () => {
     await expect(genererFacturesPdf(ecole, [], null)).rejects.toThrow();
   });
 });
+
+describe('facture PDF — 2 par feuille', () => {
+  const lireDeux = async (docs: FactureDoc[]) => {
+    const doc = await genererFacturesPdf(ecole, docs, null, { deuxParFeuille: true });
+    const brut = Buffer.from(doc.output('arraybuffer')).toString('latin1');
+    return { doc, brut, texte: textePdf(brut) };
+  };
+
+  it('deux factures par feuille A4 horizontale, réduites à la demi-page, pointillé de coupe', async () => {
+    const { doc, brut, texte } = await lireDeux(['FAC-2026-00042', 'FAC-2026-00043', 'FAC-2026-00044'].map(numero => facture({ numero })));
+    expect(doc.getNumberOfPages()).toBe(2);
+    expect([Math.round(doc.internal.pageSize.getWidth()), Math.round(doc.internal.pageSize.getHeight())]).toEqual([297, 210]);
+    for (const n of ['FAC-2026-00042', 'FAC-2026-00043', 'FAC-2026-00044']) expect(texte).toContain(n);
+    // Moitié gauche, puis moitié droite (décalée de 148,5 mm = 420,94 pt).
+    expect(brut).toMatch(/0\.7071 0 0 0\.7071 0\.0000 /);
+    expect(brut).toMatch(/0\.7071 0 0 0\.7071 420\.94\d* /);
+    expect(brut).toMatch(/\[4\.25\d* 4\.25\d*\] 0\. d/);
+  });
+
+  it('une facture seule : une feuille, l\'autre moitié libre', async () => {
+    const { doc, brut } = await lireDeux([facture()]);
+    expect(doc.getNumberOfPages()).toBe(1);
+    expect(brut).not.toMatch(/0\.7071 0 0 0\.7071 420\.94/);
+  });
+
+  it('une longue facture continue sur la demi-page suivante, sans rien perdre', async () => {
+    const lignes = Array.from({ length: 30 }, (_, i) => ({
+      cle: `l${i}`, designation: `Ligne ${i + 1}`, montant: 1000, deja_verse: 0, reste: 1000, en_retard: false,
+    }));
+    const { doc, texte } = await lireDeux([facture({ lignes, total: 30000 })]);
+    expect(doc.getNumberOfPages()).toBe(1);
+    expect(texte).toContain('Ligne 30');
+    expect(texte).toContain('Trente mille francs CFA');
+  });
+});
