@@ -23,8 +23,8 @@ interface DocumentDialogProps {
   /** Fabrique le PDF. Rappelée à chaque ouverture (et à chaque changement de mode) ; jamais avant. */
   generer: (o: { economique: boolean; deuxParFeuille: boolean }) => Promise<jsPDF>;
   /**
-   * Propose « 2 par feuille » (document A5 : deux exemplaires sur une feuille
-   * A4 horizontale). La valeur nomme le choix retenu sur l'ordinateur (« recu »…).
+   * Propose « 2 par feuille » (chaque document sur une demi-feuille A5 d'une
+   * feuille A4 horizontale). La valeur nomme le choix retenu sur l'ordinateur (« recu »…).
    */
   deuxParFeuille?: string;
   /**
@@ -168,7 +168,7 @@ export const DocumentDialog = ({
           {deuxParFeuille && (
             <Button
               variant={demiPage ? 'secondary' : 'outline'} aria-pressed={demiPage} className={`gap-2 mr-auto ${demiPage ? 'ring-2 ring-primary/40' : ''}`}
-              title="Sur une demi-feuille : A4 horizontale, l'autre moitié reste libre ; à couper au pointillé"
+              title="Sur une demi-feuille (A5) : feuille A4 horizontale, à couper au pointillé"
               onClick={() => { const v = !demiPage; setDemiPage(v); retenirDeuxParFeuille(v, deuxParFeuille); }}
             >
               <Columns2 className="h-4 w-4" /> 2 par feuille

@@ -25,6 +25,10 @@ import { jourEnLettres, type LigneFacture, type TypeFacture } from '@/lib/factur
 //
 // Plusieurs factures (une classe, toute l'école) = un seul PDF, une facture
 // par page — on imprime le tout d'un coup.
+//
+// « 2 par feuille » : feuille A4 horizontale, chaque page de facture réduite
+// à 1/√2 (rapport exact A4 → A5) sur une moitié, pointillé de coupe au milieu.
+// Deux factures par feuille ; une seule = l'autre moitié reste libre.
 // ═══════════════════════════════════════════════════════════════════════════
 
 const L = 210;
@@ -50,7 +54,11 @@ export interface FactureDoc {
   duplicata?: boolean;
 }
 
-type Etat = { doc: jsPDF; c: Palette; ecole: InfosEcole; f: FactureDoc };
+type Etat = {
+  doc: jsPDF; c: Palette; ecole: InfosEcole; f: FactureDoc;
+  /** Commence une page de facture : page A4, ou moitié de feuille (« 2 par feuille »). */
+  nouvellePage: () => void;
+};
 
 export { jourEnLettres };
 
@@ -381,7 +389,7 @@ const dessinerFacture = (e: Etat) => {
   for (const ligne of f.lignes) {
     if (y + PAS > H - 40) {
       pied(e);
-      doc.addPage('a4', 'portrait');
+      e.nouvellePage();
       filigrane(doc, ecole, L, H, 120, c.fonce);
       y = enteteTableau(e, enTeteDeSuite(e));
       rang = 0;
@@ -394,7 +402,7 @@ const dessinerFacture = (e: Etat) => {
   const besoin = 6 + 17 + 31 + 34;
   if (y + besoin > H - 22) {
     pied(e);
-    doc.addPage('a4', 'portrait');
+    e.nouvellePage();
     filigrane(doc, ecole, L, H, 120, c.fonce);
     y = enTeteDeSuite(e);
   }
@@ -405,14 +413,54 @@ const dessinerFacture = (e: Etat) => {
   pied(e);
 };
 
+/** Rapport A5 / A4 : une page de facture réduite tient exactement sur une demi-feuille. */
+const ECHELLE_DEMI = Math.SQRT1_2;
+
+/**
+ * Pages de facture sur des demi-feuilles A4 horizontales. Chaque page est
+ * dessinée en A4 comme d'habitude ; une matrice la réduit et la pose sur sa
+ * moitié, découpée au bord (le filigrane ne déborde pas sur la voisine).
+ */
+const demiFeuilles = (doc: jsPDF) => {
+  const k = doc.internal.scaleFactor;
+  const n = (v: number) => v.toFixed(4);
+  const largeur = H / 2;
+  let moitie = -1;
+  const ecrire = (t: string) => (doc.internal as unknown as { write: (s: string) => void }).write(t);
+  return {
+    suivante: () => {
+      if (moitie >= 0) doc.restoreGraphicsState();
+      if (moitie === 1) doc.addPage('a4', 'landscape');
+      moitie = moitie === 0 ? 1 : 0;
+      if (moitie === 0) {
+        doc.setDrawColor(120, 120, 120);
+        doc.setLineWidth(0.2);
+        doc.setLineDashPattern([1.5, 1.5], 0);
+        doc.line(largeur, 4, largeur, L - 4);
+        doc.setLineDashPattern([], 0);
+      }
+      const x = moitie * largeur;
+      doc.saveGraphicsState();
+      ecrire(`${n(x * k)} 0 ${n(largeur * k)} ${n(L * k)} re W n`);
+      ecrire(`${n(ECHELLE_DEMI)} 0 0 ${n(ECHELLE_DEMI)} ${n(x * k)} ${n(L * k * (1 - ECHELLE_DEMI))} cm`);
+    },
+    fin: () => { if (moitie >= 0) doc.restoreGraphicsState(); },
+  };
+};
+
 /** Une ou plusieurs factures dans UN seul PDF, chacune commençant sur une nouvelle page. */
 export async function genererFacturesPdf(
   ecole: InfosEcole, factures: FactureDoc[], couleur?: string | null,
-  /** Imprimante noir et blanc : aucun grand aplat (Paramètres → École). */
-  options: { economique?: boolean } = {},
+  options: {
+    /** Imprimante noir et blanc : aucun grand aplat (Paramètres → École). */
+    economique?: boolean;
+    /** Deux factures par feuille A4 horizontale, chacune sur une demi-page. */
+    deuxParFeuille?: boolean;
+  } = {},
 ): Promise<jsPDF> {
   if (factures.length === 0) throw new Error('Aucune facture à imprimer');
-  const doc = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' });
+  const deux = !!options.deuxParFeuille;
+  const doc = new jsPDF({ unit: 'mm', format: 'a4', orientation: deux ? 'landscape' : 'portrait' });
   const premiere = factures[0];
   doc.setProperties({
     title: factures.length === 1
@@ -425,9 +473,12 @@ export async function genererFacturesPdf(
   const c = options.economique
     ? PALETTE_ECONOMIQUE
     : paletteDepuis(couleur !== undefined ? couleur : await couleurDominanteDuLogo(ecole.logo));
+  const demi = deux ? demiFeuilles(doc) : null;
+  const nouvellePage = demi ? demi.suivante : () => { doc.addPage('a4', 'portrait'); };
   factures.forEach((f, i) => {
-    if (i > 0) doc.addPage('a4', 'portrait');
-    dessinerFacture({ doc, c, ecole, f });
+    if (demi || i > 0) nouvellePage();
+    dessinerFacture({ doc, c, ecole, f, nouvellePage });
   });
+  demi?.fin();
   return doc;
 }
