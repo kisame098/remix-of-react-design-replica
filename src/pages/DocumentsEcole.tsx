@@ -22,6 +22,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { toast } from '@/hooks/use-toast';
 import { ApercuHtml } from '@/components/documents/ApercuHtml';
+import { BoutonPermuter } from '@/components/documents/DocumentDialog';
 import { EditeurModele } from '@/components/documents/EditeurModele';
 import { EditeurVisuel } from '@/components/documents/EditeurVisuel';
 import { ImportWord } from '@/components/documents/ImportWord';
@@ -514,21 +515,29 @@ const Refus = ({ production, estDirecteur, onAllerAuxModeles }: { production: Pr
 
 // ─── Demi-page : deux documents par feuille ─────────────────────────────────
 
-/** Le choix « deux par feuille », retenu sur cet ordinateur. */
-const useDemiPage = (): [boolean, (v: boolean) => void] => {
+/**
+ * Le choix « deux par feuille », retenu sur cet ordinateur, et la permutation
+ * des deux moitiés (pour cette fenêtre seulement). `miseEnPage` l'applique.
+ */
+const useDemiPage = () => {
   const [actif, setActif] = useState(() => lireDeuxParFeuille());
+  const [permuter, setPermuter] = useState(false);
   const changer = (v: boolean) => { setActif(v); retenirDeuxParFeuille(v); };
-  return [actif, changer];
+  const miseEnPage = (html: string) => (actif ? enDeuxParFeuille(html, permuter) : html);
+  return { actif, changer, permuter, setPermuter, miseEnPage };
 };
 
-const BoutonDemiPage = ({ actif, onChange }: { actif: boolean; onChange: (v: boolean) => void }) => (
-  <Button
-    variant={actif ? 'secondary' : 'outline'} aria-pressed={actif} onClick={() => onChange(!actif)}
-    title="Deux documents par feuille : chacun sur une demi-page (A5), à couper au pointillé"
-    className={`mr-auto ${actif ? 'ring-2 ring-primary/40' : ''}`}
-  >
-    <Columns2 className="h-4 w-4 mr-2" /> 2 par feuille
-  </Button>
+const BoutonDemiPage = ({ demi }: { demi: ReturnType<typeof useDemiPage> }) => (
+  <div className="flex gap-1 mr-auto">
+    <Button
+      variant={demi.actif ? 'secondary' : 'outline'} aria-pressed={demi.actif} onClick={() => demi.changer(!demi.actif)}
+      title="Deux documents par feuille : chacun sur une demi-page (A5), à couper au pointillé"
+      className={demi.actif ? 'ring-2 ring-primary/40' : ''}
+    >
+      <Columns2 className="h-4 w-4 mr-2" /> 2 par feuille
+    </Button>
+    {demi.actif && <BoutonPermuter actif={demi.permuter} onChange={demi.setPermuter} />}
+  </div>
 );
 
 // ─── Registre des documents délivrés ────────────────────────────────────────
@@ -539,7 +548,7 @@ const RegistreDelivres = () => {
   const [recherche, setRecherche] = useState('');
   const [ouvert, setOuvert] = useState<{ numero: string; html: string | null } | null>(null);
   const [action, setAction] = useState<'imprimer' | 'pdf' | null>(null);
-  const [demiPage, setDemiPage] = useDemiPage();
+  const demi = useDemiPage();
 
   const trouves = useMemo(() => {
     const q = recherche.trim().toLowerCase();
@@ -559,7 +568,7 @@ const RegistreDelivres = () => {
     setAction(quoi);
     try {
       const sortie = await import('@/lib/modelesDocumentsPdf');
-      const html = demiPage ? enDeuxParFeuille(ouvert.html) : ouvert.html;
+      const html = demi.miseEnPage(ouvert.html);
       if (quoi === 'imprimer') await sortie.imprimerHtml(html);
       else await sortie.telechargerPdfHtml(html, nomDeFichier(ouvert.numero));
     } catch (e) {
@@ -599,9 +608,9 @@ const RegistreDelivres = () => {
             <DialogTitle className="font-mono">{ouvert?.numero}</DialogTitle>
             <DialogDescription className="sr-only">Réimpression à l'identique</DialogDescription>
           </DialogHeader>
-          {ouvert?.html ? <ApercuHtml html={demiPage ? enDeuxParFeuille(ouvert.html) : ouvert.html} /> : <p className="text-sm text-muted-foreground">Le contenu de ce document n'a pas été conservé.</p>}
+          {ouvert?.html ? <ApercuHtml html={demi.miseEnPage(ouvert.html)} /> : <p className="text-sm text-muted-foreground">Le contenu de ce document n'a pas été conservé.</p>}
           <DialogFooter className="gap-2 sm:justify-between">
-            <BoutonDemiPage actif={demiPage} onChange={setDemiPage} />
+            <BoutonDemiPage demi={demi} />
             <Button variant="outline" onClick={() => setOuvert(null)}>Fermer</Button>
             {ouvert?.html && (
               <>
@@ -805,7 +814,7 @@ const DialogProduction = ({
   const [action, setAction] = useState<'imprimer' | 'pdf' | 'word' | null>(null);
   const { p, erreur } = useProduction(demande?.source ?? null, demande?.contextes ?? null);
   const { delivrer, conserverContenu } = useDocumentsDelivres(false);
-  const [demiPage, setDemiPage] = useDemiPage();
+  const demi = useDemiPage();
   // Les numéros délivrés pour cette fenêtre : imprimer puis télécharger ne consomme pas deux numéros.
   const [delivre, setDelivre] = useState<{ html: string; contextes: ContexteDocument[]; numeros: string[] } | null>(null);
   useEffect(() => { setDelivre(null); }, [demande]);
@@ -839,7 +848,7 @@ const DialogProduction = ({
         if (demande.source.genre === 'word') telechargerWordRempli(demande.source.fichier, doc.contextes, demande.nomFichier);
       } else {
         const sortie = await import('@/lib/modelesDocumentsPdf');
-        const html = demiPage ? enDeuxParFeuille(doc.html) : doc.html;
+        const html = demi.miseEnPage(doc.html);
         if (quoi === 'imprimer') await sortie.imprimerHtml(html);
         else await sortie.telechargerPdfHtml(html, nomDeFichier(demande.nomFichier));
       }
@@ -868,10 +877,10 @@ const DialogProduction = ({
         {erreur ? <p className="text-sm text-destructive">{erreur}</p>
           : !p ? <p className="text-sm text-muted-foreground flex items-center gap-2"><Loader2 className="h-4 w-4 animate-spin" /> Préparation…</p>
           : p.refus ? <Refus production={p} estDirecteur={estDirecteur} onAllerAuxModeles={onAllerAuxModeles} />
-          : <ApercuHtml html={demiPage ? enDeuxParFeuille(delivre?.html ?? p.html) : (delivre?.html ?? p.html)} />}
+          : <ApercuHtml html={demi.miseEnPage(delivre?.html ?? p.html)} />}
 
         <DialogFooter className="gap-2">
-          {pret && <BoutonDemiPage actif={demiPage} onChange={setDemiPage} />}
+          {pret && <BoutonDemiPage demi={demi} />}
           <Button variant="outline" onClick={onFermer}>Fermer</Button>
           {pret && (
             <>

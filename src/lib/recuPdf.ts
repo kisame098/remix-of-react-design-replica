@@ -445,6 +445,8 @@ export async function genererRecuPdf(data: RecuData & {
    * Seulement si le reçu tient sur une page.
    */
   deuxParFeuille?: boolean;
+  /** « 2 par feuille » : le reçu sur la moitié droite. */
+  permuter?: boolean;
 }): Promise<jsPDF> {
   const plan = planifierRecu(new jsPDF({ unit: 'mm', format: 'a5', orientation: 'portrait' }), data);
   const deux = !!data.deuxParFeuille && plan.unePage;
@@ -513,9 +515,17 @@ export async function genererRecuPdf(data: RecuData & {
     if (annule) marqueAnnule(e, ySign - 2);
   };
 
+  // Moitié droite : tout le reçu est décalé d'une demi-feuille.
+  const aDroite = deux && !!data.permuter;
+  if (aDroite) {
+    doc.saveGraphicsState();
+    const k = doc.internal.scaleFactor;
+    (doc.internal as unknown as { write: (s: string) => void }).write(`1 0 0 1 ${((A4_PAYSAGE_L / 2) * k).toFixed(4)} 0 cm`);
+  }
   dessiner();
+  if (aDroite) doc.restoreGraphicsState();
   if (deux) {
-    // Un seul reçu, sur la moitié gauche ; l'autre moitié reste libre.
+    // Un seul reçu, sur une moitié ; l'autre moitié reste libre.
     // Pointillé de coupe au milieu.
     const milieu = A4_PAYSAGE_L / 2;
     doc.setDrawColor(120, 120, 120);

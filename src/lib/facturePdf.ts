@@ -29,6 +29,7 @@ import { jourEnLettres, type LigneFacture, type TypeFacture } from '@/lib/factur
 // « 2 par feuille » : feuille A4 horizontale, chaque page de facture réduite
 // à 1/√2 (rapport exact A4 → A5) sur une moitié, pointillé de coupe au milieu.
 // Deux factures par feuille ; une seule = l'autre moitié reste libre.
+// « Permuter » échange les moitiés (une facture seule passe à droite).
 // ═══════════════════════════════════════════════════════════════════════════
 
 const L = 210;
@@ -421,7 +422,7 @@ const ECHELLE_DEMI = Math.SQRT1_2;
  * dessinée en A4 comme d'habitude ; une matrice la réduit et la pose sur sa
  * moitié, découpée au bord (le filigrane ne déborde pas sur la voisine).
  */
-const demiFeuilles = (doc: jsPDF) => {
+const demiFeuilles = (doc: jsPDF, permuter = false) => {
   const k = doc.internal.scaleFactor;
   const n = (v: number) => v.toFixed(4);
   const largeur = H / 2;
@@ -439,7 +440,7 @@ const demiFeuilles = (doc: jsPDF) => {
         doc.line(largeur, 4, largeur, L - 4);
         doc.setLineDashPattern([], 0);
       }
-      const x = moitie * largeur;
+      const x = (permuter ? 1 - moitie : moitie) * largeur;
       doc.saveGraphicsState();
       ecrire(`${n(x * k)} 0 ${n(largeur * k)} ${n(L * k)} re W n`);
       ecrire(`${n(ECHELLE_DEMI)} 0 0 ${n(ECHELLE_DEMI)} ${n(x * k)} ${n(L * k * (1 - ECHELLE_DEMI))} cm`);
@@ -456,6 +457,8 @@ export async function genererFacturesPdf(
     economique?: boolean;
     /** Deux factures par feuille A4 horizontale, chacune sur une demi-page. */
     deuxParFeuille?: boolean;
+    /** « 2 par feuille » : la première facture de chaque feuille à droite. */
+    permuter?: boolean;
   } = {},
 ): Promise<jsPDF> {
   if (factures.length === 0) throw new Error('Aucune facture à imprimer');
@@ -473,7 +476,7 @@ export async function genererFacturesPdf(
   const c = options.economique
     ? PALETTE_ECONOMIQUE
     : paletteDepuis(couleur !== undefined ? couleur : await couleurDominanteDuLogo(ecole.logo));
-  const demi = deux ? demiFeuilles(doc) : null;
+  const demi = deux ? demiFeuilles(doc, !!options.permuter) : null;
   const nouvellePage = demi ? demi.suivante : () => { doc.addPage('a4', 'portrait'); };
   factures.forEach((f, i) => {
     if (demi || i > 0) nouvellePage();

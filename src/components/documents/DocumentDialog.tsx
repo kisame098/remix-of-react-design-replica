@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import type jsPDF from 'jspdf';
-import { Columns2, Download, Loader2, Palette, Printer, RefreshCw, TriangleAlert } from 'lucide-react';
+import { ArrowLeftRight, Columns2, Download, Loader2, Palette, Printer, RefreshCw, TriangleAlert } from 'lucide-react';
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog';
@@ -21,7 +21,7 @@ interface DocumentDialogProps {
   /** Nom du fichier téléchargé, sans extension. */
   nomFichier: string;
   /** Fabrique le PDF. Rappelée à chaque ouverture (et à chaque changement de mode) ; jamais avant. */
-  generer: (o: { economique: boolean; deuxParFeuille: boolean }) => Promise<jsPDF>;
+  generer: (o: { economique: boolean; deuxParFeuille: boolean; permuter: boolean }) => Promise<jsPDF>;
   /**
    * Propose « 2 par feuille » (chaque document sur une demi-feuille A5 d'une
    * feuille A4 horizontale). La valeur nomme le choix retenu sur l'ordinateur (« recu »…).
@@ -33,6 +33,17 @@ interface DocumentDialogProps {
    */
   typeDocument?: TypeDocument;
 }
+
+/** « 2 par feuille » : échange la moitié gauche et la moitié droite. */
+export const BoutonPermuter = ({ actif, onChange }: { actif: boolean; onChange: (v: boolean) => void }) => (
+  <Button
+    variant={actif ? 'secondary' : 'outline'} size="icon" aria-pressed={actif} aria-label="Permuter les deux moitiés"
+    title="Permuter : échanger la moitié gauche et la moitié droite (un document seul passe à droite)"
+    className={actif ? 'ring-2 ring-primary/40' : ''} onClick={() => onChange(!actif)}
+  >
+    <ArrowLeftRight className="h-4 w-4" />
+  </Button>
+);
 
 /**
  * Un document prêt : aperçu, impression, téléchargement.
@@ -55,6 +66,8 @@ export const DocumentDialog = ({
   /** Imprimer ou télécharger sans avoir choisi vaut choix : on ne redemande plus. */
   const confirmerChoix = () => { if (typeDocument && retenu === null) choisir(mode); };
   const [demiPage, setDemiPage] = useState(() => (deuxParFeuille ? lireDeuxParFeuille(deuxParFeuille) : false));
+  // Échange les deux moitiés de la feuille ; pour cette impression seulement.
+  const [permuter, setPermuter] = useState(false);
   const [doc, setDoc] = useState<jsPDF | null>(null);
   const [apercu, setApercu] = useState<string | null>(null);
   const [erreur, setErreur] = useState(false);
@@ -69,7 +82,7 @@ export const DocumentDialog = ({
     let url: string | null = null;
     setDoc(null); setApercu(null); setErreur(false); setNouvelleVersion(false);
 
-    genererRef.current({ economique: mode === 'economique', deuxParFeuille: demiPage })
+    genererRef.current({ economique: mode === 'economique', deuxParFeuille: demiPage, permuter: demiPage && permuter })
       .then(pdf => {
         if (annule) return;
         url = String(pdf.output('bloburl'));
@@ -86,7 +99,7 @@ export const DocumentDialog = ({
       annule = true;
       if (url) URL.revokeObjectURL(url);
     };
-  }, [ouvert, mode, demiPage]);
+  }, [ouvert, mode, demiPage, permuter]);
 
   const imprimer = () => {
     if (!doc) return;
@@ -166,13 +179,16 @@ export const DocumentDialog = ({
 
         <DialogFooter className="gap-2 sm:gap-2">
           {deuxParFeuille && (
-            <Button
-              variant={demiPage ? 'secondary' : 'outline'} aria-pressed={demiPage} className={`gap-2 mr-auto ${demiPage ? 'ring-2 ring-primary/40' : ''}`}
-              title="Sur une demi-feuille (A5) : feuille A4 horizontale, à couper au pointillé"
-              onClick={() => { const v = !demiPage; setDemiPage(v); retenirDeuxParFeuille(v, deuxParFeuille); }}
-            >
-              <Columns2 className="h-4 w-4" /> 2 par feuille
-            </Button>
+            <div className="flex gap-1 mr-auto">
+              <Button
+                variant={demiPage ? 'secondary' : 'outline'} aria-pressed={demiPage} className={`gap-2 ${demiPage ? 'ring-2 ring-primary/40' : ''}`}
+                title="Sur une demi-feuille (A5) : feuille A4 horizontale, à couper au pointillé"
+                onClick={() => { const v = !demiPage; setDemiPage(v); retenirDeuxParFeuille(v, deuxParFeuille); }}
+              >
+                <Columns2 className="h-4 w-4" /> 2 par feuille
+              </Button>
+              {demiPage && <BoutonPermuter actif={permuter} onChange={setPermuter} />}
+            </div>
           )}
           <Button variant="outline" onClick={onFermer}>Fermer</Button>
           <Button variant="outline" className="gap-2" disabled={!doc} onClick={() => { if (!doc) return; confirmerChoix(); telechargerPdf(doc, nomFichier); }}>

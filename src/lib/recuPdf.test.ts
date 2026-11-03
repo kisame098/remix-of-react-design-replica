@@ -376,6 +376,14 @@ describe('reçu PDF — demi-feuille', () => {
     expect(pdf).toMatch(/\[4\.25\d* 4\.25\d*\] 0\. d/);
   });
 
+  it('permuter : le reçu décalé sur la moitié droite', async () => {
+    const doc = await genererRecuPdf({ ...base(), deuxParFeuille: true, permuter: true });
+    expect(doc.getNumberOfPages()).toBe(1);
+    const pdf = Buffer.from(doc.output('arraybuffer')).toString('latin1');
+    expect(pdf).toMatch(/1 0 0 1 420\.94\d* 0 cm/);
+    expect(textePdf(pdf)).toContain('REC-2026-00042');
+  });
+
   it('sans le choix, rien ne change : A5 vertical', async () => {
     const doc = await genererRecuPdf(base());
     expect(Math.round(doc.internal.pageSize.getWidth())).toBe(148);

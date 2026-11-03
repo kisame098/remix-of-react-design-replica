@@ -19,7 +19,7 @@ import { fabriquerPdfHtml } from '@/lib/modelesDocumentsPdf';
 const sb = supabase as any;
 
 export const genererRecuModele = async (
-  modeleId: string, data: RecuData, eleve: EleveSource | null, o: { deuxParFeuille?: boolean } = {},
+  modeleId: string, data: RecuData, eleve: EleveSource | null, o: { deuxParFeuille?: boolean; permuter?: boolean } = {},
 ): Promise<jsPDF> => {
   const { data: ligne, error } = await sb.from('modeles_documents')
     .select('genre, contenu, html, fichier').eq('id', modeleId).single();
@@ -41,5 +41,5 @@ export const genererRecuModele = async (
   };
   const p = await produire(source, [contexte]);
   if (p.refus) throw new Error('Le modèle de reçu contient des champs inconnus.');
-  return fabriquerPdfHtml(o.deuxParFeuille ? recuSurDemiFeuille(p.html) : p.html);
+  return fabriquerPdfHtml(o.deuxParFeuille ? recuSurDemiFeuille(p.html, o.permuter) : p.html);
 };
