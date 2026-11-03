@@ -67,8 +67,8 @@ describe('facture PDF', () => {
 });
 
 describe('facture PDF — 2 par feuille', () => {
-  const lireDeux = async (docs: FactureDoc[]) => {
-    const doc = await genererFacturesPdf(ecole, docs, null, { deuxParFeuille: true });
+  const lireDeux = async (docs: FactureDoc[], permuter = false) => {
+    const doc = await genererFacturesPdf(ecole, docs, null, { deuxParFeuille: true, permuter });
     const brut = Buffer.from(doc.output('arraybuffer')).toString('latin1');
     return { doc, brut, texte: textePdf(brut) };
   };
@@ -88,6 +88,13 @@ describe('facture PDF — 2 par feuille', () => {
     const { doc, brut } = await lireDeux([facture()]);
     expect(doc.getNumberOfPages()).toBe(1);
     expect(brut).not.toMatch(/0\.7071 0 0 0\.7071 420\.94/);
+  });
+
+  it('permuter : une facture seule passe sur la moitié droite', async () => {
+    const { doc, brut } = await lireDeux([facture()], true);
+    expect(doc.getNumberOfPages()).toBe(1);
+    expect(brut).toMatch(/0\.7071 0 0 0\.7071 420\.94\d* /);
+    expect(brut).not.toMatch(/0\.7071 0 0 0\.7071 0\.0000 /);
   });
 
   it('une longue facture continue sur la demi-page suivante, sans rien perdre', async () => {

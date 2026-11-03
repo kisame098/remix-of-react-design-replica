@@ -40,8 +40,10 @@ const lireDocument = (html: string): Document => new DOMParser().parseFromString
  * Un document assemblé (une feuille par personne) → les mêmes documents, deux
  * par feuille A4 horizontale. Une personne dont le document a plusieurs pages
  * (Word) occupe plusieurs demi-feuilles, dans l'ordre.
+ * `permuter` échange les deux moitiés de chaque feuille : un document seul
+ * passe à droite (pour réutiliser la moitié libre d'une feuille déjà servie).
  */
-export const enDeuxParFeuille = (html: string): string => {
+export const enDeuxParFeuille = (html: string, permuter = false): string => {
   const doc = lireDocument(html);
   const { marges } = lireReglagesPage(html);
 
@@ -65,15 +67,20 @@ export const enDeuxParFeuille = (html: string): string => {
     const double = doc.createElement('div');
     // C'est la feuille réelle : le PDF la photographie comme une page.
     double.className = `${CLASSE_DOUBLE} ${CLASSE_PAGE}`;
-    for (const unite of unites.slice(i, i + 2)) {
+    const demis = unites.slice(i, i + 2).map(unite => {
       const demi = doc.createElement('div');
       demi.className = CLASSE_DEMI;
       const a4 = doc.createElement('div');
       a4.className = CLASSE_A4;
       a4.appendChild(unite);
       demi.appendChild(a4);
-      double.appendChild(demi);
+      return demi;
+    });
+    if (permuter) {
+      if (demis.length === 1) { const vide = doc.createElement('div'); vide.className = CLASSE_DEMI; demis.push(vide); }
+      demis.reverse();
     }
+    double.append(...demis);
     feuilles.push(double);
   }
   doc.body.replaceChildren(...feuilles);
@@ -87,11 +94,12 @@ export { lireDeuxParFeuille, retenirDeuxParFeuille } from '@/lib/choixDeuxParFeu
 
 /**
  * Un reçu seul sur une demi-feuille : la feuille A4 passe à l'horizontale, le
- * reçu occupe la moitié gauche (l'autre reste libre), pointillé de coupe.
- * Un modèle A5 est posé tel quel ; un modèle A4 est réduit à la demi-page.
+ * reçu occupe la moitié gauche (la droite si `permuter`), l'autre reste
+ * libre, pointillé de coupe. Un modèle A5 est posé tel quel ; un modèle A4
+ * est réduit à la demi-page.
  */
-export const recuSurDemiFeuille = (html: string): string => {
-  if (!/@page[^{]*\{[^}]*size\s*:\s*A5/i.test(html)) return enDeuxParFeuille(html);
+export const recuSurDemiFeuille = (html: string, permuter = false): string => {
+  if (!/@page[^{]*\{[^}]*size\s*:\s*A5/i.test(html)) return enDeuxParFeuille(html, permuter);
   const doc = lireDocument(html);
   const page = doc.querySelector<HTMLElement>(`.${CLASSE_PAGE}`)
     ?? doc.querySelector<HTMLElement>(`body > .${CLASSE_FEUILLE}`)
@@ -105,7 +113,7 @@ export const recuSurDemiFeuille = (html: string): string => {
   demi.appendChild(page);
   const vide = doc.createElement('div');
   vide.className = CLASSE_DEMI;
-  double.append(demi, vide);
+  if (permuter) double.append(vide, demi); else double.append(demi, vide);
   doc.body.replaceChildren(double);
   const style = doc.createElement('style');
   style.textContent = `${STYLE}\n.${CLASSE_DEMI} > * { margin: 0 !important; box-shadow: none !important; }`;

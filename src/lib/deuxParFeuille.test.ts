@@ -35,6 +35,13 @@ describe('deux documents par feuille', () => {
     expect(html).toContain('padding:2cm 2.5cm');
     expect(html).toContain(`scale(${ECHELLE_DEMI_PAGE})`);
   });
+
+  it('permuter : les deux moitiés échangées, un document seul passe à droite', () => {
+    const doc = lire(enDeuxParFeuille(assemblerDocuments(['DIOP', 'FALL', 'SECK'].map(pageVisuelle)), true));
+    const doubles = Array.from(doc.querySelectorAll('.senclass-double'));
+    expect(doubles.map(d => Array.from(d.querySelectorAll('.senclass-demi')).map(m => m.textContent?.replace(/\s+/g, ''))))
+      .toEqual([['FALL', 'DIOP'], ['', 'SECK']]);
+  });
 });
 
 describe('reçu seul sur une demi-feuille', () => {
@@ -50,5 +57,18 @@ describe('reçu seul sur une demi-feuille', () => {
     expect(demis[1].textContent?.trim()).toBe('');
     expect(doc.querySelectorAll('.senclass-a4')).toHaveLength(0);
     expect(doc.querySelectorAll(`.${CLASSE_PAGE}`)).toHaveLength(1);
+  });
+});
+
+describe('reçu seul sur une demi-feuille, permuté', () => {
+  it('le reçu sur la moitié droite, la gauche libre', async () => {
+    const { recuSurDemiFeuille } = await import('./deuxParFeuille');
+    const { MODELES_RECUS_PAR_DEFAUT } = await import('./modelesDocumentsParDefaut');
+    const { produireDocuments, contexteExemple } = await import('./modelesDocuments');
+    const p = produireDocuments(visuelVersHtml(MODELES_RECUS_PAR_DEFAUT[0].contenu), [contexteExemple({ nom: 'Les Roses' })]);
+    const demis = Array.from(lire(recuSurDemiFeuille(p.html, true)).querySelectorAll('.senclass-demi'));
+    expect(demis).toHaveLength(2);
+    expect(demis[0].textContent?.trim()).toBe('');
+    expect(demis[1].textContent).toContain('REC-2026-00042');
   });
 });
