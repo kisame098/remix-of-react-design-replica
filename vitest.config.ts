@@ -20,6 +20,9 @@ export default defineConfig({
     environment: 'jsdom',
     setupFiles: ['./src/test/setup.ts'],
     include: ['src/**/*.test.{ts,tsx}'],
+    // Mac chargé : des tests lourds (modèles de documents, fenêtres) dépassaient
+    // les 5 s par défaut et bloquaient l'envoi sans être faux. Comme senclass-local.
+    testTimeout: 30_000,
     coverage: {
       provider: 'v8',
       reporter: ['text', 'html'],
