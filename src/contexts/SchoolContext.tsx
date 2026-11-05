@@ -1823,11 +1823,13 @@ export const SchoolProvider = ({ children }: { children: ReactNode }) => {
     const profileUpdates: Record<string, unknown> = {};
     if (updates.firstName    != null) profileUpdates.first_name    = updates.firstName;
     if (updates.lastName     != null) profileUpdates.last_name     = updates.lastName;
-    if (updates.dateOfBirth  != null) profileUpdates.date_of_birth = updates.dateOfBirth;
+    // Fiche incomplète (souvent importée) : une date ou un sexe vide n'est pas
+    // envoyé — la base refuserait '' et rien ne serait enregistré.
+    if (updates.dateOfBirth)          profileUpdates.date_of_birth = updates.dateOfBirth;
     if (updates.placeOfBirth != null) profileUpdates.place_of_birth = updates.placeOfBirth;
-    if (updates.sex          != null) profileUpdates.sex           = updates.sex;
-    if (updates.phone        !== undefined) profileUpdates.phone   = updates.phone ?? null;
-    if (updates.email        !== undefined) profileUpdates.email   = updates.email ?? null;
+    if (updates.sex)                  profileUpdates.sex           = updates.sex;
+    if (updates.phone        !== undefined) profileUpdates.phone   = updates.phone?.trim() || null;
+    if (updates.email        !== undefined) profileUpdates.email   = updates.email?.trim() || null;
     if (updates.residence    != null) profileUpdates.residence     = updates.residence;
     // Photo : '' ou null = supprimée.
     if (updates.photoUrl     !== undefined) profileUpdates.photo_url = updates.photoUrl || null;

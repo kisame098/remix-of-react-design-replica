@@ -60,6 +60,7 @@ import { ListChecks, FileText, Landmark } from 'lucide-react';
 import { useFicheInscription } from '@/hooks/useFicheInscription';
 import { libelleSexe } from '@/lib/ficheInscription';
 import { ProfilMatieres } from '@/components/student/ProfilMatieres';
+import { erreurModificationEleve } from '@/lib/validationModificationEleve';
 
 interface EditFormData {
   firstName: string;
@@ -242,25 +243,11 @@ const StudentManagement = () => {
   const handleSaveEdit = async () => {
     if (!selectedStudent) return;
 
-    // Validation
-    if (!editForm.firstName.trim() || !editForm.lastName.trim()) {
-      toast({ title: "Erreur", description: "Le nom et prénom sont obligatoires", variant: "destructive" });
-      return;
-    }
-    if (!editForm.dateOfBirth || !editForm.placeOfBirth.trim()) {
-      toast({ title: "Erreur", description: "La date et lieu de naissance sont obligatoires", variant: "destructive" });
-      return;
-    }
-    if (!editForm.sex) {
-      toast({ title: "Erreur", description: "Le sexe est obligatoire", variant: "destructive" });
-      return;
-    }
-    if (!editForm.residence.trim()) {
-      toast({ title: "Erreur", description: "Le lieu de résidence est obligatoire", variant: "destructive" });
-      return;
-    }
-    if (!editForm.tutor1.phone.trim() || !editForm.tutor1.status) {
-      toast({ title: "Erreur", description: "Les informations du tuteur 1 sont obligatoires", variant: "destructive" });
+    // Validation : une fiche incomplète (souvent importée) doit rester
+    // modifiable ; on refuse seulement d'effacer une valeur obligatoire.
+    const erreur = erreurModificationEleve(selectedStudent, editForm);
+    if (erreur) {
+      toast({ title: "Erreur", description: erreur, variant: "destructive" });
       return;
     }
     const unanswered = editRequiredGroups.filter(g => !editGroupChoices[g.id]);
@@ -276,8 +263,9 @@ const StudentManagement = () => {
         dateOfBirth: editForm.dateOfBirth,
         placeOfBirth: editForm.placeOfBirth,
         sex: editForm.sex as 'homme' | 'femme',
-        phone: editForm.phone || undefined,
-        email: editForm.email || undefined,
+        // '' = numéro / email effacé (envoyé tel quel pour être retiré).
+        phone: editForm.phone.trim(),
+        email: editForm.email.trim(),
         residence: editForm.residence,
         classId: editForm.classId,
         tutor1: editForm.tutor1 as Tutor,
