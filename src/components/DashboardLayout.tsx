@@ -1,4 +1,4 @@
-import { Suspense } from 'react';
+import { lazy, Suspense } from 'react';
 import { Outlet } from 'react-router-dom';
 import { DashboardSidebar } from './DashboardSidebar';
 import { ChargementPage } from './ChargementPage';
@@ -6,11 +6,19 @@ import { BandeauDonneesEnregistrees } from './BandeauDonneesEnregistrees';
 import { BandeauAbonnement } from './BandeauAbonnement';
 import { AnnonceSiteWeb } from './AnnonceSiteWeb';
 import { useSchool } from '@/contexts/SchoolContext';
+import { useAuth } from '@/hooks/useAuth';
+import { accesGuide } from '@/lib/guide';
+import { FiletGuide } from '@/guide/FiletGuide';
+
+// Chargé seulement pour les écoles qui y ont droit (bêta-testeuses).
+const Guide = lazy(() => import('@/guide/Guide'));
 
 export const DashboardLayout = () => {
   // Une seule annonce pour tout le tableau de bord : les écrans de l'école
   // lisent tous le même contexte, la date vaut donc pour l'ensemble.
   const { instantaneLe } = useSchool();
+  const { school, accountRole, staffPermissions } = useAuth();
+  const avecGuide = accesGuide(school, accountRole, staffPermissions);
 
   return (
     <div className="flex h-screen bg-background overflow-hidden">
@@ -33,6 +41,7 @@ export const DashboardLayout = () => {
           <Outlet />
         </Suspense>
       </main>
+      {avecGuide && <FiletGuide><Suspense fallback={null}><Guide /></Suspense></FiletGuide>}
     </div>
   );
 };

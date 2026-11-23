@@ -12,6 +12,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Checkbox } from '@/components/ui/checkbox';
 import { Loader2, School, Plus, Pencil, Trash2, Settings2, Tag, RefreshCw, Zap, Calendar } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
+import { signalerGuide } from '@/lib/signauxGuide';
 import {
   AnnexService, SERVICE_FREQUENCY_LABELS, ServiceFrequency,
   getAcademicMonths, getSchoolBillableMonths, readExcludedBillingMonths,
@@ -74,6 +75,7 @@ const TuitionSection = () => {
       await setTuitionConfig(classId, insc, monthly, mois.montants);
       setEditing(null);
       toast({ title: 'Sauvegardé', description: 'Tarifs mis à jour' });
+      signalerGuide('tarif-enregistre');
     } catch {
       toast({ title: 'Erreur', description: 'Impossible de sauvegarder', variant: 'destructive' });
     } finally {
@@ -92,7 +94,7 @@ const TuitionSection = () => {
       {classes.length === 0 ? (
         <p className="text-sm text-muted-foreground text-center py-8">Aucune classe créée</p>
       ) : (
-        <div className="space-y-2">
+        <div className="space-y-2" data-guide="tarifs:liste">
           {classes.map(cls => {
             const cfg       = getTuitionConfig(cls.id);
             const isEditing = editing === cls.id;
@@ -102,7 +104,7 @@ const TuitionSection = () => {
                   {isEditing ? (
                     <div className="space-y-3">
                       <p className="font-medium text-sm">{cls.name}</p>
-                      <div className="grid grid-cols-2 gap-3">
+                      <div className="grid grid-cols-2 gap-3" data-guide="tarifs:montants">
                         <div className="space-y-1">
                           <Label className="text-xs">Frais d'inscription (FCFA)</Label>
                           <Input
@@ -158,7 +160,7 @@ const TuitionSection = () => {
                         <Button variant="outline" size="sm" onClick={() => setEditing(null)} disabled={saving}>
                           Annuler
                         </Button>
-                        <Button size="sm" onClick={() => saveEdit(cls.id)} disabled={saving}>
+                        <Button data-guide="tarifs:enregistrer" size="sm" onClick={() => saveEdit(cls.id)} disabled={saving}>
                           {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" /> : null}
                           Enregistrer
                         </Button>
@@ -191,7 +193,7 @@ const TuitionSection = () => {
                           </Badge>
                         )}
                       </div>
-                      <Button variant="ghost" size="icon" onClick={() => startEdit(cls.id)} className="h-8 w-8">
+                      <Button data-guide="tarifs:modifier" variant="ghost" size="icon" onClick={() => startEdit(cls.id)} className="h-8 w-8">
                         <Pencil className="h-3.5 w-3.5" />
                       </Button>
                     </div>
@@ -377,7 +379,7 @@ const ServicesSection = () => {
         </div>
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
           <DialogTrigger asChild>
-            <Button size="sm" className="gap-1.5" onClick={openCreate}>
+            <Button data-guide="services:ajouter" size="sm" className="gap-1.5" onClick={openCreate}>
               <Plus className="h-3.5 w-3.5" /> Ajouter
             </Button>
           </DialogTrigger>

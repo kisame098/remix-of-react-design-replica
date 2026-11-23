@@ -119,7 +119,7 @@ export const SchoolYearSelector = ({ collapsed = false }: SchoolYearSelectorProp
       <>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon" className="w-10 h-10">
+            <Button data-guide="annee:selecteur" variant="ghost" size="icon" className="w-10 h-10">
               {yearsLoading
                 ? <Loader2 className="w-5 h-5 animate-spin text-primary" />
                 : <CalendarDays className="w-5 h-5 text-primary" />
@@ -171,7 +171,7 @@ export const SchoolYearSelector = ({ collapsed = false }: SchoolYearSelectorProp
       <div className="px-4 py-3 border-b border-border">
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="outline" className="w-full justify-between gap-2 h-auto py-2">
+            <Button data-guide="annee:selecteur" variant="outline" className="w-full justify-between gap-2 h-auto py-2">
               <div className="flex items-center gap-2 min-w-0">
                 {yearsLoading
                   ? <Loader2 className="w-4 h-4 shrink-0 animate-spin text-primary" />

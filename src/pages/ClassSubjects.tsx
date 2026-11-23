@@ -509,6 +509,7 @@ const ClassSubjects = () => {
                       <TableCell className="text-right">
                         <div className="flex items-center justify-end gap-1">
                           <Button
+                            data-guide="notes:saisir"
                             variant="outline" size="sm"
                             onClick={() => navigate(`/notes/${periodId}/${classId}/${subject.id}`)}
                           >

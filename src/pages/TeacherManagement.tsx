@@ -249,7 +249,7 @@ const TeacherManagement = () => {
         </div>
 
         {/* Filters & Search Bar */}
-        <Card className="mb-6">
+        <Card className="mb-6" data-guide="profs:filtres">
           <CardContent className="py-4">
             <div className="flex flex-col md:flex-row gap-4">
               {/* Search */}
@@ -398,7 +398,7 @@ const TeacherManagement = () => {
 
                       <Separator className="my-4" />
 
-                      <div className="flex justify-center gap-2">
+                      <div className="flex justify-center gap-2" data-guide="profs:actions">
                         <Button
                           variant="outline"
                           size="sm"

@@ -31,9 +31,12 @@ import {
   Hotel, Landmark,
   FileText,
   Globe,
+  Compass,
 } from 'lucide-react';
 import { accesSiteWeb, menuPourMode, modeDeLEcole, urlMenuActive, type IconeMenu } from '@/lib/modeGestion';
 import { lireReglagesFinancements } from '@/lib/financements';
+import { accesGuide } from '@/lib/guide';
+import { ouvrirGuide } from '@/lib/signauxGuide';
 import { SchoolYearSelector } from './SchoolYearSelector';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {
@@ -57,6 +60,7 @@ export const DashboardSidebar = () => {
 
   const mode = modeDeLEcole(school);
   const financements = useMemo(() => lireReglagesFinancements(school?.settings).actif, [school?.settings]);
+  const avecGuide = accesGuide(school, accountRole, staffPermissions);
   const siteWeb = accesSiteWeb(school, accountRole);
   const visibleMenuItems = useMemo(
     () => menuPourMode(mode, { financements, siteWeb }).filter(item => !item.permission || hasPermission(accountRole, staffPermissions, item.permission)),
@@ -116,7 +120,7 @@ export const DashboardSidebar = () => {
       </button>
 
       {/* Navigation */}
-      <nav className="flex-1 p-4 overflow-y-auto sidebar-scroll">
+      <nav className="flex-1 p-4 overflow-y-auto sidebar-scroll" data-guide="menu:liste">
         <ul className="space-y-2">
           {visibleMenuItems.map((item) => {
             const isActive = item.url === urlActive;
@@ -135,6 +139,7 @@ export const DashboardSidebar = () => {
                 {(
                   <NavLink
                     to={item.url}
+                    data-guide={`menu:${item.url}`}
                     className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 ${
                       isActive
                         ? 'bg-primary text-primary-foreground shadow-md'
@@ -180,7 +185,7 @@ export const DashboardSidebar = () => {
       <div className="p-4 border-t border-border">
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <button className="w-full flex items-center gap-3 px-2 py-2 rounded-xl hover:bg-muted transition-colors text-left">
+            <button data-guide="menu:compte" className="w-full flex items-center gap-3 px-2 py-2 rounded-xl hover:bg-muted transition-colors text-left">
               <Avatar className="h-9 w-9 flex-shrink-0">
                 <AvatarImage src={profile?.avatar_url ?? undefined} className="object-cover" />
                 <AvatarFallback className="bg-primary/10 text-primary font-semibold text-sm">{initials}</AvatarFallback>
@@ -205,7 +210,7 @@ export const DashboardSidebar = () => {
               {!collapsed && <ChevronsUpDown className="h-4 w-4 text-muted-foreground flex-shrink-0" />}
             </button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" side="top" className="w-56">
+          <DropdownMenuContent align="end" side="top" className="w-60">
             {accountRole === 'admin' && (
               <DropdownMenuItem onClick={() => navigate('/abonnement')} className="gap-2 cursor-pointer">
                 <CreditCard className="h-4 w-4" />
@@ -213,13 +218,20 @@ export const DashboardSidebar = () => {
               </DropdownMenuItem>
             )}
             {accountRole === 'admin' && (
-              <DropdownMenuItem onClick={() => navigate('/parametres')} className="gap-2 cursor-pointer">
+              <DropdownMenuItem data-guide="menu:parametres" onClick={() => navigate('/parametres')} className="gap-2 cursor-pointer">
                 <Settings className="h-4 w-4" />
                 Paramètres
               </DropdownMenuItem>
             )}
-            {accountRole === 'admin' && <DropdownMenuSeparator />}
-            <DropdownMenuItem onClick={handleSignOut} className="gap-2 cursor-pointer text-destructive focus:text-destructive">
+            {avecGuide && (
+              <DropdownMenuItem data-guide="menu:apprendre" onClick={ouvrirGuide} className="gap-2 cursor-pointer">
+                <Compass className="h-4 w-4" />
+                <span className="whitespace-nowrap">Apprendre SenClass</span>
+                <span className="ml-auto rounded-full bg-violet-100 px-1.5 py-0.5 text-[10px] font-semibold text-violet-700">Bêta</span>
+              </DropdownMenuItem>
+            )}
+            {(accountRole === 'admin' || avecGuide) && <DropdownMenuSeparator />}
+            <DropdownMenuItem data-guide="menu:deconnexion" onClick={handleSignOut} className="gap-2 cursor-pointer text-destructive focus:text-destructive">
               <LogOut className="h-4 w-4" />
               Déconnexion
             </DropdownMenuItem>

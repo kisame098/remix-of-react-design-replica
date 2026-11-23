@@ -18,6 +18,7 @@ import {
 } from '@/types/attendance';
 import { AttendanceSession } from '@/types/attendance';
 import { toast } from '@/hooks/use-toast';
+import { signalerGuide } from '@/lib/signauxGuide';
 
 interface StudentAttendanceFormProps {
   session: AttendanceSession;
@@ -112,6 +113,7 @@ export const StudentAttendanceForm = ({ session }: StudentAttendanceFormProps) =
       title: 'Saisie complète',
       description: 'Les présences ont été enregistrées pour cette session.',
     });
+    signalerGuide('presences-completes');
   };
 
   if (classStudents.length === 0) {
@@ -153,6 +155,7 @@ export const StudentAttendanceForm = ({ session }: StudentAttendanceFormProps) =
             </Button>
             {!isComplete && (
               <Button
+                data-guide="presences:complet"
                 size="sm"
                 className="gap-2 h-8 text-xs"
                 onClick={handleMarkComplete}

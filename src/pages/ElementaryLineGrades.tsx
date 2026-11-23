@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useSchool } from '@/contexts/SchoolContext';
+import { signalerGuide } from '@/lib/signauxGuide';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -78,6 +79,7 @@ const ElementaryLineGrades = () => {
         pointsObtenus: e.points !== '' ? Number(e.points) : null,
       })));
       setSaveState('saved');
+      signalerGuide('note-enregistree');
     } catch (err) {
       setSaveState('error');
       toast({ title: 'Erreur de sauvegarde', description: String(err), variant: 'destructive' });

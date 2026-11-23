@@ -14,6 +14,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { estFormationPro } from '@/lib/modeGestion';
 import { useSchoolYear } from '@/contexts/SchoolYearContext';
 import { useToast } from '@/hooks/use-toast';
+import { signalerGuide } from '@/lib/signauxGuide';
 import { useFicheInscription } from '@/hooks/useFicheInscription';
 import BulkImportStudents from '@/components/student/BulkImportStudents';
 import { PhotoPicker } from '@/components/student/PhotoPicker';
@@ -149,6 +150,7 @@ const StudentRegistration = () => {
       // La fiche s'ouvre APRÈS le succès : l'inscription est déjà enregistrée.
       montrerFiche(student, { reinscription: true });
       resetAll();
+      signalerGuide('eleve-inscrit');
     } catch (err) {
       toast({ title: 'Erreur', description: String(err), variant: 'destructive' });
     } finally {
@@ -250,6 +252,7 @@ const StudentRegistration = () => {
       // La fiche s'ouvre APRÈS le succès : l'inscription est déjà enregistrée.
       montrerFiche(student, { reinscription: false });
       resetAll();
+      signalerGuide('eleve-inscrit');
     } catch (err) {
       toast({ title: "Erreur lors de l'inscription", description: String(err), variant: 'destructive' });
     } finally {
@@ -287,7 +290,7 @@ const StudentRegistration = () => {
               </p>
             </div>
           </div>
-          <BulkImportStudents />
+          <div data-guide="eleve:import"><BulkImportStudents /></div>
         </div>
 
         {/* Alerte année scolaire manquante */}
@@ -300,7 +303,7 @@ const StudentRegistration = () => {
         )}
 
         {/* Réinscription rapide */}
-        <Card className="mb-6 border-amber-500/30 bg-amber-50/50 dark:bg-amber-950/20">
+        <Card data-guide="eleve:reinscription" className="mb-6 border-amber-500/30 bg-amber-50/50 dark:bg-amber-950/20">
           <CardHeader className="pb-3">
             <CardTitle className="flex items-center gap-2 text-lg">
               <RefreshCw className="w-5 h-5 text-amber-600" />
@@ -378,36 +381,36 @@ const StudentRegistration = () => {
             </CardHeader>
             <CardContent className="space-y-6">
               {/* Photo */}
-              <div className="pb-4 border-b">
+              <div className="pb-4 border-b" data-guide="eleve:photo">
                 <PhotoPicker value={photoUrl} onChange={setPhotoUrl} name={fullName} />
               </div>
 
               <div className="grid gap-4 md:grid-cols-2">
-                <div className="space-y-2">
+                <div className="space-y-2" data-guide="eleve:nom">
                   <Label htmlFor="lastName">Nom *</Label>
                   <Input id="lastName" placeholder="Nom de famille"
                     value={formData.lastName} onChange={e => handleInputChange('lastName', e.target.value)}
                     disabled={isSubmitting} />
                 </div>
-                <div className="space-y-2">
+                <div className="space-y-2" data-guide="eleve:prenom">
                   <Label htmlFor="firstName">Prénom *</Label>
                   <Input id="firstName" placeholder="Prénom"
                     value={formData.firstName} onChange={e => handleInputChange('firstName', e.target.value)}
                     disabled={isSubmitting} />
                 </div>
-                <div className="space-y-2">
+                <div className="space-y-2" data-guide="eleve:naissance-date">
                   <Label htmlFor="dateOfBirth">Date de naissance *</Label>
                   <Input id="dateOfBirth" type="date"
                     value={formData.dateOfBirth} onChange={e => handleInputChange('dateOfBirth', e.target.value)}
                     disabled={isSubmitting} />
                 </div>
-                <div className="space-y-2">
+                <div className="space-y-2" data-guide="eleve:naissance-lieu">
                   <Label htmlFor="placeOfBirth">Lieu de naissance *</Label>
                   <Input id="placeOfBirth" placeholder="Ville de naissance"
                     value={formData.placeOfBirth} onChange={e => handleInputChange('placeOfBirth', e.target.value)}
                     disabled={isSubmitting} />
                 </div>
-                <div className="space-y-2">
+                <div className="space-y-2" data-guide="eleve:sexe">
                   <Label>Sexe *</Label>
                   <Select value={formData.sex} onValueChange={v => handleInputChange('sex', v)} disabled={isSubmitting}>
                     <SelectTrigger><SelectValue placeholder="Sélectionner le sexe" /></SelectTrigger>
@@ -417,7 +420,7 @@ const StudentRegistration = () => {
                     </SelectContent>
                   </Select>
                 </div>
-                <div className="space-y-2">
+                <div className="space-y-2" data-guide="eleve:residence">
                   <Label htmlFor="residence">Lieu de résidence *</Label>
                   <div className="relative">
                     <Home className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
@@ -426,7 +429,7 @@ const StudentRegistration = () => {
                       disabled={isSubmitting} />
                   </div>
                 </div>
-                <div className="space-y-2">
+                <div className="space-y-2" data-guide="eleve:telephone">
                   <Label htmlFor="phone">Téléphone (optionnel)</Label>
                   <div className="relative">
                     <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
@@ -435,7 +438,7 @@ const StudentRegistration = () => {
                       disabled={isSubmitting} />
                   </div>
                 </div>
-                <div className="space-y-2">
+                <div className="space-y-2" data-guide="eleve:email">
                   <Label htmlFor="email">Email (optionnel)</Label>
                   <div className="relative">
                     <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
@@ -458,7 +461,7 @@ const StudentRegistration = () => {
               <CardDescription>Informations du tuteur principal</CardDescription>
             </CardHeader>
             <CardContent className="grid gap-4 md:grid-cols-3">
-              <div className="space-y-2">
+              <div className="space-y-2" data-guide="eleve:tuteur-statut">
                 <Label>Statut *</Label>
                 <Select value={tutor1.status} onValueChange={v => handleTutor1Change('status', v)} disabled={isSubmitting}>
                   <SelectTrigger><SelectValue placeholder="Relation avec l'élève" /></SelectTrigger>
@@ -467,7 +470,7 @@ const StudentRegistration = () => {
                   </SelectContent>
                 </Select>
               </div>
-              <div className="space-y-2">
+              <div className="space-y-2" data-guide="eleve:tuteur-telephone">
                 <Label>Téléphone *</Label>
                 <div className="relative">
                   <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
@@ -489,7 +492,7 @@ const StudentRegistration = () => {
           </Card>
 
           {/* Tuteur 2 */}
-          <Card>
+          <Card data-guide="eleve:tuteur2">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Users className="w-5 h-5 text-muted-foreground" />
@@ -561,7 +564,7 @@ const StudentRegistration = () => {
                   onValueChange={v => handleInputChange('classId', v)}
                   disabled={isSubmitting}
                 >
-                  <SelectTrigger className="w-full md:w-1/2">
+                  <SelectTrigger data-guide="eleve:classe" className="w-full md:w-1/2">
                     <SelectValue placeholder={modeFormationPro ? 'Sélectionner une promotion' : 'Sélectionner une classe'} />
                   </SelectTrigger>
                   <SelectContent>
@@ -597,6 +600,7 @@ const StudentRegistration = () => {
           {/* Bouton submit */}
           <motion.div whileHover={{ scale: 1.01 }} whileTap={{ scale: 0.99 }}>
             <Button
+              data-guide="eleve:inscrire"
               type="submit"
               size="lg"
               className="w-full gap-2"

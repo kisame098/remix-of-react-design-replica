@@ -19,6 +19,7 @@ import { ConflictDialog } from '@/components/schedule/ConflictDialog';
 import { ScheduleEvent, ScheduleConflict, ViewMode, GROUP_OPTIONS } from '@/types/schedule';
 import { Calendar, Users, GraduationCap, Plus, Filter, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
+import { signalerGuide } from '@/lib/signauxGuide';
 
 const ScheduleManagement = () => {
   const { classes, teachers } = useSchool();
@@ -102,6 +103,7 @@ const ScheduleManagement = () => {
         const result = await addEvent(eventData);
         if (result.success) {
           toast.success('Créneau ajouté avec succès');
+          signalerGuide('cours-cree');
           setIsFormModalOpen(false);
           setPendingSlot(null);
         } else if (result.conflicts.length > 0) {
@@ -145,7 +147,7 @@ const ScheduleManagement = () => {
             Planifiez et gérez les créneaux horaires
           </p>
         </div>
-        <Button onClick={() => handleSlotClick(0, '08:00', '09:00')} disabled={scheduleLoading}>
+        <Button data-guide="emploi:nouveau" onClick={() => handleSlotClick(0, '08:00', '09:00')} disabled={scheduleLoading}>
           {scheduleLoading
             ? <Loader2 className="w-4 h-4 mr-2 animate-spin" />
             : <Plus className="w-4 h-4 mr-2" />}
@@ -154,7 +156,7 @@ const ScheduleManagement = () => {
       </div>
 
       {/* View Mode Selector */}
-      <Card>
+      <Card data-guide="emploi:vue">
         <CardContent className="pt-6">
           <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
             {/* Onglets Vue */}

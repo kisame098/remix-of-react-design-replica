@@ -168,7 +168,7 @@ const AttendanceManagement = () => {
             Suivi des présences élèves et professeurs par session
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2" data-guide="presences:actions">
           <Button
             variant="outline"
             size="sm"
@@ -267,7 +267,7 @@ const AttendanceManagement = () => {
           <div className="w-64 border-r flex-shrink-0 flex flex-col bg-muted/10">
 
             {/* Navigation de date */}
-            <div className="p-3 border-b flex-shrink-0 space-y-2">
+            <div className="p-3 border-b flex-shrink-0 space-y-2" data-guide="presences:date">
               <div className="flex items-center gap-1">
                 <Button
                   variant="ghost"
@@ -378,6 +378,7 @@ const AttendanceManagement = () => {
                     return (
                       <button
                         key={event.id}
+                        data-guide="presences:cours"
                         onClick={() => handleSelectEvent(event)}
                         disabled={openingSession}
                         className={cn(
@@ -454,7 +455,7 @@ const AttendanceManagement = () => {
                 <p className="text-sm">Ouverture de la session…</p>
               </div>
             ) : selectedSession ? (
-              <div className="p-6 space-y-4">
+              <div className="p-6 space-y-4" data-guide="presences:detail">
                 {/* Info cours */}
                 <div className="flex items-center gap-4 p-4 rounded-xl bg-muted/40 border">
                   <div className="p-2.5 rounded-lg bg-primary/10 text-primary flex-shrink-0">

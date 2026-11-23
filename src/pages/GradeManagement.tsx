@@ -17,6 +17,7 @@ import { toast } from '@/hooks/use-toast';
 import { GradePeriod } from '@/contexts/SchoolContext';
 import { NIVEAUX_ELEMENTAIRE } from '@/lib/elementaryDefaults';
 import { classesAvecNotes } from '@/lib/prescolaire';
+import { signalerGuide } from '@/lib/signauxGuide';
 
 const formatShortDate = (iso?: string) => {
   if (!iso) return '—';
@@ -123,6 +124,7 @@ const GradeManagement = () => {
       setPeriodEndDate('');
       setIsDialogOpen(false);
       toast({ title: 'Succès', description: 'Période créée avec succès' });
+      signalerGuide('periode-creee');
     } catch (err) {
       toast({ title: 'Erreur', description: String(err), variant: 'destructive' });
     } finally {
@@ -241,7 +243,7 @@ const GradeManagement = () => {
         </div>
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
           <DialogTrigger asChild>
-            <Button className="gap-2" disabled={gradesLoading}>
+            <Button data-guide="notes:nouvelle" className="gap-2" disabled={gradesLoading}>
               <Plus className="h-4 w-4" />
               Nouvelle Période
             </Button>
@@ -251,7 +253,7 @@ const GradeManagement = () => {
               <DialogTitle>Créer une Période</DialogTitle>
             </DialogHeader>
             <div className="space-y-4 pt-4">
-              <div className="space-y-2">
+              <div className="space-y-2" data-guide="periode:type">
                 <Label>Type de période</Label>
                 <Select value={periodType} onValueChange={(v: 'semester' | 'exam') => setPeriodType(v)}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
@@ -261,7 +263,7 @@ const GradeManagement = () => {
                   </SelectContent>
                 </Select>
               </div>
-              <div className="space-y-2">
+              <div className="space-y-2" data-guide="periode:nom">
                 <Label>Nom de la période</Label>
                 <Input
                   placeholder={periodType === 'semester' ? 'Ex: 1er Trimestre' : 'Ex: Examen Février'}
@@ -270,7 +272,7 @@ const GradeManagement = () => {
                   onKeyDown={(e) => e.key === 'Enter' && handleCreatePeriod()}
                 />
               </div>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-2 gap-3" data-guide="periode:dates">
                 <div className="space-y-2">
                   <Label>Date de début (optionnel)</Label>
                   <Input type="date" value={periodStartDate} onChange={(e) => setPeriodStartDate(e.target.value)} />
@@ -283,7 +285,7 @@ const GradeManagement = () => {
               <p className="text-xs text-muted-foreground -mt-2">
                 Ces dates permettent de scoper les absences et retards à cette période sur les bulletins de notes.
               </p>
-              <Button onClick={handleCreatePeriod} className="w-full" disabled={isCreating}>
+              <Button data-guide="periode:creer" onClick={handleCreatePeriod} className="w-full" disabled={isCreating}>
                 {isCreating && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
                 Créer la période
               </Button>
@@ -296,7 +298,7 @@ const GradeManagement = () => {
       <div className="flex-1 min-h-0 flex">
 
         {/* LEFT PANEL — Periods list */}
-        <div className="w-60 border-r flex-shrink-0 flex flex-col bg-muted/10">
+        <div data-guide="notes:periodes" className="w-60 border-r flex-shrink-0 flex flex-col bg-muted/10">
           <div className="flex-1 overflow-y-auto p-3 space-y-4">
             {gradesLoading ? (
               <div className="flex items-center justify-center py-12">
@@ -472,6 +474,7 @@ const GradeManagement = () => {
                     return (
                       <button
                         key={cls.id}
+                        data-guide="notes:classe"
                         onClick={() => navigate(`/notes/${selectedPeriodId}/${cls.id}`)}
                         className="text-left group"
                       >

@@ -342,7 +342,7 @@ const IdentityManagement = () => {
 
       {/* Tabs + Search */}
       <div className="flex items-center justify-between gap-4 flex-wrap">
-        <div className="flex gap-0.5 bg-muted rounded-xl p-1">
+        <div className="flex gap-0.5 bg-muted rounded-xl p-1" data-guide="identifiants:onglets">
           {([
             { key: 'student' as const,   label: 'Élèves',      icon: <GraduationCap className="h-4 w-4" />, count: studentCount },
             { key: 'teacher' as const,   label: 'Professeurs', icon: <Briefcase className="h-4 w-4" />,     count: teacherCount },

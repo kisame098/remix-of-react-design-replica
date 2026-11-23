@@ -14,6 +14,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { useSchool } from '@/contexts/SchoolContext';
 import { useSchoolYear } from '@/contexts/SchoolYearContext';
 import { useToast } from '@/hooks/use-toast';
+import { signalerGuide } from '@/lib/signauxGuide';
 
 // ─── Compression image ───────────────────────────────────────────────────────
 
@@ -279,6 +280,7 @@ const TeacherRegistration = () => {
         description: `${teacher.firstName} ${teacher.lastName} réinscrit pour ${currentYear?.name || 'cette année'}.`,
       });
       resetAll();
+      signalerGuide('prof-inscrit');
     } catch (err) {
       toast({ title: 'Erreur', description: String(err), variant: 'destructive' });
     } finally {
@@ -340,6 +342,7 @@ const TeacherRegistration = () => {
         description: `${teacher.firstName} ${teacher.lastName} — ID : ${teacher.teacherId}`,
       });
       resetAll();
+      signalerGuide('prof-inscrit');
     } catch (err) {
       toast({ title: "Erreur lors de l'inscription", description: String(err), variant: 'destructive' });
     } finally {
@@ -434,7 +437,7 @@ const TeacherRegistration = () => {
 
         <form onSubmit={handleSubmit} className="space-y-6">
           {/* Photo */}
-          <Card>
+          <Card data-guide="prof:photo">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Camera className="w-5 h-5 text-primary" />
@@ -461,7 +464,7 @@ const TeacherRegistration = () => {
               <CardDescription>Informations de base du professeur</CardDescription>
             </CardHeader>
             <CardContent className="grid gap-4 md:grid-cols-2">
-              <div className="space-y-2">
+              <div className="space-y-2" data-guide="prof:nom">
                 <Label htmlFor="lastName">Nom *</Label>
                 <Input
                   id="lastName"
@@ -471,7 +474,7 @@ const TeacherRegistration = () => {
                   disabled={isReEnrolling || isSubmitting}
                 />
               </div>
-              <div className="space-y-2">
+              <div className="space-y-2" data-guide="prof:prenom">
                 <Label htmlFor="firstName">Prénom *</Label>
                 <Input
                   id="firstName"
@@ -481,7 +484,7 @@ const TeacherRegistration = () => {
                   disabled={isReEnrolling || isSubmitting}
                 />
               </div>
-              <div className="space-y-2">
+              <div className="space-y-2" data-guide="prof:naissance-date">
                 <Label htmlFor="dateOfBirth">Date de naissance *</Label>
                 <Input
                   id="dateOfBirth"
@@ -491,7 +494,7 @@ const TeacherRegistration = () => {
                   disabled={isReEnrolling || isSubmitting}
                 />
               </div>
-              <div className="space-y-2">
+              <div className="space-y-2" data-guide="prof:naissance-lieu">
                 <Label htmlFor="placeOfBirth">Lieu de naissance *</Label>
                 <Input
                   id="placeOfBirth"
@@ -501,7 +504,7 @@ const TeacherRegistration = () => {
                   disabled={isReEnrolling || isSubmitting}
                 />
               </div>
-              <div className="space-y-2">
+              <div className="space-y-2" data-guide="prof:sexe">
                 <Label>Sexe *</Label>
                 <Select
                   value={formData.sex}
@@ -515,7 +518,7 @@ const TeacherRegistration = () => {
                   </SelectContent>
                 </Select>
               </div>
-              <div className="space-y-2">
+              <div className="space-y-2" data-guide="prof:residence">
                 <Label htmlFor="residence">Lieu de résidence *</Label>
                 <div className="relative">
                   <Home className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
@@ -529,7 +532,7 @@ const TeacherRegistration = () => {
                   />
                 </div>
               </div>
-              <div className="space-y-2">
+              <div className="space-y-2" data-guide="prof:telephone">
                 <Label htmlFor="phone">Téléphone *</Label>
                 <div className="relative">
                   <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
@@ -571,7 +574,7 @@ const TeacherRegistration = () => {
               <CardDescription>Diplôme et expérience du professeur</CardDescription>
             </CardHeader>
             <CardContent className="grid gap-4 md:grid-cols-2">
-              <div className="space-y-2">
+              <div className="space-y-2" data-guide="prof:diplome">
                 <Label htmlFor="diploma">Diplôme *</Label>
                 <div className="relative">
                   <GraduationCap className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
@@ -585,7 +588,7 @@ const TeacherRegistration = () => {
                   />
                 </div>
               </div>
-              <div className="space-y-2">
+              <div className="space-y-2" data-guide="prof:experience">
                 <Label htmlFor="yearsExperience">Années d'expérience *</Label>
                 <div className="relative">
                   <Clock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
@@ -600,7 +603,7 @@ const TeacherRegistration = () => {
                   />
                 </div>
               </div>
-              <div className="space-y-2 md:col-span-2">
+              <div className="space-y-2 md:col-span-2" data-guide="prof:urgence">
                 <Label htmlFor="emergencyPhone">Numéro d'urgence *</Label>
                 <div className="relative">
                   <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
@@ -627,7 +630,7 @@ const TeacherRegistration = () => {
               <CardDescription>Type de contrat et mode de paiement</CardDescription>
             </CardHeader>
             <CardContent className="grid gap-4 md:grid-cols-2">
-              <div className="space-y-2">
+              <div className="space-y-2" data-guide="prof:contrat">
                 <Label>Type de contrat *</Label>
                 <Select
                   value={formData.contractType}
@@ -642,7 +645,7 @@ const TeacherRegistration = () => {
                   </SelectContent>
                 </Select>
               </div>
-              <div className="space-y-2">
+              <div className="space-y-2" data-guide="prof:paiement">
                 <Label>Type de paiement *</Label>
                 <Select
                   value={formData.paymentType}
@@ -658,7 +661,7 @@ const TeacherRegistration = () => {
                 </Select>
               </div>
               {formData.paymentType && (
-                <div className="space-y-2 md:col-span-2">
+                <div className="space-y-2 md:col-span-2" data-guide="prof:salaire">
                   <Label htmlFor="salaryAmount">
                     {formData.paymentType === 'hourly' ? 'Taux horaire (FCFA/heure) *' : 'Salaire mensuel (FCFA) *'}
                   </Label>
@@ -683,6 +686,7 @@ const TeacherRegistration = () => {
           {/* Bouton soumission */}
           <motion.div whileHover={{ scale: 1.01 }} whileTap={{ scale: 0.99 }}>
             <Button
+              data-guide="prof:inscrire"
               type="submit"
               size="lg"
               className="w-full gap-2 py-6 text-lg font-semibold"

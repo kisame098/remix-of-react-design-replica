@@ -61,6 +61,7 @@ import { useFicheInscription } from '@/hooks/useFicheInscription';
 import { libelleSexe } from '@/lib/ficheInscription';
 import { ProfilMatieres } from '@/components/student/ProfilMatieres';
 import { erreurModificationEleve } from '@/lib/validationModificationEleve';
+import { signalerGuide } from '@/lib/signauxGuide';
 
 interface EditFormData {
   firstName: string;
@@ -295,6 +296,7 @@ const StudentManagement = () => {
       description: `Les informations de ${editForm.firstName} ${editForm.lastName} ont été mises à jour.`,
     });
     setIsEditOpen(false);
+    signalerGuide('eleve-modifie');
   };
 
   // Profil académique résolu du profil ouvert : une ligne par matière
@@ -422,7 +424,7 @@ const StudentManagement = () => {
               }))}
               onReintegrer={reintegrerEleve}
             />
-            <Button variant="outline" className="gap-2" onClick={() => setIsExportOpen(true)}>
+            <Button data-guide="eleves:exporter" variant="outline" className="gap-2" onClick={() => setIsExportOpen(true)}>
               <Download className="w-4 h-4" />
               Exporter
             </Button>
@@ -434,7 +436,7 @@ const StudentManagement = () => {
           <CardContent className="py-4">
             <div className="flex flex-col md:flex-row gap-4">
               {/* Search */}
-              <div className="relative flex-1">
+              <div className="relative flex-1" data-guide="eleves:recherche">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                 <Input
                   placeholder="Rechercher par nom, prénom ou ID..."
@@ -445,7 +447,7 @@ const StudentManagement = () => {
               </div>
 
               {/* Class Filter */}
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2" data-guide="eleves:filtre">
                 <Filter className="w-4 h-4 text-muted-foreground" />
                 <Select value={classFilter} onValueChange={setClassFilter}>
                   <SelectTrigger className="w-48">
@@ -463,7 +465,7 @@ const StudentManagement = () => {
               </div>
 
               {/* View Toggle */}
-              <div className="flex items-center gap-1 p-1 bg-muted rounded-lg">
+              <div className="flex items-center gap-1 p-1 bg-muted rounded-lg" data-guide="eleves:vue">
                 <Button
                   variant={viewMode === 'grid' ? 'default' : 'ghost'}
                   size="sm"
@@ -578,6 +580,7 @@ const StudentManagement = () => {
 
                       <div className="flex justify-center gap-2">
                         <Button
+                          data-guide="eleves:profil"
                           variant="outline"
                           size="sm"
                           onClick={() => openProfile(student)}
@@ -678,6 +681,7 @@ const StudentManagement = () => {
                         <TableCell className="text-right">
                           <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                             <Button
+                              data-guide="eleves:profil"
                               variant="ghost"
                               size="icon"
                               onClick={() => openProfile(student)}
@@ -704,7 +708,7 @@ const StudentManagement = () => {
 
         {/* Profile Sheet */}
         <Sheet open={isProfileOpen} onOpenChange={setIsProfileOpen}>
-          <SheetContent className="w-full sm:max-w-lg overflow-y-auto">
+          <SheetContent data-guide="eleves:fiche" className="w-full sm:max-w-lg overflow-y-auto">
             {selectedStudent && (
               <>
                 <SheetHeader className="text-left">
@@ -919,6 +923,7 @@ const StudentManagement = () => {
                   </Button>
 
                   <Button 
+                    data-guide="eleves:modifier"
                     className="w-full gap-2" 
                     onClick={() => { setIsProfileOpen(false); openEdit(selectedStudent); }}
                   >
@@ -1221,7 +1226,7 @@ const StudentManagement = () => {
               <Button variant="outline" onClick={() => setIsEditOpen(false)}>
                 Annuler
               </Button>
-              <Button onClick={handleSaveEdit} className="gap-2">
+              <Button data-guide="eleves:enregistrer" onClick={handleSaveEdit} className="gap-2">
                 <Save className="w-4 h-4" />
                 Enregistrer
               </Button>

@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useSchool } from '@/contexts/SchoolContext';
+import { signalerGuide } from '@/lib/signauxGuide';
 import { GradeUpsertEntry } from '@/contexts/SchoolContext';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -111,6 +112,7 @@ const SubjectGrades = () => {
       }));
       await upsertGrades(subjectId!, upsertEntries);
       setSaveState('saved');
+      signalerGuide('note-enregistree');
     } catch {
       setSaveState('error');
       toast({ title: 'Erreur de sauvegarde', description: 'Les notes n\'ont pas pu être enregistrées', variant: 'destructive' });
