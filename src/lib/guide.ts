@@ -47,6 +47,8 @@ export interface Etape {
   titre: string;
   texte: string;
   astuce?: string;
+  /** L'ordre affiché sur l'écran, quand « Cliquez ici » ne suffit pas. */
+  action?: string;
   champs?: Champ[];
   /** Page où se passe l'étape ; ailleurs, la bulle propose d'y retourner. */
   page?: string | RegExp;
@@ -125,6 +127,16 @@ export const estRempli = (el: HTMLElement): boolean => {
     : !c.hasAttribute('data-placeholder'));
 };
 
+/** Ce que la personne doit faire maintenant, et sur quel élément. */
+export interface Geste {
+  type: 'cliquer' | 'ecrire' | 'choisir';
+  /** Étiquette posée sur l'élément : « Cliquez ici ». */
+  etiquette: string;
+  element: HTMLElement | null;
+  /** Le champ concerné (« Nom de l'école »). */
+  libelle: string;
+}
+
 export interface EtatEtape {
   /** On n'est pas sur la page de l'étape. */
   horsPage: boolean;
@@ -133,8 +145,25 @@ export interface EtatEtape {
   absente: boolean;
   /** Pour « rempli » : un état par champ désigné. */
   champs: { libelle: string; rempli: boolean }[];
+  /** null = rien à faire, seulement à lire (ou déjà fait). */
+  geste: Geste | null;
   satisfaite: boolean;
 }
+
+const ETIQUETTES: Record<Geste['type'], string> = { cliquer: 'Cliquez ici', ecrire: 'Écrivez ici', choisir: 'Choisissez ici' };
+
+const gesteAFaire = (etape: Etape, cibles: { libelle: string; el: HTMLElement | null }[]): Geste | null => {
+  if (etape.condition.type === 'lire') return null;
+  if (etape.condition.type !== 'rempli') {
+    return { type: 'cliquer', etiquette: etape.action ?? ETIQUETTES.cliquer, element: cibles.find(c => c.el)?.el ?? null, libelle: '' };
+  }
+  // Un champ à la fois : le premier qui reste à remplir.
+  const reste = cibles.find(c => c.el && !estRempli(c.el));
+  if (!reste?.el) return null;
+  const liste = reste.el.matches('[role="combobox"]') || (!reste.el.querySelector('input, textarea') && reste.el.querySelector('[role="combobox"]') !== null);
+  const type = liste ? 'choisir' : 'ecrire';
+  return { type, etiquette: etape.action ?? ETIQUETTES[type], element: reste.el, libelle: reste.libelle };
+};
 
 /** Un signal n'est jamais « satisfait » ici : il arrive par un événement (etapeApresSignal). */
 export const lireEtat = (
@@ -154,7 +183,7 @@ export const lireEtat = (
     : cond.type === 'page' ? correspond(cond.chemin, chemin)
     : cond.type === 'visible' ? trouver(cond.cible, visible) !== null
     : false;
-  return { horsPage, elements, absente, champs, satisfaite };
+  return { horsPage, elements, absente, champs, satisfaite, geste: satisfaite || horsPage ? null : gesteAFaire(etape, trouves.map(t => ({ libelle: t.c.libelle ?? '', el: t.el }))) };
 };
 
 /** « lire » et « rempli » attendent le bouton Continuer ; le reste avance tout seul. */
@@ -207,6 +236,11 @@ export const reunir = (boites: Boite[]): Boite | null => {
     height: Math.max(...boites.map(b => b.top + b.height)) - top,
   };
 };
+
+/** Hauteur de l'étiquette « Cliquez ici » et de sa pointe. */
+export const HAUTEUR_ETIQUETTE = 48;
+/** Au-dessus de l'élément, ou dessous s'il touche le haut de l'écran. */
+export const etiquetteDessus = (b: Boite): boolean => b.top - HAUTEUR_ETIQUETTE >= 10;
 
 const MARGE = 16;
 

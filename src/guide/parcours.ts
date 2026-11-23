@@ -36,7 +36,7 @@ export const CHAPITRES: Chapitre[] = [
         condition: { type: 'lire' },
       },
       {
-        id: 'reperes-compte', titre: 'Votre compte', champs: [{ cible: 'menu:compte' }],
+        id: 'reperes-compte', titre: 'Cliquez sur votre nom', champs: [{ cible: 'menu:compte' }],
         texte: 'Cliquez sur votre nom, en bas du menu : c\'est là que se trouvent les réglages, la déconnexion… et ce guide, si vous voulez le relancer.',
         condition: { type: 'visible', cible: 'menu:deconnexion' }, passerVers: 'fin',
       },
@@ -301,7 +301,7 @@ export const CHAPITRES: Chapitre[] = [
         condition: { type: 'signal', nom: 'formation-creee' },
       },
       {
-        id: 'for-niveaux', titre: 'Puis ses niveaux', page: '/formation/formations',
+        id: 'for-niveaux', titre: 'Cliquez sur le nom de la formation', page: '/formation/formations',
         texte: 'Cliquez sur le nom de la formation pour l\'ouvrir : vous y créez ses niveaux, et dans chaque niveau ses matières avec coefficients. Sans niveau, on ne peut pas ouvrir de promotion.',
         condition: { type: 'page', chemin: /^\/formation\/formations\/[^/]+/ },
       },
@@ -424,7 +424,7 @@ export const CHAPITRES: Chapitre[] = [
         condition: { type: 'lire' },
       },
       {
-        id: 'ges-profil', titre: 'Ouvrez un profil', page: '/eleves', champs: [{ cible: 'eleves:profil' }],
+        id: 'ges-profil', titre: 'Ouvrez le profil d\'un élève', page: '/eleves', champs: [{ cible: 'eleves:profil' }],
         texte: 'Cliquez sur « Profil » d\'un élève.',
         absence: 'Aucun élève à l\'écran : inscrivez-en un, ou effacez votre recherche.',
         condition: { type: 'visible', cible: 'eleves:fiche' }, passerVers: 'ges-exporter',
@@ -435,12 +435,12 @@ export const CHAPITRES: Chapitre[] = [
         condition: { type: 'lire' }, siAbsent: 'ges-profil',
       },
       {
-        id: 'ges-modifier', titre: 'Modifier ses informations', page: '/eleves', champs: [{ cible: 'eleves:modifier' }],
+        id: 'ges-modifier', titre: 'Cliquez sur « Modifier les informations »', page: '/eleves', champs: [{ cible: 'eleves:modifier' }],
         texte: 'Cliquez sur « Modifier les informations ». Juste au-dessus, « Fiche d\'inscription » réimprime sa fiche avec ses identifiants.',
         condition: { type: 'visible', cible: 'eleves:enregistrer' }, siAbsent: 'ges-profil', passerVers: 'ges-exporter',
       },
       {
-        id: 'ges-enregistrer', titre: 'Corrigez, puis enregistrez', page: '/eleves', champs: [{ cible: 'eleves:enregistrer' }],
+        id: 'ges-enregistrer', titre: 'Corrigez, puis enregistrez', action: 'Quand c\'est corrigé, cliquez ici', page: '/eleves', champs: [{ cible: 'eleves:enregistrer' }],
         texte: 'Changez ce que vous voulez (même la classe) et cliquez sur Enregistrer. « Retirer » sert à un élève qui quitte l\'école : ses paiements passés sont conservés, et vous pouvez le réintégrer.',
         condition: { type: 'signal', nom: 'eleve-modifie' }, siAbsent: 'ges-profil', passerVers: 'ges-exporter',
       },
@@ -684,7 +684,7 @@ export const CHAPITRES: Chapitre[] = [
         condition: { type: 'lire' }, siAbsent: 'pre-cours',
       },
       {
-        id: 'pre-eleves', titre: 'L\'appel des élèves', importance: 'facultatif', page: '/presences', champs: [{ cible: 'presences:complet' }],
+        id: 'pre-eleves', titre: 'Faites l\'appel, puis « Marquer complet »', importance: 'facultatif', page: '/presences', champs: [{ cible: 'presences:complet' }],
         texte: 'Tous sont présents au départ : ne touchez que les absents et les retards. Quand c\'est juste, cliquez sur « Marquer complet ».',
         absence: 'Cette classe n\'a pas d\'élève, ou l\'appel est déjà marqué complet.',
         condition: { type: 'signal', nom: 'presences-completes' }, passerVers: 'pre-cloture',
@@ -713,7 +713,7 @@ export const CHAPITRES: Chapitre[] = [
         condition: { type: 'visible', cible: 'services:ajouter' }, passerVers: 'pai-caisse',
       },
       {
-        id: 'pai-crayon', titre: 'Le tarif d\'une classe', page: '/paiements', champs: [{ cible: 'tarifs:modifier' }],
+        id: 'pai-crayon', titre: 'Cliquez sur le crayon d\'une classe', page: '/paiements', champs: [{ cible: 'tarifs:modifier' }],
         texte: 'Cliquez sur le crayon d\'une classe.',
         absence: 'Aucune classe à régler : créez-en une d\'abord.',
         condition: { type: 'visible', cible: 'tarifs:montants' }, siAbsent: 'pai-config', passerVers: 'pai-services',
@@ -734,18 +734,18 @@ export const CHAPITRES: Chapitre[] = [
         condition: { type: 'lire' }, siAbsent: 'pai-config',
       },
       {
-        id: 'pai-caisse', titre: 'La caisse', page: '/paiements', champs: [{ cible: 'paiements:entry' }],
+        id: 'pai-caisse', titre: 'Ouvrez la caisse : « Paiement »', page: '/paiements', champs: [{ cible: 'paiements:entry' }],
         texte: 'Cliquez sur « Paiement ».',
         condition: { type: 'visible', cible: 'caisse:recherche' }, passerVers: 'pai-suivi',
       },
       {
-        id: 'pai-recherche', titre: 'Trouvez l\'élève', page: '/paiements', champs: [{ cible: 'caisse:recherche' }],
+        id: 'pai-recherche', titre: 'Tapez son nom, puis cliquez sur l\'élève', action: 'Tapez son nom ici', page: '/paiements', champs: [{ cible: 'caisse:recherche' }],
         texte: 'Tapez son nom et cliquez dessus : tout ce qu\'il doit apparaît à droite, mois par mois.',
         absence: 'Cliquez sur « Paiement » pour rouvrir la caisse.',
         condition: { type: 'visible', cible: 'caisse:elements' }, siAbsent: 'pai-caisse', passerVers: 'pai-suivi',
       },
       {
-        id: 'pai-encaisser', titre: 'Encaisser', importance: 'facultatif', page: '/paiements', champs: [{ cible: 'caisse:elements' }],
+        id: 'pai-encaisser', titre: 'Cochez, choisissez le mode, validez', action: 'Cochez ce qui est payé', importance: 'facultatif', page: '/paiements', champs: [{ cible: 'caisse:elements' }],
         texte: 'Cochez ce que la famille paie, choisissez le mode (espèces, Wave…) et validez : le reçu numéroté s\'ouvre. Pour un acompte, baissez le montant : le reste reste dû.',
         astuce: 'Ne validez que si c\'est un vrai paiement. Une erreur s\'annule dans « Historique », et l\'annulation reste visible.',
         condition: { type: 'signal', nom: 'paiement-enregistre' }, siAbsent: 'pai-recherche', passerVers: 'pai-suivi',

@@ -73,6 +73,21 @@ describe('lire l\'écran', () => {
   it('un enregistrement n\'est jamais supposé fait', () => {
     expect(lireEtat(e('x', { condition: { type: 'signal', nom: 'classe-creee' } }), '/', visible).satisfaite).toBe(false);
   });
+  it('le geste : un champ à la fois, dans l\'ordre, et plus rien quand c\'est rempli', () => {
+    document.body.innerHTML = `<div data-guide="nom"><input></div><div data-guide="sexe"><button role="combobox" data-placeholder=""></button></div>`;
+    const etape = e('x', { champs: [{ cible: 'nom', libelle: 'Nom' }, { cible: 'sexe', libelle: 'Sexe' }], condition: { type: 'rempli' } });
+    const geste = () => lireEtat(etape, '/', visible).geste;
+    expect(geste()).toMatchObject({ type: 'ecrire', etiquette: 'Écrivez ici', libelle: 'Nom' });
+    (document.querySelector('input') as HTMLInputElement).value = 'Diop';
+    expect(geste()).toMatchObject({ type: 'choisir', etiquette: 'Choisissez ici', libelle: 'Sexe' });
+    document.querySelector('button')!.removeAttribute('data-placeholder');
+    expect(geste()).toBeNull();
+  });
+  it('rien à faire sur une étape à lire, ni sur une autre page', () => {
+    expect(lireEtat(e('x'), '/', visible).geste).toBeNull();
+    expect(lireEtat(e('x', { page: '/a', condition: { type: 'visible', cible: 'z' } }), '/b', visible).geste).toBeNull();
+    expect(lireEtat(e('x', { condition: { type: 'signal', nom: 'classe-creee' }, action: 'Cochez' }), '/', visible).geste).toMatchObject({ etiquette: 'Cochez' });
+  });
   it('hors page : on ne dit pas en plus que l\'élément manque', () => {
     expect(lireEtat(e('x', { page: '/classes', champs: [{ cible: 'z' }] }), '/eleves', visible)).toMatchObject({ horsPage: true, absente: false });
     expect(correspond('/notes', '/notes/1')).toBe(false);

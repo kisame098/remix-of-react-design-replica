@@ -81,6 +81,25 @@ describe('la proposition de départ', () => {
   });
 });
 
+describe('à faire ou à lire : cela se voit', () => {
+  it('à lire : ni étiquette ni bloc bleu, un bouton « J\'ai compris »', async () => {
+    commencerA('classes', 'cla-liste');
+    monter('/classes');
+    expect(await screen.findByText('Terminer')).toBeInTheDocument();
+    expect(screen.queryByText('À vous de le faire')).not.toBeInTheDocument();
+    expect(screen.queryByText('Cliquez ici')).not.toBeInTheDocument();
+  });
+  it('cliquer à côté fait insister, sans bloquer le clic', async () => {
+    commencerA('classes', 'cla-nouvelle');
+    monter('/classes');
+    const etiquette = await screen.findByText('Cliquez ici');
+    vi.spyOn(Element.prototype, 'getBoundingClientRect').mockReturnValue({ left: 500, top: 300, right: 600, bottom: 340, width: 100, height: 40, x: 500, y: 300, toJSON() {} });
+    await waitFor(() => expect(etiquette.closest('.fixed')).toHaveStyle({ left: '550px' }));
+    await userEvent.click(screen.getByText('Gestion Classe'));
+    await waitFor(() => expect(screen.getByText('Cliquez ici').className).toContain('guide-secousse'));
+  });
+});
+
 describe('la personne pratique, le guide suit', () => {
   it('menu → fenêtre → champ → création, sans jamais agir à sa place', async () => {
     commencerA('classes', 'cla-ouvrir');
@@ -89,16 +108,22 @@ describe('la personne pratique, le guide suit', () => {
     await userEvent.click(screen.getByText('Gestion Classe'));
     expect(await screen.findByText('Cliquez sur « Nouvelle Classe »')).toBeInTheDocument();
     expect(screen.queryByLabelText('nom')).not.toBeInTheDocument();   // rien ne s'ouvre tout seul
+    expect(screen.getByText('Cliquez ici')).toBeInTheDocument();
+    expect(screen.getByText('À vous de le faire')).toBeInTheDocument();
 
     await userEvent.click(screen.getByText('Nouvelle Classe'));
     expect(await screen.findByText('Le nom de la classe')).toBeInTheDocument();
-    const continuer = () => screen.getByText('Continuer').closest('button')!;
-    expect(continuer()).toBeDisabled();
+    // Tant que c'est vide : l'ordre est sur le champ, et aucun bouton pour continuer.
+    expect(await screen.findByText('Écrivez ici')).toBeInTheDocument();
+    expect(screen.getByText('Écrivez : Nom de la classe')).toBeInTheDocument();
+    expect(screen.queryByText('Continuer')).not.toBeInTheDocument();
     await userEvent.type(screen.getByLabelText('nom'), '6ème A');
-    await waitFor(() => expect(continuer()).toBeEnabled());
+    const continuer = async () => (await screen.findByText('Continuer')).closest('button')!;
+    expect(await continuer()).toBeEnabled();
+    await waitFor(() => expect(screen.queryByText('Écrivez ici')).not.toBeInTheDocument());
 
     // Cliquer dans la bulle ne referme pas la fenêtre qu'elle explique.
-    await userEvent.click(continuer(), { pointerEventsCheck: 0 });
+    await userEvent.click(await continuer(), { pointerEventsCheck: 0 });
     expect(await screen.findByText('La limite d\'élèves')).toBeInTheDocument();
     expect(screen.getByLabelText('nom')).toHaveValue('6ème A');
 
