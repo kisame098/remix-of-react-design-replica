@@ -120,7 +120,7 @@ export const EventFormModal: React.FC<EventFormModalProps> = ({
 
         <form onSubmit={handleSubmit} className="space-y-4">
           {/* Jour */}
-          <div className="space-y-2">
+          <div className="space-y-2" data-guide="cours:jour">
             <Label>Jour</Label>
             <Select
               value={formData.dayIndex.toString()}
@@ -142,7 +142,7 @@ export const EventFormModal: React.FC<EventFormModalProps> = ({
           </div>
 
           {/* Horaires */}
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-2 gap-4" data-guide="cours:heures">
             <div className="space-y-2">
               <Label>Heure début</Label>
               <Input
@@ -166,7 +166,7 @@ export const EventFormModal: React.FC<EventFormModalProps> = ({
           </div>
 
           {/* Matière */}
-          <div className="space-y-2">
+          <div className="space-y-2" data-guide="cours:matiere">
             <Label>Matière</Label>
             <Input
               placeholder="Ex: Mathématiques"
@@ -204,7 +204,7 @@ export const EventFormModal: React.FC<EventFormModalProps> = ({
 
           {/* Professeur (en vue classe ou si aucun prof pré-sélectionné) */}
           {(viewMode === 'class' || !selectedTeacherId) && (
-            <div className="space-y-2">
+            <div className="space-y-2" data-guide="cours:prof">
               <Label>Professeur (optionnel)</Label>
               <Select
                 value={formData.teacherId ?? 'none'}
@@ -292,7 +292,7 @@ export const EventFormModal: React.FC<EventFormModalProps> = ({
             <Button type="button" variant="outline" onClick={onClose} disabled={isSaving}>
               Annuler
             </Button>
-            <Button type="submit" disabled={isSaving}>
+            <Button data-guide="cours:ajouter" type="submit" disabled={isSaving}>
               {isSaving && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
               {isEditing ? 'Modifier' : 'Ajouter'}
             </Button>

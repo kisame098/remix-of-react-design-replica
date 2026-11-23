@@ -221,7 +221,7 @@ const DocumentsEcole = () => {
       </div>
 
       <div className="flex-1 min-h-0 flex flex-col md:flex-row">
-        <nav className="md:w-56 border-b md:border-b-0 md:border-r flex-shrink-0 flex md:flex-col p-3 gap-1 bg-muted/10">
+        <nav data-guide="documents:onglets" className="md:w-56 border-b md:border-b-0 md:border-r flex-shrink-0 flex md:flex-col p-3 gap-1 bg-muted/10">
           {ONGLETS.map(o => {
             const actif = o.id === onglet;
             return (

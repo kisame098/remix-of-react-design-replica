@@ -35,6 +35,7 @@ import {
   type ConfigScolarite, type Cycle, type NombrePeriodes,
 } from '@/lib/configScolarite';
 import { estFormationPro } from '@/lib/modeGestion';
+import { signalerGuide } from '@/lib/signauxGuide';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -142,6 +143,7 @@ const SettingsPage = () => {
         [CLE_PIED_DOCUMENTS]: piedDocuments.trim(),
       });
       toast({ title: 'École mise à jour' });
+      signalerGuide('ecole-enregistree');
     } catch {
       toast({ title: 'Erreur', description: 'Impossible de sauvegarder', variant: 'destructive' });
     } finally {
@@ -173,6 +175,7 @@ const SettingsPage = () => {
     try {
       await updateProfile({ full_name: fullName });
       toast({ title: 'Profil mis à jour' });
+      signalerGuide('compte-enregistre');
     } catch {
       toast({ title: 'Erreur', description: 'Impossible de sauvegarder', variant: 'destructive' });
     } finally {
@@ -282,6 +285,7 @@ const SettingsPage = () => {
     try {
       updateSchoolYear(currentYear.id, yearForm);
       toast({ title: 'Année scolaire mise à jour', description: 'Les mois facturables dans Paiements sont recalculés automatiquement.' });
+      signalerGuide('annee-enregistree');
     } finally {
       setSavingYear(false);
     }
@@ -292,6 +296,7 @@ const SettingsPage = () => {
     try {
       await updateSchoolSettings({ tuitionBillingTiming: billingTiming });
       toast({ title: 'Mode de facturation mis à jour', description: 'Les échéances et retards affichés dans Paiements sont recalculés automatiquement.' });
+      signalerGuide('echeance-enregistree');
     } catch {
       toast({ title: 'Erreur', description: 'Impossible de sauvegarder', variant: 'destructive' });
     } finally {
@@ -320,6 +325,7 @@ const SettingsPage = () => {
     try {
       await updateSchoolSettings({ scheduleMinHour: minHour, scheduleMaxHour: maxHour });
       toast({ title: 'Horaires mis à jour', description: 'La grille d\'emploi du temps est recalculée automatiquement.' });
+      signalerGuide('horaires-enregistres');
     } catch {
       toast({ title: 'Erreur', description: 'Impossible de sauvegarder', variant: 'destructive' });
     } finally {
@@ -356,6 +362,7 @@ const SettingsPage = () => {
     try {
       await updateSchoolSettings({ [CLE_CONFIG_SCOLARITE]: config });
       toast({ title: 'Scolarité mise à jour', description: 'Les bulletins de fin d\'année rendront la décision finale selon ces réglages.' });
+      signalerGuide('scolarite-enregistree');
     } catch {
       toast({ title: 'Erreur', description: 'Impossible de sauvegarder', variant: 'destructive' });
     } finally {
@@ -385,13 +392,13 @@ const SettingsPage = () => {
 
       <Tabs defaultValue="ecole" className="space-y-6">
         {/* Formation pro : « Financements » prend la place de « Scolarité ». */}
-        <TabsList className="grid w-full grid-cols-5">
-          <TabsTrigger value="ecole" className="gap-2" title="École" aria-label="École"><School className="h-4 w-4" /> <span className="hidden md:inline">École</span></TabsTrigger>
-          <TabsTrigger value="compte" className="gap-2" title="Mon compte" aria-label="Mon compte"><User className="h-4 w-4" /> <span className="hidden md:inline">Mon compte</span></TabsTrigger>
-          <TabsTrigger value="annee" className="gap-2" title="Année scolaire" aria-label="Année scolaire"><Calendar className="h-4 w-4" /> <span className="hidden md:inline">Année scolaire</span></TabsTrigger>
-          <TabsTrigger value="horaires" className="gap-2" title="Emploi du temps" aria-label="Emploi du temps"><Clock className="h-4 w-4" /> <span className="hidden md:inline">Emploi du temps</span></TabsTrigger>
-          {avecScolarite && <TabsTrigger value="scolarite" className="gap-2" title="Scolarité" aria-label="Scolarité"><GraduationCap className="h-4 w-4" /> <span className="hidden md:inline">Scolarité</span></TabsTrigger>}
-          {!avecScolarite && <TabsTrigger value="financements" className="gap-2" title="Financements" aria-label="Financements"><Landmark className="h-4 w-4" /> <span className="hidden md:inline">Financements</span></TabsTrigger>}
+        <TabsList className="grid w-full grid-cols-5" data-guide="parametres:onglets">
+          <TabsTrigger value="ecole" data-guide="parametres:onglet-ecole" className="gap-2" title="École" aria-label="École"><School className="h-4 w-4" /> <span className="hidden md:inline">École</span></TabsTrigger>
+          <TabsTrigger value="compte" data-guide="parametres:onglet-compte" className="gap-2" title="Mon compte" aria-label="Mon compte"><User className="h-4 w-4" /> <span className="hidden md:inline">Mon compte</span></TabsTrigger>
+          <TabsTrigger value="annee" data-guide="parametres:onglet-annee" className="gap-2" title="Année scolaire" aria-label="Année scolaire"><Calendar className="h-4 w-4" /> <span className="hidden md:inline">Année scolaire</span></TabsTrigger>
+          <TabsTrigger value="horaires" data-guide="parametres:onglet-horaires" className="gap-2" title="Emploi du temps" aria-label="Emploi du temps"><Clock className="h-4 w-4" /> <span className="hidden md:inline">Emploi du temps</span></TabsTrigger>
+          {avecScolarite && <TabsTrigger value="scolarite" data-guide="parametres:onglet-scolarite" className="gap-2" title="Scolarité" aria-label="Scolarité"><GraduationCap className="h-4 w-4" /> <span className="hidden md:inline">Scolarité</span></TabsTrigger>}
+          {!avecScolarite && <TabsTrigger value="financements" data-guide="parametres:onglet-financements" className="gap-2" title="Financements" aria-label="Financements"><Landmark className="h-4 w-4" /> <span className="hidden md:inline">Financements</span></TabsTrigger>}
         </TabsList>
 
         {/* École */}
@@ -402,7 +409,7 @@ const SettingsPage = () => {
               <CardDescription>Nom, coordonnées et logo affichés dans l'application.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
-              <div className="space-y-2">
+              <div className="space-y-2" data-guide="ecole:logo">
                 <PhotoUploadAvatar
                   value={school?.logo_url}
                   onChange={handleLogoChange}
@@ -416,27 +423,27 @@ const SettingsPage = () => {
                 </p>
               </div>
               <div className="grid gap-4 sm:grid-cols-2">
-                <div className="space-y-1.5">
+                <div className="space-y-1.5" data-guide="ecole:nom">
                   <Label>Nom de l'école</Label>
                   <Input value={schoolForm.name} onChange={e => setSchoolForm(f => ({ ...f, name: e.target.value }))} />
                 </div>
-                <div className="space-y-1.5">
+                <div className="space-y-1.5" data-guide="ecole:ville">
                   <Label>Ville</Label>
                   <Input value={schoolForm.city} onChange={e => setSchoolForm(f => ({ ...f, city: e.target.value }))} />
                 </div>
-                <div className="space-y-1.5">
+                <div className="space-y-1.5" data-guide="ecole:pays">
                   <Label>Pays</Label>
                   <Input value={schoolForm.country} onChange={e => setSchoolForm(f => ({ ...f, country: e.target.value }))} />
                 </div>
-                <div className="space-y-1.5">
+                <div className="space-y-1.5" data-guide="ecole:telephone">
                   <Label>Téléphone</Label>
                   <Input value={schoolForm.phone} onChange={e => setSchoolForm(f => ({ ...f, phone: e.target.value }))} />
                 </div>
-                <div className="space-y-1.5 sm:col-span-2">
+                <div className="space-y-1.5 sm:col-span-2" data-guide="ecole:email">
                   <Label>Email de contact</Label>
                   <Input type="email" value={schoolForm.email} onChange={e => setSchoolForm(f => ({ ...f, email: e.target.value }))} />
                 </div>
-                <div className="space-y-1.5 sm:col-span-2">
+                <div className="space-y-1.5 sm:col-span-2" data-guide="ecole:adresse">
                   <Label>Adresse</Label>
                   <Input
                     value={adresseEcole}
@@ -444,33 +451,33 @@ const SettingsPage = () => {
                     placeholder="Ex : BP 1234, Point E"
                   />
                 </div>
-                <div className="space-y-1.5 sm:col-span-2">
+                <div className="space-y-1.5 sm:col-span-2" data-guide="ecole:ninea">
                   <Label>N° d'agrément / NINEA <span className="font-normal text-muted-foreground">(facultatif)</span></Label>
                   <Input value={nineaEcole} onChange={e => setNineaEcole(e.target.value)} />
                   <p className="text-xs text-muted-foreground">
                     Le logo, l'adresse et ce numéro figurent dans l'en-tête des reçus de paiement et des fiches d'inscription.
                   </p>
                 </div>
-                <div className="space-y-1.5">
+                <div className="space-y-1.5" data-guide="ecole:autorisation">
                   <Label>N° d'autorisation d'ouverture <span className="font-normal text-muted-foreground">(facultatif)</span></Label>
                   <Input value={autorisationEcole} onChange={e => setAutorisationEcole(e.target.value)} />
                 </div>
-                <div className="space-y-1.5">
+                <div className="space-y-1.5" data-guide="ecole:rc">
                   <Label>Registre de commerce (RC) <span className="font-normal text-muted-foreground">(facultatif)</span></Label>
                   <Input value={rcEcole} onChange={e => setRcEcole(e.target.value)} />
                 </div>
                 <p className="text-xs text-muted-foreground sm:col-span-2 -mt-2">
                   L'autorisation et le RC figurent au pied des documents officiels (attestations, diplômes).
                 </p>
-                <div className="space-y-1.5">
+                <div className="space-y-1.5" data-guide="ecole:directeurs-etudes">
                   <Label>Directeur des études <span className="font-normal text-muted-foreground">(facultatif)</span></Label>
                   <Input value={directeurEtudes} onChange={e => setDirecteurEtudes(e.target.value)} placeholder="Ex : M. Babacar Gueye" />
                 </div>
-                <div className="space-y-1.5">
+                <div className="space-y-1.5" data-guide="ecole:directeur-general">
                   <Label>Directeur général <span className="font-normal text-muted-foreground">(facultatif)</span></Label>
                   <Input value={directeurGeneral} onChange={e => setDirecteurGeneral(e.target.value)} />
                 </div>
-                <div className="space-y-1.5 sm:col-span-2">
+                <div className="space-y-1.5 sm:col-span-2" data-guide="ecole:pied">
                   <Label>Pied de page des documents <span className="font-normal text-muted-foreground">(facultatif)</span></Label>
                   <Textarea
                     rows={3} value={piedDocuments} onChange={e => setPiedDocuments(e.target.value)}
@@ -483,7 +490,7 @@ const SettingsPage = () => {
               </div>
             </CardContent>
             <CardFooter className="justify-end border-t bg-muted/30 py-4">
-              <Button className="gap-2" onClick={saveSchool} disabled={savingSchool}>
+              <Button data-guide="ecole:enregistrer" className="gap-2" onClick={saveSchool} disabled={savingSchool}>
                 {savingSchool ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
                 Enregistrer
               </Button>
@@ -506,7 +513,7 @@ const SettingsPage = () => {
                 uploading={uploadingAvatar}
               />
               <div className="grid gap-4 sm:grid-cols-2">
-                <div className="space-y-1.5">
+                <div className="space-y-1.5" data-guide="compte:nom">
                   <Label>Nom complet</Label>
                   <Input value={fullName} onChange={e => setFullName(e.target.value)} />
                 </div>
@@ -521,7 +528,7 @@ const SettingsPage = () => {
               </div>
             </CardContent>
             <CardFooter className="justify-end border-t bg-muted/30 py-4">
-              <Button className="gap-2" onClick={saveProfile} disabled={savingProfile}>
+              <Button data-guide="compte:enregistrer" className="gap-2" onClick={saveProfile} disabled={savingProfile}>
                 {savingProfile ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
                 Enregistrer
               </Button>
@@ -539,7 +546,7 @@ const SettingsPage = () => {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="grid gap-4 sm:grid-cols-2">
+              <div className="grid gap-4 sm:grid-cols-2" data-guide="annee:dates">
                 <div className="space-y-1.5">
                   <Label>Date d'ouverture</Label>
                   <Input type="date" value={yearForm.startDate} onChange={e => setYearForm(f => ({ ...f, startDate: e.target.value }))} />
@@ -551,7 +558,7 @@ const SettingsPage = () => {
               </div>
             </CardContent>
             <CardFooter className="justify-end border-t bg-muted/30 py-4">
-              <Button className="gap-2" onClick={saveYear} disabled={savingYear || !currentYear}>
+              <Button data-guide="annee:enregistrer" className="gap-2" onClick={saveYear} disabled={savingYear || !currentYear}>
                 {savingYear ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
                 Enregistrer
               </Button>
@@ -567,7 +574,7 @@ const SettingsPage = () => {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="space-y-1.5 max-w-md">
+              <div className="space-y-1.5 max-w-md" data-guide="echeance:mode">
                 <Label>Mode de facturation</Label>
                 <Select value={billingTiming} onValueChange={v => setBillingTiming(v as TuitionBillingTiming)}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
@@ -579,7 +586,7 @@ const SettingsPage = () => {
                 </Select>
               </div>
 
-              <div className="space-y-2 border rounded-lg p-3 bg-muted/20">
+              <div className="space-y-2 border rounded-lg p-3 bg-muted/20" data-guide="echeance:arrivee">
                 <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
                   Élève inscrit en cours de mois
                 </p>
@@ -618,7 +625,7 @@ const SettingsPage = () => {
                 </p>
               </div>
 
-              <div>
+              <div data-guide="echeance:mois">
                 <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
                   <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
                     Mois à facturer ({previewMonths.length - previewMonths.filter(m => excludedMonths.includes(m.key)).length}/{previewMonths.length})
@@ -670,7 +677,7 @@ const SettingsPage = () => {
               </div>
             </CardContent>
             <CardFooter className="justify-end border-t bg-muted/30 py-4">
-              <Button className="gap-2" onClick={saveBillingTiming} disabled={savingTiming}>
+              <Button data-guide="echeance:enregistrer" className="gap-2" onClick={saveBillingTiming} disabled={savingTiming}>
                 {savingTiming ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
                 Enregistrer
               </Button>
@@ -686,7 +693,7 @@ const SettingsPage = () => {
               <CardDescription>Détermine les heures affichées dans la grille d'emploi du temps.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="grid gap-4 sm:grid-cols-2">
+              <div className="grid gap-4 sm:grid-cols-2" data-guide="horaires:plage">
                 <div className="space-y-1.5">
                   <Label>Heure minimum de début des cours</Label>
                   <Select value={minHour} onValueChange={setMinHour}>
@@ -708,7 +715,7 @@ const SettingsPage = () => {
               </div>
             </CardContent>
             <CardFooter className="justify-end border-t bg-muted/30 py-4">
-              <Button className="gap-2" onClick={saveHours} disabled={savingHours}>
+              <Button data-guide="horaires:enregistrer" className="gap-2" onClick={saveHours} disabled={savingHours}>
                 {savingHours ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
                 Enregistrer
               </Button>
@@ -732,7 +739,7 @@ const SettingsPage = () => {
                   SenClass rend la décision finale (Admis / Redouble) sur le bulletin du dernier trimestre ou semestre.
                 </CardDescription>
               </CardHeader>
-              <CardContent className="space-y-3">
+              <CardContent className="space-y-3" data-guide="scolarite:cycles">
                 {CYCLES.map(({ cycle, libelle, bareme }) => (
                   <div key={cycle} className="grid gap-3 sm:grid-cols-[140px_1fr_1fr] items-end rounded-lg border p-3">
                     <p className="font-medium sm:pb-2">{libelle}</p>
@@ -768,7 +775,7 @@ const SettingsPage = () => {
                 </p>
               </CardContent>
               <CardFooter className="justify-end border-t bg-muted/30 py-4">
-                <Button className="gap-2" onClick={saveScolarite} disabled={savingScolarite}>
+                <Button data-guide="scolarite:enregistrer" className="gap-2" onClick={saveScolarite} disabled={savingScolarite}>
                   {savingScolarite ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
                   Enregistrer
                 </Button>

@@ -15,6 +15,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Plus, Trash2, Loader2, Pencil, GraduationCap, Copy, Download, Upload, Clock, Layers, EyeOff } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
+import { signalerGuide } from '@/lib/signauxGuide';
 import {
   type Formation, type NiveauMatiereType, type NiveauMatiereNature,
   TYPES_DIPLOME_SUGGERES, nomFormationValide, triFormations, resumeFormation,
@@ -160,6 +161,7 @@ const Formations = () => {
       if (dialog.kind === 'create') {
         await addFormation(data);
         toast({ title: 'Formation créée', description: data.name });
+        signalerGuide('formation-creee');
       } else if (dialog.kind === 'edit') {
         await updateFormation(dialog.formationId, data);
         toast({ title: 'Formation modifiée' });
@@ -229,7 +231,7 @@ const Formations = () => {
               </Button>
             </>
           )}
-          <Button size="sm" className="gap-2" onClick={openCreate}>
+          <Button data-guide="formation:ajouter" size="sm" className="gap-2" onClick={openCreate}>
             <Plus className="h-3.5 w-3.5" />Ajouter une formation
           </Button>
         </div>

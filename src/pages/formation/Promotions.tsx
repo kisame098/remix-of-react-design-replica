@@ -17,6 +17,7 @@ import {
 import { Plus, Trash2, Loader2, Pencil, Copy, Users, GraduationCap, UserCog } from 'lucide-react';
 import { DialogFormateurs } from '@/components/formation/DialogFormateurs';
 import { toast } from '@/hooks/use-toast';
+import { signalerGuide } from '@/lib/signauxGuide';
 import {
   type Promotion, type RythmePromotion, type StatutPromotion,
   LIBELLES_RYTHME, LIBELLES_STATUT_PROMOTION, nomPromotionValide, datesPromotionValides,
@@ -118,6 +119,7 @@ const Promotions = () => {
       if (dialog?.kind === 'create') {
         await addPromotion(niveauId, data);
         toast({ title: 'Promotion créée', description: data.name });
+        signalerGuide('promotion-creee');
       } else if (dialog?.kind === 'edit') {
         await updatePromotion(dialog.promotionId, data);
         toast({ title: 'Promotion modifiée' });
@@ -161,7 +163,7 @@ const Promotions = () => {
             matières et coefficients de son niveau — rien à ressaisir.
           </p>
         </div>
-        <Button size="sm" className="gap-2" onClick={openCreate} disabled={niveaux.length === 0}>
+        <Button data-guide="promotion:nouvelle" size="sm" className="gap-2" onClick={openCreate} disabled={niveaux.length === 0}>
           <Plus className="h-3.5 w-3.5" />Nouvelle promotion
         </Button>
       </div>

@@ -15,6 +15,7 @@ import {
   AlertCircle, Loader2, QrCode, ScanLine, LockOpen, Landmark,
 } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
+import { signalerGuide } from '@/lib/signauxGuide';
 import { useRecus } from '@/hooks/useRecus';
 import type { Payment } from '@/types/payment';
 import {
@@ -384,6 +385,7 @@ const PaymentEntry = ({ initialMode = 'search' }: { initialMode?: 'search' | 'sc
       setMontantsSaisis({});
       setReference('');
       setNote('');
+      signalerGuide('paiement-enregistre');
       // Après l'encaissement, jamais avant : un souci de reçu ne peut pas
       // empêcher (ni annuler) un paiement. montrerRecu ne lève pas.
       await montrerRecu(enregistres, { apresEncaissement: true });
@@ -449,7 +451,7 @@ const PaymentEntry = ({ initialMode = 'search' }: { initialMode?: 'search' | 'sc
             </p>
           </div>
         ) : (
-        <div className="relative">
+        <div className="relative" data-guide="caisse:recherche">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
             className="pl-9" placeholder="Nom, prénom ou ID…"
@@ -547,7 +549,7 @@ const PaymentEntry = ({ initialMode = 'search' }: { initialMode?: 'search' | 'sc
             <p className="text-sm mt-1 opacity-70">Recherchez et sélectionnez un élève pour gérer ses paiements</p>
           </div>
         ) : (
-          <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
+          <div className="flex-1 min-h-0 flex flex-col overflow-hidden" data-guide="caisse:elements">
             {/* Payment items — gardent toujours ~3 lignes visibles : sur un
                 écran peu haut, c'est le panneau d'encaissement qui défile
                 au lieu d'écraser la liste. */}

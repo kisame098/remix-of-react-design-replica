@@ -67,6 +67,7 @@ const PaymentManagement = () => {
             return (
               <button
                 key={tab.id}
+                data-guide={`paiements:${tab.id}`}
                 onClick={() => setActiveTab(tab.id)}
                 className={`w-full flex items-center gap-3 px-3 py-3 rounded-xl text-left transition-all group ${
                   isActive

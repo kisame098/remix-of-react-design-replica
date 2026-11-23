@@ -22,6 +22,7 @@ import { estPrescolaire } from '@/lib/prescolaire';
 import { useSchoolYear } from '@/contexts/SchoolYearContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
+import { signalerGuide } from '@/lib/signauxGuide';
 import { buildProgrammeCards, programmeCardLabel, programmeCardKey, getNiveauLabels, getNiveauxSupprimes, resolveNiveauLabel, type ProgrammeCard } from '@/lib/programmeCards';
 
 const NO_BLOC = '__none__';
@@ -105,6 +106,7 @@ const ClassManagement = () => {
       setNewClassLimit('30');
       setNewClassCardKey(NO_BLOC);
       setIsDialogOpen(false);
+      signalerGuide('classe-creee');
     } catch (err) {
       toast({ title: 'Erreur', description: String(err), variant: 'destructive' });
     } finally {
@@ -205,7 +207,7 @@ const ClassManagement = () => {
 
           <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
             <DialogTrigger asChild>
-              <Button className="gap-2" disabled={!currentYear}>
+              <Button data-guide="classe:nouvelle" className="gap-2" disabled={!currentYear}>
                 <Plus className="w-4 h-4" />
                 Nouvelle Classe
               </Button>
@@ -218,7 +220,7 @@ const ClassManagement = () => {
                 </DialogDescription>
               </DialogHeader>
               <div className="space-y-4 py-4">
-                <div className="space-y-2">
+                <div className="space-y-2" data-guide="classe:nom">
                   <Label htmlFor="className">Nom de la classe *</Label>
                   <Input
                     id="className"
@@ -229,7 +231,7 @@ const ClassManagement = () => {
                     onKeyDown={e => e.key === 'Enter' && handleAddClass()}
                   />
                 </div>
-                <div className="space-y-2">
+                <div className="space-y-2" data-guide="classe:limite">
                   <Label htmlFor="classLimit">Limite d'élèves *</Label>
                   <Input
                     id="classLimit"
@@ -241,7 +243,7 @@ const ClassManagement = () => {
                     disabled={isSaving}
                   />
                 </div>
-                <div className="space-y-2">
+                <div className="space-y-2" data-guide="classe:bloc">
                   <Label htmlFor="classBloc">Programme / Cursus (optionnel)</Label>
                   <Select value={newClassCardKey} onValueChange={setNewClassCardKey} disabled={isSaving}>
                     <SelectTrigger id="classBloc">
@@ -269,7 +271,7 @@ const ClassManagement = () => {
                 <Button variant="outline" onClick={() => setIsDialogOpen(false)} disabled={isSaving}>
                   Annuler
                 </Button>
-                <Button onClick={handleAddClass} disabled={isSaving} className="gap-2">
+                <Button data-guide="classe:creer" onClick={handleAddClass} disabled={isSaving} className="gap-2">
                   {isSaving && <Loader2 className="w-4 h-4 animate-spin" />}
                   Créer la classe
                 </Button>
@@ -435,7 +437,7 @@ const ClassManagement = () => {
         )}
 
         {!classesLoading && classes.length > 0 && (
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+          <div data-guide="classe:liste" className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
             <AnimatePresence>
               {classes.map((cls, index) => {
                 const studentCount = getStudentCountByClass(cls.id);

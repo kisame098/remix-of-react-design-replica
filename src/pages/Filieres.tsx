@@ -643,7 +643,7 @@ const Filieres = () => {
             {importing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
             Importer
           </Button>
-          <Button className="gap-2" onClick={openCreateBloc}><Plus className="h-4 w-4" />Nouveau bloc</Button>
+          <Button data-guide="cursus:nouveau" className="gap-2" onClick={openCreateBloc}><Plus className="h-4 w-4" />Nouveau bloc</Button>
         </div>
       </div>
 
@@ -715,7 +715,7 @@ const Filieres = () => {
         </div>
       )}
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div data-guide="cursus:blocs" className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {allCards.map(card => {
           if (card.type === 'niveau' && (NIVEAUX_ELEMENTAIRE as readonly string[]).includes(card.niveau)) {
             const { niveau } = card;

@@ -227,8 +227,8 @@ const PlatformSchoolDetail = () => {
           <div className="text-sm">
             <p>Accès aux nouveautés en test : <span className="font-semibold">{beta === null ? '—' : beta ? 'oui' : 'non'}</span></p>
             <p className="text-xs text-muted-foreground mt-1 max-w-xl">
-              Une école bêta-testeuse voit les nouveautés en test avant les autres. Aucune pour l'instant :
-              le <strong>site web de l'école</strong> est désormais ouvert à toutes les écoles.
+              Une école bêta-testeuse voit les nouveautés en test avant les autres. En ce moment :
+              le <strong>mode guidé</strong> (« Apprendre SenClass »), proposé à l'ouverture du tableau de bord.
             </p>
           </div>
           {beta !== null && (
