@@ -6,13 +6,13 @@ import { modeDeLEcole } from '@/lib/modeGestion';
 import { toast } from '@/hooks/use-toast';
 import {
   avanceSeule, chapitreSuivant, etapeApresPasser, etapeApresSignal, etapeDeReprise, etapePrecedente, etapeSuivante,
-  lireEtat, marquerTermine, pageOuAller, parcoursPour, rang, reunir,
-  type Boite, type Chapitre, type Etape, type EtatEtape, type Progression,
+  etiquetteDessus, HAUTEUR_ETIQUETTE, lireEtat, marquerTermine, pageOuAller, parcoursPour, rang, reunir,
+  type Boite, type Chapitre, type Etape, type EtatEtape, type Geste, type Progression,
 } from '@/lib/guide';
 import { EVENEMENT_OUVRIR, EVENEMENT_SIGNAL, type SignalGuide } from '@/lib/signauxGuide';
 import { CHAPITRES } from './parcours';
 import { chargerProgression, garderDansLeCompte, garderSurAppareil } from './progressionGuide';
-import { BulleGuide, Projecteur } from './BulleGuide';
+import { BulleGuide, EtiquetteGeste, Projecteur } from './BulleGuide';
 import { FenetreBilan, FenetreChapitres, FenetreProposition } from './FenetresGuide';
 
 /** L'écran est relu plusieurs fois par seconde : les pages ne savent rien du guide. */
@@ -20,10 +20,20 @@ const RYTHME_MS = 200;
 /** Temps laissé à une page pour s'afficher avant de dire « cet élément n'est pas là ». */
 const PATIENCE_MS = 1500;
 const DUREE_BRAVO_MS = 1100;
+/** Sans rien faire pendant ce temps, on insiste. */
+const HESITATION_MS = 8000;
+const DUREE_INSISTANCE_MS = 1600;
 
 interface Ecran {
-  etat: EtatEtape;
+  etat: Omit<EtatEtape, 'elements' | 'geste'>;
+  geste: Omit<Geste, 'element'> | null;
+  /** L'élément sur lequel agir maintenant. */
+  boiteGeste: Boite | null;
   boites: Boite[];
+  /** L'endroit où agir est caché par le défilement. */
+  ailleurs: 'haut' | 'bas' | null;
+  /** … depuis assez longtemps : ce n'est pas le défilement en cours. */
+  proposerMontrer: boolean;
   /** La liste déroulante ouverte : la bulle ne doit pas la cacher. */
   liste: Boite | null;
   /** Pas de voile : une liste est ouverte par-dessus, il faut pouvoir la lire. */
@@ -45,10 +55,32 @@ const boiteDe = (el: Element): Boite => {
   return { left: r.left, top: r.top, width: r.width, height: r.height };
 };
 
+/**
+ * L'élément est-il caché par le défilement — de la page, ou de la zone qui le
+ * contient (le menu de gauche défile tout seul) ? Dit de quel côté il se trouve.
+ */
+const horsEcran = (el: HTMLElement): 'haut' | 'bas' | null => {
+  const r = el.getBoundingClientRect();
+  if (r.height === 0) return null;
+  const repere = r.top + Math.min(r.height / 2, 60);
+  let haut = 0;
+  let bas = window.innerHeight;
+  for (let p = el.parentElement; p; p = p.parentElement) {
+    if (!/auto|scroll/.test(getComputedStyle(p).overflowY) || p.scrollHeight <= p.clientHeight) continue;
+    const b = p.getBoundingClientRect();
+    haut = Math.max(haut, b.top);
+    bas = Math.min(bas, b.bottom);
+  }
+  return repere < haut + 4 ? 'haut' : repere > bas - 4 ? 'bas' : null;
+};
+
 const amenerAlEcran = (el: HTMLElement) => {
   const r = el.getBoundingClientRect();
-  if (r.top >= 70 && r.bottom <= window.innerHeight - 20) return;
-  el.scrollIntoView({ block: r.height > window.innerHeight * 0.7 ? 'start' : 'center', behavior: 'smooth' });
+  if (!horsEcran(el) && r.top >= 70 && r.bottom <= window.innerHeight - 20) return;
+  el.scrollIntoView({
+    block: r.height > window.innerHeight * 0.7 ? 'start' : 'center',
+    behavior: document.hidden || window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth',
+  });
 };
 
 export default function Guide() {
@@ -99,6 +131,7 @@ export default function Guide() {
 
   // Revenu en arrière exprès : on ne rejoue pas l'avance automatique.
   const manuel = useRef(false);
+  const principalRef = useRef<HTMLElement | null>(null);
   const absentDepuis = useRef<number | null>(null);
 
   const allerA = useCallback((suivante: Etape | null, enArriere = false) => {
@@ -155,7 +188,8 @@ export default function Guide() {
   // ── Lecture de l'écran ────────────────────────────────────────────────────
   useEffect(() => {
     if (!enCours || !chapitre || !etape || bravo) return;
-    let amene = false;
+    let amene: HTMLElement | null = null;
+    let ailleursDepuis: number | null = null;
     const lire = () => {
       const etat = lireEtat(etape, pathname);
       if (avanceSeule(etape) && etat.satisfaite && !manuel.current) { allerA(etapeSuivante(chapitre, etape.id)); return; }
@@ -172,12 +206,21 @@ export default function Guide() {
         }
       } else absentDepuis.current = null;
 
-      if (!amene && joignables.length > 0) { amene = true; amenerAlEcran(joignables[0]); }
+      const principal = etat.geste?.element && joignables.includes(etat.geste.element) ? etat.geste.element : joignables[0] ?? null;
+      principalRef.current = principal;
+      // Une fois par champ : remplir le premier amène au suivant.
+      if (principal && amene !== principal) { amene = principal; amenerAlEcran(principal); }
 
       const listeOuverte = document.querySelector('[data-radix-popper-content-wrapper]');
       const boites = joignables.map(boiteDe);
+      const ailleurs = principal && !listeOuverte ? horsEcran(principal) : null;
+      ailleursDepuis = ailleurs ? ailleursDepuis ?? Date.now() : null;
       const suivant: Ecran = {
-        etat: { ...etat, elements: [] },
+        etat: { horsPage: etat.horsPage, absente: etat.absente, champs: etat.champs, satisfaite: etat.satisfaite },
+        geste: etat.geste && { type: etat.geste.type, etiquette: etat.geste.etiquette, libelle: etat.geste.libelle },
+        boiteGeste: etat.geste?.element && principal === etat.geste.element ? boiteDe(principal) : null,
+        ailleurs,
+        proposerMontrer: ailleursDepuis !== null && Date.now() - ailleursDepuis > 900,
         boites,
         liste: listeOuverte ? boiteDe(listeOuverte) : null,
         sansVoile: !!listeOuverte || !!dialogue,
@@ -197,7 +240,42 @@ export default function Guide() {
     };
   }, [enCours, chapitre, etape, pathname, bravo, allerA]);
 
-  const zone = useMemo(() => (ecran && !ecran.etat.horsPage ? reunir(ecran.liste ? [...ecran.boites, ecran.liste] : ecran.boites) : null), [ecran]);
+  // Ce que la bulle ne doit pas cacher : les éléments, la liste ouverte et l'étiquette.
+  const zone = useMemo(() => {
+    if (!ecran || ecran.etat.horsPage || ecran.ailleurs) return null;
+    const b = ecran.boiteGeste;
+    const etiquette = b && { left: b.left, top: etiquetteDessus(b) ? b.top - HAUTEUR_ETIQUETTE - 6 : b.top + b.height, width: b.width, height: HAUTEUR_ETIQUETTE + 6 };
+    return reunir([...ecran.boites, ...(ecran.liste ? [ecran.liste] : []), ...(etiquette ? [etiquette] : [])]);
+  }, [ecran]);
+
+  // ── La personne hésite, ou clique à côté : on insiste ─────────────────────
+  const [insiste, setInsiste] = useState(false);
+  const cleGeste = ecran?.geste ? `${etape?.id}:${ecran.geste.libelle}` : null;
+  const boiteGeste = useRef<Boite | null>(null);
+  boiteGeste.current = ecran?.boiteGeste ?? null;
+  useEffect(() => {
+    if (!enCours || !cleGeste) return;
+    let fin = 0;
+    const insister = () => {
+      setInsiste(true);
+      window.clearTimeout(fin);
+      fin = window.setTimeout(() => setInsiste(false), DUREE_INSISTANCE_MS);
+    };
+    const horloge = window.setInterval(insister, HESITATION_MS);
+    const clic = (e: MouseEvent) => {
+      const b = boiteGeste.current;
+      if (!b || !(e.target instanceof Element) || e.target.closest('[data-guide-ui], [data-radix-popper-content-wrapper]')) return;
+      const dedans = e.clientX >= b.left - 6 && e.clientX <= b.left + b.width + 6 && e.clientY >= b.top - 6 && e.clientY <= b.top + b.height + 6;
+      if (!dedans) insister();
+    };
+    document.addEventListener('click', clic, true);
+    return () => {
+      window.clearInterval(horloge);
+      window.clearTimeout(fin);
+      document.removeEventListener('click', clic, true);
+      setInsiste(false);
+    };
+  }, [enCours, cleGeste]);
 
   if (!progression || chapitres.length === 0) return null;
 
@@ -245,16 +323,20 @@ export default function Guide() {
 
       {enCours && chapitre && etape && !liste && createPortal(
         <>
-          {!reduit && !bravo && ecran && ecran.boites.length > 0 && !ecran.etat.horsPage && <Projecteur boites={ecran.boites} voile={!ecran.sansVoile} />}
+          {!reduit && !bravo && ecran && ecran.boites.length > 0 && !ecran.etat.horsPage && !ecran.ailleurs && <Projecteur boites={ecran.boites} voile={!ecran.sansVoile} />}
+          {!reduit && !bravo && ecran?.geste && ecran.boiteGeste && !ecran.liste && !ecran.ailleurs && (
+            <EtiquetteGeste geste={ecran.geste} boite={ecran.boiteGeste} insiste={insiste} />
+          )}
           <BulleGuide
             chapitre={chapitre} etape={etape} numero={rang(chapitre, etape.id) + 1}
-            etat={ecran?.etat ?? null} boite={zone}
+            etat={ecran?.etat ?? null} geste={ecran?.geste ?? null} insiste={insiste} boite={zone}
             introuvable={ecran?.introuvable ?? false} cachee={ecran?.cachee ?? false} bravo={bravo} reduit={reduit}
             peutRejoindre={page !== null || etapeDeReprise(chapitre, etape.id) !== null}
             onContinuer={() => allerA(etapeSuivante(chapitre, etape.id))}
             onPasser={() => allerA(etapeApresPasser(chapitre, etape.id))}
             onPrecedent={etapePrecedente(chapitre, etape.id) ? () => allerA(etapePrecedente(chapitre, etape.id), true) : null}
             onRejoindre={rejoindre}
+            ailleurs={ecran?.proposerMontrer ? ecran.ailleurs : null} onMontrer={() => principalRef.current && amenerAlEcran(principalRef.current)}
             onReduire={() => setReduit(r => !r)}
             onArreter={arreter}
           />

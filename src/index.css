@@ -147,3 +147,14 @@
     box-shadow: none !important;
   }
 }
+
+/* ── Mode guidé : l'ordre doit sauter aux yeux ─────────────────────────────── */
+@keyframes guide-rebond { 0%, 100% { translate: 0 0; } 50% { translate: 0 -5px; } }
+@keyframes guide-halo { 0% { box-shadow: 0 0 0 0 rgba(37, 99, 235, 0.7); } 100% { box-shadow: 0 0 0 18px rgba(37, 99, 235, 0); } }
+@keyframes guide-secousse { 0%, 100% { translate: 0 0; } 20%, 60% { translate: -8px 0; } 40%, 80% { translate: 8px 0; } }
+.guide-rebond { animation: guide-rebond 0.9s ease-in-out infinite; }
+.guide-halo { border: 3px solid rgb(37, 99, 235); animation: guide-halo 1.3s ease-out infinite; }
+.guide-secousse { animation: guide-secousse 0.5s ease-in-out 2; }
+@media (prefers-reduced-motion: reduce) {
+  .guide-rebond, .guide-halo, .guide-secousse { animation: none; }
+}

@@ -1,8 +1,11 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { ArrowLeft, ArrowRight, Check, CheckCircle2, Circle, Compass, Lightbulb, MapPin, Minus, PartyPopper, X } from 'lucide-react';
+import {
+  ArrowDown, ArrowLeft, ArrowRight, ArrowUp, BookOpen, Check, CheckCircle2, ChevronsUpDown, Circle, Compass, Keyboard, Lightbulb, MapPin, Minus,
+  MousePointerClick, PartyPopper, X,
+} from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
-import { avanceSeule, placerBulle, type Boite, type Chapitre, type Etape, type EtatEtape, type Importance } from '@/lib/guide';
+import { HAUTEUR_ETIQUETTE, etiquetteDessus, placerBulle, type Boite, type Chapitre, type Etape, type EtatEtape, type Geste, type Importance } from '@/lib/guide';
 
 const LIBELLE_IMPORTANCE: Record<Importance, string> = {
   obligatoire: 'Obligatoire', conseille: 'Conseillé', facultatif: 'Facultatif',
@@ -10,6 +13,8 @@ const LIBELLE_IMPORTANCE: Record<Importance, string> = {
 const COULEUR_IMPORTANCE: Record<Importance, string> = {
   obligatoire: 'bg-red-100 text-red-700', conseille: 'bg-sky-100 text-sky-700', facultatif: 'bg-muted text-muted-foreground',
 };
+
+const ICONE_GESTE: Record<Geste['type'], typeof Compass> = { cliquer: MousePointerClick, ecrire: Keyboard, choisir: ChevronsUpDown };
 
 const DEBORD = 6;
 
@@ -27,9 +32,41 @@ export const Projecteur = ({ boites, voile }: { boites: Boite[]; voile: boolean 
         <rect width="100%" height="100%" fill="white" />
         {trous.map(({ cle, ...r }) => <rect key={cle} {...r} fill="black" />)}
       </mask>
-      {voile && <rect width="100%" height="100%" fill="rgba(15, 23, 42, 0.38)" mask="url(#voile-guide)" />}
+      {voile && <rect width="100%" height="100%" fill="rgba(15, 23, 42, 0.5)" mask="url(#voile-guide)" />}
       {trous.map(({ cle, ...r }) => <rect key={cle} {...r} fill="none" strokeWidth={3} className="stroke-primary" />)}
     </svg>
+  );
+};
+
+/**
+ * « Cliquez ici », posé SUR l'écran, contre l'élément : l'ordre est là où la
+ * personne regarde, pas dans un texte à lire ailleurs.
+ */
+export const EtiquetteGeste = ({ geste, boite, insiste }: { geste: Pick<Geste, 'type' | 'etiquette'>; boite: Boite; insiste: boolean }) => {
+  const Icone = ICONE_GESTE[geste.type];
+  const dessus = etiquetteDessus(boite);
+  const centre = boite.left + Math.min(boite.width / 2, 150);
+  const largeur = typeof window === 'undefined' ? 1280 : window.innerWidth;
+  return (
+    <>
+      <div
+        aria-hidden data-guide-ui
+        className="guide-halo fixed z-[61] pointer-events-none rounded-xl print:hidden"
+        style={{ left: boite.left - DEBORD, top: boite.top - DEBORD, width: boite.width + DEBORD * 2, height: boite.height + DEBORD * 2 }}
+      />
+      <div
+        aria-hidden data-guide-ui
+        className="fixed z-[65] pointer-events-none print:hidden"
+        style={{ left: Math.max(90, Math.min(centre, largeur - 90)), top: dessus ? boite.top - DEBORD - HAUTEUR_ETIQUETTE : boite.top + boite.height + DEBORD + 4 }}
+      >
+        <div className={cn('guide-rebond flex -translate-x-1/2 items-center', dessus ? 'flex-col' : 'flex-col-reverse')}>
+          <span className={cn('flex items-center gap-2 whitespace-nowrap rounded-full bg-blue-600 px-4 py-2 text-[15px] font-bold text-white shadow-xl ring-2 ring-white', insiste && 'guide-secousse')}>
+            <Icone className="h-5 w-5" strokeWidth={2.5} />{geste.etiquette}
+          </span>
+          <span className={cn('h-0 w-0 border-x-8 border-x-transparent', dessus ? 'border-t-8 border-t-blue-600' : 'border-b-8 border-b-blue-600')} />
+        </div>
+      </div>
+    </>
   );
 };
 
@@ -37,23 +74,30 @@ interface Props {
   chapitre: Chapitre;
   etape: Etape;
   numero: number;
-  etat: EtatEtape | null;
+  etat: Omit<EtatEtape, 'elements' | 'geste'> | null;
+  geste: Pick<Geste, 'type' | 'etiquette' | 'libelle'> | null;
   boite: Boite | null;
   introuvable: boolean;
   cachee: boolean;
   bravo: boolean;
+  /** La personne hésite (elle attend, ou clique ailleurs) : on insiste. */
+  insiste: boolean;
   reduit: boolean;
   peutRejoindre: boolean;
   onContinuer: () => void;
   onPasser: () => void;
   onPrecedent: (() => void) | null;
   onRejoindre: () => void;
+  ailleurs: 'haut' | 'bas' | null;
+  onMontrer: () => void;
   onReduire: () => void;
   onArreter: () => void;
 }
 
+const VERBES: Record<Geste['type'], string> = { cliquer: 'Cliquez', ecrire: 'Écrivez', choisir: 'Choisissez' };
+
 export const BulleGuide = (p: Props) => {
-  const { chapitre, etape, etat, boite, introuvable, reduit, bravo } = p;
+  const { chapitre, etape, etat, geste, boite, introuvable, reduit, bravo } = p;
   const ref = useRef<HTMLDivElement>(null);
   const [place, setPlace] = useState<{ left: number; top: number } | null>(null);
 
@@ -80,15 +124,26 @@ export const BulleGuide = (p: Props) => {
     if (!el) return;
     const n = placerBulle(reduit || bravo ? null : boite, { width: el.offsetWidth, height: el.offsetHeight }, { width: window.innerWidth, height: window.innerHeight });
     setPlace(avant => (avant && avant.left === n.left && avant.top === n.top ? avant : n));
-  }, [boite, reduit, bravo, etape, etat, introuvable]);
+  }, [boite, reduit, bravo, etape, etat, geste, introuvable, p.ailleurs]);
 
-  const attend = avanceSeule(etape) && !etat?.satisfaite;
   const horsPage = etat?.horsPage ?? false;
+  const satisfaite = etat?.satisfaite ?? false;
   const total = chapitre.etapes.length;
   const versUnePage = etape.condition.type === 'page';
-  const aide = p.peutRejoindre && (horsPage || (versUnePage && attend && !introuvable));
+  const aLire = etape.condition.type === 'lire';
+  const aRemplir = etape.condition.type === 'rempli';
+  const aFaire = !aLire && !horsPage && !satisfaite;
+  const Icone = ICONE_GESTE[geste?.type ?? 'cliquer'];
+
+  const aide = p.peutRejoindre && versUnePage && aFaire && !introuvable;
   // Aller sur une page ne se « passe » pas (la suite s'y déroule), sauf s'il n'y a rien à ouvrir.
-  const passer = !horsPage && !etat?.satisfaite && (!versUnePage || introuvable);
+  const passer = aFaire && (!versUnePage || introuvable);
+
+  const importance = etape.importance && (
+    <span className={cn('rounded-full px-2 py-0.5 text-[11px] font-semibold flex-shrink-0', COULEUR_IMPORTANCE[etape.importance])}>
+      {LIBELLE_IMPORTANCE[etape.importance]}
+    </span>
+  );
 
   return (
     <div
@@ -112,69 +167,87 @@ export const BulleGuide = (p: Props) => {
           <div className="h-1 bg-muted"><div className="h-full bg-primary transition-all" style={{ width: `${Math.round((p.numero / total) * 100)}%` }} /></div>
 
           {bravo ? (
-            <div className="flex items-center gap-3 px-4 py-6" aria-live="polite">
-              <PartyPopper className="h-7 w-7 text-green-600" />
-              <p className="font-semibold text-green-700">Bravo, c'est enregistré !</p>
+            <div className="flex items-center gap-3 bg-green-600 px-4 py-6 text-white" aria-live="polite">
+              <PartyPopper className="h-8 w-8" />
+              <p className="text-lg font-bold">Bravo, c'est enregistré !</p>
             </div>
           ) : (
             <>
-              <div className="px-4 pt-3 pb-2 space-y-2 max-h-[46vh] overflow-y-auto" aria-live="polite">
-                <div className="flex items-start gap-2">
-                  <h2 className="flex-1 font-semibold leading-snug">{etape.titre}</h2>
-                  {etape.importance && (
-                    <span className={cn('rounded-full px-2 py-0.5 text-[11px] font-semibold flex-shrink-0', COULEUR_IMPORTANCE[etape.importance])}>
-                      {LIBELLE_IMPORTANCE[etape.importance]}
+              <div className="max-h-[46vh] overflow-y-auto" aria-live="polite">
+                {/* À FAIRE : un bloc bleu, l'ordre et rien d'autre. À LIRE : un titre calme. */}
+                {aFaire ? (
+                  <div className={cn('flex items-center gap-3 bg-blue-600 px-4 py-3 text-white', p.insiste && 'guide-secousse')}>
+                    <span className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-full bg-white text-blue-600">
+                      <Icone className="guide-rebond h-6 w-6" strokeWidth={2.5} />
                     </span>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-[11px] font-bold uppercase tracking-wider text-white/90">À vous de le faire</p>
+                      <h2 className="text-base font-bold leading-snug">
+                        {aRemplir ? (geste ? `${VERBES[geste.type]} : ${geste.libelle}` : etape.titre) : etape.titre}
+                      </h2>
+                    </div>
+                  </div>
+                ) : aRemplir && satisfaite && !horsPage ? (
+                  <div className="flex items-center gap-3 bg-green-600 px-4 py-3 text-white">
+                    <CheckCircle2 className="h-7 w-7 flex-shrink-0" />
+                    <h2 className="text-base font-bold leading-snug">C'est rempli. Vérifiez, puis continuez.</h2>
+                  </div>
+                ) : null}
+
+                <div className="space-y-2 px-4 pt-3 pb-2">
+                  <div className="flex items-start gap-2">
+                    {!aFaire && aLire && <BookOpen className="mt-0.5 h-4 w-4 flex-shrink-0 text-primary" />}
+                    {!aFaire || aRemplir ? <p className="flex-1 font-semibold leading-snug">{etape.titre}</p> : <span className="flex-1" />}
+                    {importance}
+                  </div>
+                  <p className="text-sm text-muted-foreground leading-relaxed">{etape.texte}</p>
+                  {etape.astuce && (
+                    <p className="flex gap-2 rounded-lg bg-amber-50 p-2 text-xs text-amber-900"><Lightbulb className="h-4 w-4 flex-shrink-0" />{etape.astuce}</p>
                   )}
+                  {!horsPage && !introuvable && etat && etat.champs.length > 1 && (
+                    <ul className="space-y-1">
+                      {etat.champs.map(c => (
+                        <li key={c.libelle} className={cn('flex items-center gap-2 text-sm', c.rempli ? 'text-green-700' : 'font-medium text-foreground')}>
+                          {c.rempli ? <CheckCircle2 className="h-4 w-4" /> : <Circle className="h-4 w-4 text-blue-600" />}{c.libelle}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                  {horsPage && <p className="rounded-lg bg-amber-100 p-2 text-sm font-medium text-amber-900">Vous avez changé de page : cette étape se passe ailleurs.</p>}
+                  {p.cachee && !horsPage && <p className="rounded-lg bg-amber-100 p-2 text-sm font-medium text-amber-900">Fermez d'abord la fenêtre ouverte.</p>}
+                  {introuvable && <p className="rounded-lg bg-amber-100 p-2 text-sm font-medium text-amber-900">{etape.absence ?? 'Cet élément n\'est pas affiché pour le moment.'}</p>}
                 </div>
-                <p className="text-sm text-muted-foreground leading-relaxed">{etape.texte}</p>
-                {etape.astuce && (
-                  <p className="flex gap-2 rounded-lg bg-amber-50 p-2 text-xs text-amber-900"><Lightbulb className="h-4 w-4 flex-shrink-0" />{etape.astuce}</p>
-                )}
-                {!horsPage && !introuvable && etat && etat.champs.length > 0 && (
-                  <ul className="space-y-1">
-                    {etat.champs.map(c => (
-                      <li key={c.libelle} className={cn('flex items-center gap-2 text-sm', c.rempli ? 'text-green-700' : 'text-foreground')}>
-                        {c.rempli ? <CheckCircle2 className="h-4 w-4" /> : <Circle className="h-4 w-4 text-muted-foreground" />}{c.libelle}
-                      </li>
-                    ))}
-                  </ul>
-                )}
-                {horsPage && (
-                  <p className="rounded-lg bg-muted p-2 text-xs">Cette étape se passe sur une autre page.</p>
-                )}
-                {p.cachee && !horsPage && (
-                  <p className="rounded-lg bg-muted p-2 text-xs">Fermez d'abord la fenêtre ouverte.</p>
-                )}
-                {introuvable && (
-                  <p className="rounded-lg bg-muted p-2 text-xs">{etape.absence ?? 'Cet élément n\'est pas affiché pour le moment.'}</p>
-                )}
               </div>
 
-              <div className="flex items-center gap-2 px-4 pb-3 pt-1">
-                {p.onPrecedent && (
-                  <Button type="button" variant="ghost" size="icon" className="h-8 w-8" onClick={p.onPrecedent} title="Étape précédente" aria-label="Étape précédente">
-                    <ArrowLeft className="h-4 w-4" />
+              <div className="space-y-1 px-4 pb-3 pt-1">
+                {horsPage && p.peutRejoindre && (
+                  <Button type="button" className="h-11 w-full gap-2 text-base font-semibold" onClick={p.onRejoindre}><MapPin className="h-4 w-4" />Y retourner</Button>
+                )}
+                {p.ailleurs && !horsPage && (
+                  <Button type="button" onClick={p.onMontrer} className="h-11 w-full gap-2 bg-blue-600 text-base font-semibold text-white hover:bg-blue-700">
+                    {p.ailleurs === 'bas' ? <ArrowDown className="guide-rebond h-5 w-5" /> : <ArrowUp className="guide-rebond h-5 w-5" />}
+                    C'est plus {p.ailleurs} : me montrer l'endroit
                   </Button>
                 )}
-                <div className="flex-1" />
-                {aide && (
-                  <Button type="button" variant={horsPage ? 'default' : 'ghost'} size="sm" className="gap-1.5" onClick={p.onRejoindre}>
-                    <MapPin className="h-3.5 w-3.5" />{horsPage ? 'Y retourner' : 'Je ne trouve pas'}
+                {!horsPage && !aFaire && (
+                  <Button type="button" onClick={p.onContinuer}
+                    className={cn('h-11 w-full gap-2 text-base font-semibold', !aLire && 'bg-green-600 text-white hover:bg-green-700')}>
+                    {p.numero === total ? <><Check className="h-5 w-5" />Terminer</> : <>{!aLire ? 'Continuer' : etape.importance ? 'C\'est bon, suivant' : 'J\'ai compris'}<ArrowRight className="h-5 w-5" /></>}
                   </Button>
                 )}
-                {passer && <Button type="button" variant="ghost" size="sm" onClick={p.onPasser}>Passer</Button>}
-                {!horsPage && !attend && (
-                  <Button type="button" size="sm" className="gap-1.5" onClick={p.onContinuer} disabled={etat !== null && !etat.satisfaite}>
-                    {p.numero === total ? <><Check className="h-4 w-4" />Terminer</> : <>Continuer<ArrowRight className="h-4 w-4" /></>}
-                  </Button>
+                {(p.onPrecedent || aide || passer) && (
+                  <div className="flex items-center">
+                    {p.onPrecedent && (
+                      <Button type="button" variant="ghost" size="sm" className="gap-1 px-2 text-xs text-muted-foreground" onClick={p.onPrecedent}>
+                        <ArrowLeft className="h-3.5 w-3.5" />Étape précédente
+                      </Button>
+                    )}
+                    <span className="flex-1" />
+                    {aide && <Button type="button" variant="ghost" size="sm" className="px-2 text-xs text-muted-foreground" onClick={p.onRejoindre}>Je ne trouve pas</Button>}
+                    {passer && <Button type="button" variant="ghost" size="sm" className="px-2 text-xs text-muted-foreground" onClick={p.onPasser}>Passer</Button>}
+                  </div>
                 )}
               </div>
-              {attend && !horsPage && !introuvable && (
-                <p className="flex items-center gap-2 border-t bg-primary/5 px-4 py-2 text-xs font-medium text-primary">
-                  <span className="h-2 w-2 rounded-full bg-primary animate-pulse motion-reduce:animate-none" />À vous de jouer : le guide avance dès que c'est fait.
-                </p>
-              )}
             </>
           )}
         </div>
