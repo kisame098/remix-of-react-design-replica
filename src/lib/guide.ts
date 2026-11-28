@@ -60,6 +60,8 @@ export interface Etape {
   absence?: string;
   /** « Passer » saute jusqu'à cette étape (par-dessus toute une création) ; 'fin' = fin du chapitre. */
   passerVers?: string;
+  /** Si cet élément est déjà à l'écran (une période existe…), l'étape est sautée comme par « Passer ». */
+  dejaFait?: string;
   permission?: PermissionKey;
   adminOnly?: boolean;
   mode?: ModeGestion;
@@ -262,7 +264,13 @@ export const placerBulle = (
   if (cible.left - MARGE * 2 - bulle.width >= 0) return { left: cible.left - MARGE - bulle.width, top };
   if (bas + MARGE * 2 + bulle.height <= vue.height) return { left, top: borne(bas + MARGE, bulle.height, vue.height) };
   if (cible.top - MARGE * 2 - bulle.height >= 0) return { left, top: cible.top - MARGE - bulle.height };
-  return enBas;
+  // Plus de place sur les côtés (une fenêtre occupe le centre) : un coin libre.
+  const coins = [
+    { left: MARGE, top: vue.height - bulle.height - MARGE }, { left: vue.width - bulle.width - MARGE, top: vue.height - bulle.height - MARGE },
+    { left: MARGE, top: MARGE }, { left: vue.width - bulle.width - MARGE, top: MARGE },
+  ];
+  const libre = coins.find(c => c.left + bulle.width <= cible.left || c.left >= droite || c.top + bulle.height <= cible.top || c.top >= bas);
+  return libre ?? enBas;
 };
 
 // ─── Progression ────────────────────────────────────────────────────────────

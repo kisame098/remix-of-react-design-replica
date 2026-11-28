@@ -98,7 +98,7 @@ export const DialogExamen = ({ open, onOpenChange, examen, nbExistants, periodes
           <DialogDescription>Un rattrapage se crée comme un nouvel examen : le premier passage reste en mémoire.</DialogDescription>
         </DialogHeader>
         <div className="flex-1 overflow-y-auto space-y-4 pt-1 pr-1 pb-1">
-          <div className="space-y-2">
+          <div className="space-y-2" data-guide="examen:nom">
             <Label htmlFor="examen-nom">Nom *</Label>
             <Input id="examen-nom" placeholder="Ex : Examen blanc n°1" value={name} onChange={e => setName(e.target.value)} />
             {!examen && (
@@ -109,7 +109,7 @@ export const DialogExamen = ({ open, onOpenChange, examen, nbExistants, periodes
               </div>
             )}
           </div>
-          <div className="space-y-2">
+          <div className="space-y-2" data-guide="examen:type">
             <Label>Type</Label>
             <div className="grid grid-cols-2 gap-2">
               {(Object.keys(LIBELLES_TYPE_EXAMEN) as TypeExamen[]).map(t => (
@@ -137,7 +137,7 @@ export const DialogExamen = ({ open, onOpenChange, examen, nbExistants, periodes
             </div>
           </div>
           <p className="text-xs text-muted-foreground -mt-2">Session, centre et président du jury figurent sur le relevé de notes de l'examen.</p>
-          <div className="space-y-2">
+          <div className="space-y-2" data-guide="examen:moyenne">
             <Label>Compte dans la moyenne de</Label>
             <Select value={periodeId} onValueChange={setPeriodeId}>
               <SelectTrigger aria-label="Période"><SelectValue /></SelectTrigger>
@@ -154,7 +154,7 @@ export const DialogExamen = ({ open, onOpenChange, examen, nbExistants, periodes
                   : 'Les notes restent propres à l\'examen (décision, mention), sans entrer dans les moyennes.'}
             </p>
           </div>
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-3 gap-3" data-guide="examen:seuil">
             <div className="space-y-2">
               <Label htmlFor="examen-seuil">Admis à partir de</Label>
               <div className="flex items-center gap-1.5">
@@ -180,7 +180,7 @@ export const DialogExamen = ({ open, onOpenChange, examen, nbExistants, periodes
               </span>
             </label>
           )}
-          <Button onClick={() => void valider()} className="w-full" disabled={enregistrement}>
+          <Button data-guide="examen:creer" onClick={() => void valider()} className="w-full" disabled={enregistrement}>
             {enregistrement && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
             {examen ? 'Enregistrer' : 'Créer l\'examen'}
           </Button>

@@ -88,6 +88,8 @@ interface Props {
   onPasser: () => void;
   onPrecedent: (() => void) | null;
   onRejoindre: () => void;
+  /** Version réduite au bloc « À vous de le faire » (la personne remplit une fenêtre). */
+  compacte: boolean;
   ailleurs: 'haut' | 'bas' | null;
   onMontrer: () => void;
   onReduire: () => void;
@@ -124,7 +126,7 @@ export const BulleGuide = (p: Props) => {
     if (!el) return;
     const n = placerBulle(reduit || bravo ? null : boite, { width: el.offsetWidth, height: el.offsetHeight }, { width: window.innerWidth, height: window.innerHeight });
     setPlace(avant => (avant && avant.left === n.left && avant.top === n.top ? avant : n));
-  }, [boite, reduit, bravo, etape, etat, geste, introuvable, p.ailleurs]);
+  }, [boite, reduit, bravo, etape, etat, geste, introuvable, p.ailleurs, p.compacte]);
 
   const horsPage = etat?.horsPage ?? false;
   const satisfaite = etat?.satisfaite ?? false;
@@ -157,7 +159,7 @@ export const BulleGuide = (p: Props) => {
           <Compass className="h-4 w-4" />Guide · {p.numero}/{total}
         </button>
       ) : (
-        <div className="w-[360px] max-w-full rounded-2xl border border-border bg-card text-card-foreground shadow-2xl overflow-hidden">
+        <div className={cn('max-w-full rounded-2xl border border-border bg-card text-card-foreground shadow-2xl overflow-hidden', p.compacte ? 'w-[280px]' : 'w-[360px]')}>
           <div className="flex items-center gap-2 px-4 pt-3 pb-2">
             <Compass className="h-4 w-4 text-primary flex-shrink-0" />
             <p className="flex-1 min-w-0 truncate text-xs font-medium text-muted-foreground">{chapitre.titre} · étape {p.numero} sur {total}</p>
@@ -194,7 +196,7 @@ export const BulleGuide = (p: Props) => {
                   </div>
                 ) : null}
 
-                <div className="space-y-2 px-4 pt-3 pb-2">
+                <div className={cn('space-y-2 px-4 pt-3 pb-2', p.compacte && 'hidden')}>
                   <div className="flex items-start gap-2">
                     {!aFaire && aLire && <BookOpen className="mt-0.5 h-4 w-4 flex-shrink-0 text-primary" />}
                     {!aFaire || aRemplir ? <p className="flex-1 font-semibold leading-snug">{etape.titre}</p> : <span className="flex-1" />}
@@ -219,7 +221,7 @@ export const BulleGuide = (p: Props) => {
                 </div>
               </div>
 
-              <div className="space-y-1 px-4 pb-3 pt-1">
+              <div className={cn('space-y-1 px-4 pb-3 pt-1', p.compacte && 'hidden')}>
                 {horsPage && p.peutRejoindre && (
                   <Button type="button" className="h-11 w-full gap-2 text-base font-semibold" onClick={p.onRejoindre}><MapPin className="h-4 w-4" />Y retourner</Button>
                 )}

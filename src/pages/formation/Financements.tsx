@@ -73,7 +73,7 @@ const Financements = () => {
           </p>
         </div>
         {directeur && (
-          <Button size="sm" className="gap-2" onClick={() => setEdition({})}>
+          <Button data-guide="financements:nouveau" size="sm" className="gap-2" onClick={() => setEdition({})}>
             <Plus className="h-3.5 w-3.5" />Nouvel organisme
           </Button>
         )}

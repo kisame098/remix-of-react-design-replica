@@ -169,6 +169,12 @@ describe('place de la bulle', () => {
       expect(p.top).toBeGreaterThanOrEqual(16); expect(p.top + bulle.height).toBeLessThanOrEqual(784);
     }
   });
+  it('une fenêtre au centre : la bulle va dans un coin libre, sans la couvrir', () => {
+    const fenetre = { left: 304, top: 40, width: 672, height: 720 };
+    const petite = { width: 280, height: 120 };
+    const p = placerBulle(fenetre, petite, { width: 1280, height: 800 });
+    expect(p.left + petite.width <= fenetre.left || p.left >= fenetre.left + fenetre.width).toBe(true);
+  });
   it('plusieurs champs : un seul cadre', () => {
     expect(reunir([{ left: 10, top: 10, width: 10, height: 10 }, { left: 50, top: 5, width: 10, height: 10 }])).toEqual({ left: 10, top: 5, width: 50, height: 15 });
     expect(reunir([])).toBeNull();

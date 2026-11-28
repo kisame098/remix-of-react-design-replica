@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { signalerGuide } from '@/lib/signauxGuide';
 import { type SaisieNote, type StatutNote } from '@/lib/formationPro';
 import { toast } from '@/hooks/use-toast';
 
@@ -74,6 +75,7 @@ export const useSauvegardeNotes = (fournies: ActionsSauvegarde) => {
         toast({ title: 'Erreur de sauvegarde', description: `${echecs} note${echecs > 1 ? 's' : ''} n'${echecs > 1 ? 'ont' : 'a'} pas pu être enregistrée${echecs > 1 ? 's' : ''}.`, variant: 'destructive' });
       } else if (enAttente.current.size === 0) {
         setEtat('saved');
+        signalerGuide('note-fp-enregistree');
       }
     });
     return chaine.current;

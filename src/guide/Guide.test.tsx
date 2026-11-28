@@ -100,6 +100,19 @@ describe('à faire ou à lire : cela se voit', () => {
   });
 });
 
+describe('déjà fait', () => {
+  it('une étape dont le résultat existe déjà est sautée toute seule', async () => {
+    localStorage.setItem(CLE, JSON.stringify({ choix: 'accepte', actif: true, chapitre: 'evaluations', etape: 'eva-periode', termines: [], maj: 5 }));
+    const avant = auth.school;
+    auth.school = { ...avant, management_mode: 'formation_pro' } as typeof auth.school;
+    render(<MemoryRouter initialEntries={['/formation/evaluations/p1']}>
+      <Routes><Route path="*" element={<div data-guide="evaluations:periodes">Semestre 1</div>} /></Routes><Guide />
+    </MemoryRouter>);
+    await waitFor(() => expect(enregistre().etape).toBe('eva-periodes'));
+    auth.school = avant;
+  });
+});
+
 describe('la personne pratique, le guide suit', () => {
   it('menu → fenêtre → champ → création, sans jamais agir à sa place', async () => {
     commencerA('classes', 'cla-ouvrir');

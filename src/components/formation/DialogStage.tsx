@@ -16,6 +16,7 @@ import { Loader2, Plus, Trash2, Building2, FileText } from 'lucide-react';
 import { BoutonDocument } from '@/components/formation/BoutonDocument';
 import { useDonneesDocuments } from '@/hooks/useDocumentsFormation';
 import { toast } from '@/hooks/use-toast';
+import { signalerGuide } from '@/lib/signauxGuide';
 import {
   type Stage, type Periode, type NiveauMatiere, trouverEntreprise, datesStageValides, noteStageValide,
   periodePourStage, dureeStageJours, libelleDuree,
@@ -112,7 +113,7 @@ export const DialogStage = ({ open, onOpenChange, promotionId, stage, eleveId, e
         note, appreciation: f.appreciation,
       };
       if (stage) await updateStage(stage.id, data);
-      else await addStage(promotionId, data);
+      else { await addStage(promotionId, data); signalerGuide('stage-cree'); }
       toast({ title: stage ? 'Stage enregistré' : 'Stage créé' });
       onOpenChange(false);
     } catch (err) {
@@ -145,7 +146,7 @@ export const DialogStage = ({ open, onOpenChange, promotionId, stage, eleveId, e
 
           <div className="flex-1 overflow-y-auto space-y-5 -mx-1 px-1">
             {!stage && !eleveId && (
-              <div className="space-y-2">
+              <div className="space-y-2" data-guide="stage:eleve">
                 <Label>Élève *</Label>
                 <Select value={f.eleveId} onValueChange={v => setF({ ...f, eleveId: v })}>
                   <SelectTrigger aria-label="Élève"><SelectValue placeholder="Choisir un élève" /></SelectTrigger>
@@ -156,7 +157,7 @@ export const DialogStage = ({ open, onOpenChange, promotionId, stage, eleveId, e
               </div>
             )}
 
-            <section className="space-y-3">
+            <section className="space-y-3" data-guide="stage:entreprise">
               <h3 className="text-sm font-semibold flex items-center gap-1.5"><Building2 className="h-4 w-4 text-primary" />Entreprise d'accueil</h3>
               <div className="space-y-1.5">
                 <Label htmlFor="stage-entreprise">Entreprise</Label>
@@ -207,7 +208,7 @@ export const DialogStage = ({ open, onOpenChange, promotionId, stage, eleveId, e
               <h3 className="text-sm font-semibold">Note</h3>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div className="space-y-1.5">
-                  <Label htmlFor="stage-note">Note sur 20</Label>
+                  <Label htmlFor="stage-note" data-guide="stage:note">Note sur 20</Label>
                   <Input id="stage-note" inputMode="decimal" placeholder="—" value={f.note} onChange={e => setF({ ...f, note: e.target.value })} />
                 </div>
                 <div className="space-y-1.5 sm:col-span-2">
@@ -307,7 +308,7 @@ export const DialogStage = ({ open, onOpenChange, promotionId, stage, eleveId, e
                 </BoutonDocument>
               </div>
             ) : <span />}
-            <Button onClick={() => void enregistrer()} disabled={enregistrement}>
+            <Button data-guide="stage:creer" onClick={() => void enregistrer()} disabled={enregistrement}>
               {enregistrement && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
               {stage ? 'Enregistrer' : 'Créer le stage'}
             </Button>

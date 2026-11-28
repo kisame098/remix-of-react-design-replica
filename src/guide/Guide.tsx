@@ -6,7 +6,7 @@ import { modeDeLEcole } from '@/lib/modeGestion';
 import { toast } from '@/hooks/use-toast';
 import {
   avanceSeule, chapitreSuivant, etapeApresPasser, etapeApresSignal, etapeDeReprise, etapePrecedente, etapeSuivante,
-  etiquetteDessus, HAUTEUR_ETIQUETTE, lireEtat, marquerTermine, pageOuAller, parcoursPour, rang, reunir,
+  etiquetteDessus, HAUTEUR_ETIQUETTE, lireEtat, marquerTermine, pageOuAller, trouver, parcoursPour, rang, reunir,
   type Boite, type Chapitre, type Etape, type EtatEtape, type Geste, type Progression,
 } from '@/lib/guide';
 import { EVENEMENT_OUVRIR, EVENEMENT_SIGNAL, type SignalGuide } from '@/lib/signauxGuide';
@@ -40,6 +40,8 @@ interface Ecran {
   sansVoile: boolean;
   /** Une fenêtre ouverte cache l'élément à utiliser. */
   cachee: boolean;
+  /** La personne remplit la fenêtre que l'étape a ouverte : la bulle se fait petite, dans un coin. */
+  fenetre: Boite | null;
   /** Absente depuis assez longtemps pour le dire. */
   introuvable: boolean;
 }
@@ -191,6 +193,7 @@ export default function Guide() {
     let amene: HTMLElement | null = null;
     let ailleursDepuis: number | null = null;
     const lire = () => {
+      if (etape.dejaFait && !manuel.current && trouver(etape.dejaFait)) { allerA(etapeApresPasser(chapitre, etape.id)); return; }
       const etat = lireEtat(etape, pathname);
       if (avanceSeule(etape) && etat.satisfaite && !manuel.current) { allerA(etapeSuivante(chapitre, etape.id)); return; }
 
@@ -224,7 +227,8 @@ export default function Guide() {
         boites,
         liste: listeOuverte ? boiteDe(listeOuverte) : null,
         sansVoile: !!listeOuverte || !!dialogue,
-        cachee: !!dialogue && etat.elements.length > 0 && joignables.length === 0,
+        cachee: !!dialogue && etat.elements.length > 0 && joignables.length === 0 && etape.condition.type !== 'signal',
+        fenetre: dialogue && etape.condition.type === 'signal' && joignables.length === 0 ? boiteDe(dialogue) : null,
         introuvable: etat.absente && absentDepuis.current !== null && Date.now() - absentDepuis.current > PATIENCE_MS,
       };
       setEcran(avant => (JSON.stringify(avant) === JSON.stringify(suivant) ? avant : suivant));
@@ -243,6 +247,7 @@ export default function Guide() {
   // Ce que la bulle ne doit pas cacher : les éléments, la liste ouverte et l'étiquette.
   const zone = useMemo(() => {
     if (!ecran || ecran.etat.horsPage || ecran.ailleurs) return null;
+    if (ecran.fenetre) return ecran.fenetre;
     const b = ecran.boiteGeste;
     const etiquette = b && { left: b.left, top: etiquetteDessus(b) ? b.top - HAUTEUR_ETIQUETTE - 6 : b.top + b.height, width: b.width, height: HAUTEUR_ETIQUETTE + 6 };
     return reunir([...ecran.boites, ...(ecran.liste ? [ecran.liste] : []), ...(etiquette ? [etiquette] : [])]);
@@ -336,6 +341,7 @@ export default function Guide() {
             onPasser={() => allerA(etapeApresPasser(chapitre, etape.id))}
             onPrecedent={etapePrecedente(chapitre, etape.id) ? () => allerA(etapePrecedente(chapitre, etape.id), true) : null}
             onRejoindre={rejoindre}
+            compacte={!!ecran?.fenetre}
             ailleurs={ecran?.proposerMontrer ? ecran.ailleurs : null} onMontrer={() => principalRef.current && amenerAlEcran(principalRef.current)}
             onReduire={() => setReduit(r => !r)}
             onArreter={arreter}

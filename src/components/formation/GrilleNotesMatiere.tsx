@@ -171,7 +171,7 @@ export const GrilleNotesMatiere = ({ promotionId, periode, matiere, categories, 
         </div>
       </div>
 
-      <div ref={tableRef} className="rounded-lg border overflow-x-auto">
+      <div ref={tableRef} data-guide="evaluations:grille" className="rounded-lg border overflow-x-auto">
         <table className="w-full text-sm border-collapse">
           <thead>
             <tr className="bg-muted/40">

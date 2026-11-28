@@ -10,6 +10,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { toast } from '@/hooks/use-toast';
+import { signalerGuide } from '@/lib/signauxGuide';
 import {
   CLE_FINANCEMENTS, erreurOrganisme, lireReglagesFinancements, nouvelId, organisme3FPT, organismeVierge,
   type Organisme,
@@ -201,7 +202,7 @@ export const ActivationFinancements = () => {
           </div>
           <div className="flex items-center gap-2 flex-shrink-0">
             {saving && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
-            <Switch checked={reglages.actif} onCheckedChange={v => void basculer(v)} disabled={saving} aria-label="Activer les financements" />
+            <Switch data-guide="financements:activation" checked={reglages.actif} onCheckedChange={v => void basculer(v)} disabled={saving} aria-label="Activer les financements" />
           </div>
         </div>
       </CardHeader>
@@ -243,6 +244,7 @@ export const DialogOrganisme = ({ organisme, open, onOpenChange, onEnregistre }:
       const organismes = organisme ? reglages.organismes.map(x => (x.id === o.id ? o : x)) : [...reglages.organismes, o];
       await updateSchoolSettings({ [CLE_FINANCEMENTS]: { actif: true, organismes } });
       toast({ title: organisme ? 'Organisme modifié' : 'Organisme créé', description: o.nom });
+      if (!organisme) signalerGuide('organisme-cree');
       onEnregistre?.(o);
       onOpenChange(false);
     } catch (e) {
