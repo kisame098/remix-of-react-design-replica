@@ -12,6 +12,11 @@ import type { Chapitre } from '@/lib/guide';
 /** Une création dans une fenêtre : le nom d'un chemin de notes /notes/<période>/<classe>. */
 const PAGE_CLASSE_NOTES = /^\/notes\/[^/]+\/[^/]+$/;
 const PAGE_SAISIE = /^\/notes\/[^/]+\/[^/]+\/(elementaire\/)?[^/]+$/;
+const PAGE_FORMATION = /^\/formation\/formations\/[^/]+$/;
+const PAGE_PROGRAMME = /^\/formation\/formations\/[^/]+\/niveaux\/[^/]+$/;
+const PAGE_EVALUATIONS = /^\/formation\/evaluations\/[^/]+$/;
+const PAGE_EXAMENS = /^\/formation\/examens\/[^/]+$/;
+const PAGE_STAGES = /^\/formation\/stages\/[^/]+$/;
 
 export const CHAPITRES: Chapitre[] = [
   // ─── 1. Repères ───────────────────────────────────────────────────────────
@@ -285,10 +290,10 @@ export const CHAPITRES: Chapitre[] = [
     ],
   },
 
-  // ─── 4 bis. Formations et promotions (formation professionnelle) ──────────
+  // ─── 4 bis. Formation professionnelle : le catalogue ──────────────────────
   {
-    id: 'formations', titre: 'Formations et promotions', icone: 'formations', permission: 'grades', mode: 'formation_pro',
-    description: 'Votre catalogue de formations, puis les groupes d\'apprenants.',
+    id: 'formations', titre: 'Créer une formation', icone: 'formations', permission: 'grades', mode: 'formation_pro',
+    description: 'Votre catalogue : une formation, ses niveaux et le programme de chaque niveau.',
     etapes: [
       {
         id: 'for-ouvrir', titre: 'Ouvrez « Formations »', champs: [{ cible: 'menu:/formation/formations' }],
@@ -296,30 +301,153 @@ export const CHAPITRES: Chapitre[] = [
         condition: { type: 'page', chemin: '/formation/formations' },
       },
       {
-        id: 'for-ajouter', titre: 'Ajoutez une formation', page: '/formation/formations', champs: [{ cible: 'formation:ajouter' }],
-        texte: 'Cliquez sur « Ajouter une formation », remplissez la fenêtre et enregistrez. Une formation (« CAP Restauration ») contient des niveaux (« CAP 1 », « CAP 2 »…).',
-        condition: { type: 'signal', nom: 'formation-creee' },
-      },
-      {
-        id: 'for-niveaux', titre: 'Cliquez sur le nom de la formation', page: '/formation/formations',
-        texte: 'Cliquez sur le nom de la formation pour l\'ouvrir : vous y créez ses niveaux, et dans chaque niveau ses matières avec coefficients. Sans niveau, on ne peut pas ouvrir de promotion.',
-        condition: { type: 'page', chemin: /^\/formation\/formations\/[^/]+/ },
-      },
-      {
-        id: 'for-niveau-creer', titre: 'Créez au moins un niveau',
-        texte: 'Ajoutez un niveau sur cette page, puis continuez. Vous pourrez compléter ses matières plus tard.',
+        id: 'for-principe', titre: 'Formation, niveau, programme', page: '/formation/formations',
+        texte: 'Une formation (« CAP Restauration ») contient des niveaux (« CAP 1 », « CAP 2 »…). Chaque niveau a son programme : ses matières, leurs coefficients et leurs heures. Les élèves, eux, sont rangés dans des promotions.',
         condition: { type: 'lire' },
       },
       {
-        id: 'for-promos', titre: 'Ouvrez « Promotions »', champs: [{ cible: 'menu:/formation/promotions' }],
-        texte: 'Une promotion, c\'est le groupe d\'apprenants qui suit un niveau ensemble.',
+        id: 'for-modeles', titre: 'Partir d\'un modèle', importance: 'facultatif', adminOnly: true, page: '/formation/formations', champs: [{ cible: 'formation:modeles' }],
+        texte: 'SenClass fournit des formations hôtellerie-restauration toutes prêtes, avec leurs matières. Vous pourrez les modifier. Si l\'une vous convient, importez-la plus tard ; pour apprendre, nous en créons une ensemble.',
+        condition: { type: 'lire' },
+      },
+      {
+        id: 'for-ajouter', titre: 'Cliquez sur « Ajouter une formation »', page: '/formation/formations', champs: [{ cible: 'formation:ajouter' }],
+        texte: 'Une fenêtre va s\'ouvrir. Créez une vraie formation de votre école : elle restera.',
+        condition: { type: 'visible', cible: 'formation:nom' }, passerVers: 'for-gerer',
+      },
+      {
+        id: 'for-nom', titre: 'Le nom de la formation', importance: 'obligatoire', page: '/formation/formations', champs: [{ cible: 'formation:nom', libelle: 'Nom de la formation' }],
+        texte: 'Par exemple « CAP Restauration » ou « BT Hôtellerie ».',
+        condition: { type: 'rempli' }, siAbsent: 'for-ajouter',
+      },
+      {
+        id: 'for-details', titre: 'Le diplôme et la durée', importance: 'conseille', page: '/formation/formations', champs: [{ cible: 'formation:details' }],
+        texte: 'Type de diplôme, intitulé et option sont imprimés sur les relevés et les diplômes. Durée et niveau d\'entrée servent à présenter la formation. Remplissez ce que vous connaissez.',
+        condition: { type: 'lire' }, siAbsent: 'for-ajouter',
+      },
+      {
+        id: 'for-creer', titre: 'Créez la formation', importance: 'obligatoire', page: '/formation/formations', champs: [{ cible: 'formation:creer' }],
+        texte: 'Cliquez sur « Créer ».',
+        condition: { type: 'signal', nom: 'formation-creee' }, siAbsent: 'for-ajouter',
+      },
+      {
+        id: 'for-gerer', titre: 'Ouvrez-la : « Gérer »', page: '/formation/formations', champs: [{ cible: 'formation:gerer' }],
+        texte: 'Cliquez sur « Gérer » sous votre formation, pour lui donner ses niveaux.',
+        absence: 'Aucune formation pour l\'instant : revenez en arrière pour en créer une.',
+        condition: { type: 'page', chemin: PAGE_FORMATION }, passerVers: 'fin',
+      },
+      {
+        id: 'for-niveau-ajouter', titre: 'Cliquez sur « Ajouter un niveau »', page: PAGE_FORMATION, champs: [{ cible: 'niveau:ajouter' }],
+        texte: 'Sans niveau, on ne peut ni écrire de programme ni ouvrir de promotion.',
+        condition: { type: 'visible', cible: 'niveau:nom' }, passerVers: 'for-formule',
+      },
+      {
+        id: 'for-niveau-nom', titre: 'Le nom du niveau', importance: 'obligatoire', page: PAGE_FORMATION, champs: [{ cible: 'niveau:nom', libelle: 'Nom du niveau' }],
+        texte: '« CAP 1 » pour une première année ; « Cycle unique » si la formation tient en une seule étape.',
+        astuce: 'Pour les années suivantes, inutile de tout refaire : le bouton « Dupliquer » d\'un niveau copie son programme.',
+        condition: { type: 'rempli' }, siAbsent: 'for-niveau-ajouter',
+      },
+      {
+        id: 'for-niveau-creer', titre: 'Créez le niveau', importance: 'obligatoire', page: PAGE_FORMATION, champs: [{ cible: 'niveau:creer' }],
+        texte: 'Cliquez sur « Créer ».',
+        condition: { type: 'signal', nom: 'niveau-cree' }, siAbsent: 'for-niveau-ajouter',
+      },
+      {
+        id: 'for-formule', titre: 'La formule d\'évaluation', adminOnly: true, page: PAGE_FORMATION, champs: [{ cible: 'formation:formule' }],
+        texte: 'Elle dit comment se calcule la moyenne : contrôle continu, TP, examens… et le poids de chacun. Le total doit faire 100 %. Le bouton « Utiliser la formule courante » en propose une, que vous pouvez modifier.',
+        astuce: 'Sans formule, aucune moyenne ne peut être calculée dans Évaluations.',
+        condition: { type: 'lire' },
+      },
+      {
+        id: 'for-programme', titre: 'Cliquez sur « Gérer le programme »', adminOnly: true, page: PAGE_FORMATION, champs: [{ cible: 'niveau:programme' }],
+        texte: 'Le programme, ce sont les matières enseignées à ce niveau.',
+        absence: 'Ce niveau n\'apparaît pas encore : créez-en un ci-dessus.',
+        condition: { type: 'page', chemin: PAGE_PROGRAMME }, passerVers: 'fin',
+      },
+      {
+        id: 'for-matiere-ajouter', titre: 'Cliquez sur « Ajouter une matière »', adminOnly: true, page: PAGE_PROGRAMME, champs: [{ cible: 'programme:ajouter' }],
+        texte: 'Ajoutons la première ; vous ferez les autres de la même façon.',
+        condition: { type: 'visible', cible: 'matiere:nom' }, passerVers: 'for-fin',
+      },
+      {
+        id: 'for-matiere-type', titre: 'Obligatoire, facultative ou au choix', adminOnly: true, page: PAGE_PROGRAMME, champs: [{ cible: 'matiere:type' }],
+        texte: '« Obligatoire » : tous les élèves la suivent. « Facultative » : seulement ceux qui la prennent. « Au choix » : l\'élève choisit une option parmi plusieurs (Cuisine ou Pâtisserie, par exemple).',
+        condition: { type: 'lire' }, siAbsent: 'for-matiere-ajouter',
+      },
+      {
+        id: 'for-matiere-nom', titre: 'Le nom de la matière', importance: 'obligatoire', adminOnly: true, page: PAGE_PROGRAMME, champs: [{ cible: 'matiere:nom', libelle: 'Nom de la matière' }],
+        texte: 'Par exemple « TP Cuisine ». Un nom déjà utilisé dans l\'école est repris tel quel.',
+        condition: { type: 'rempli' }, siAbsent: 'for-matiere-ajouter',
+      },
+      {
+        id: 'for-matiere-coef', titre: 'Le coefficient', importance: 'obligatoire', adminOnly: true, page: PAGE_PROGRAMME, champs: [{ cible: 'matiere:coef', libelle: 'Coefficient' }],
+        texte: 'Son poids dans la moyenne générale. Le volume horaire, à côté, est facultatif.',
+        condition: { type: 'rempli' }, siAbsent: 'for-matiere-ajouter',
+      },
+      {
+        id: 'for-matiere-nature', titre: 'La nature', adminOnly: true, page: PAGE_PROGRAMME, champs: [{ cible: 'matiere:nature' }],
+        texte: 'Choisissez « Stage » pour la matière qui recevra la note du stage en entreprise : la rubrique Stages la remplira toute seule.',
+        condition: { type: 'lire' }, siAbsent: 'for-matiere-ajouter',
+      },
+      {
+        id: 'for-matiere-valider', titre: 'Ajoutez la matière', importance: 'obligatoire', adminOnly: true, page: PAGE_PROGRAMME, champs: [{ cible: 'matiere:ajouter' }],
+        texte: 'Cliquez sur « Ajouter ».',
+        condition: { type: 'signal', nom: 'matiere-ajoutee' }, siAbsent: 'for-matiere-ajouter',
+      },
+      {
+        id: 'for-fin', titre: 'Le programme se complète ici',
+        texte: 'Ajoutez les autres matières de la même façon. Le crayon modifie une matière, la corbeille la retire. Les promotions de ce niveau reprendront ce programme toutes seules.',
+        condition: { type: 'lire' },
+      },
+    ],
+  },
+
+  // ─── 4 ter. Promotions ────────────────────────────────────────────────────
+  {
+    id: 'promotions', titre: 'Ouvrir une promotion', icone: 'classes', permission: 'grades', mode: 'formation_pro',
+    description: 'Le groupe d\'apprenants qui suit un niveau ensemble.',
+    etapes: [
+      {
+        id: 'prm-ouvrir', titre: 'Ouvrez « Promotions »', champs: [{ cible: 'menu:/formation/promotions' }],
+        texte: 'Cliquez sur Promotions dans le menu de gauche.',
         condition: { type: 'page', chemin: '/formation/promotions' },
       },
       {
-        id: 'for-promo-creer', titre: 'Créez une promotion', page: '/formation/promotions', champs: [{ cible: 'promotion:nouvelle' }],
-        texte: 'Cliquez sur « Nouvelle promotion », choisissez le niveau, donnez un nom et enregistrez. Les matières du niveau sont reprises automatiquement.',
-        absence: 'Le bouton est inactif tant qu\'aucun niveau n\'existe : créez-en un dans Formations.',
-        condition: { type: 'signal', nom: 'promotion-creee' },
+        id: 'prm-nouvelle', titre: 'Cliquez sur « Nouvelle promotion »', page: '/formation/promotions', champs: [{ cible: 'promotion:nouvelle' }],
+        texte: 'Une promotion, c\'est une « classe » de la formation professionnelle : les élèves y sont inscrits, notés et facturés.',
+        absence: 'Le bouton reste gris tant qu\'aucun niveau n\'existe : faites d\'abord le chapitre « Créer une formation ».',
+        condition: { type: 'visible', cible: 'promotion:niveau' }, passerVers: 'prm-liste',
+      },
+      {
+        id: 'prm-niveau', titre: 'Le niveau suivi', importance: 'obligatoire', page: '/formation/promotions', champs: [{ cible: 'promotion:niveau', libelle: 'Niveau suivi' }],
+        texte: 'La promotion reprend tout le programme de ce niveau : rien à ressaisir.',
+        condition: { type: 'rempli' }, siAbsent: 'prm-nouvelle',
+      },
+      {
+        id: 'prm-nom', titre: 'Le nom de la promotion', importance: 'obligatoire', page: '/formation/promotions', champs: [{ cible: 'promotion:nom', libelle: 'Nom de la promotion' }],
+        texte: 'SenClass en propose un à partir du niveau et de la date de début ; vous pouvez le changer.',
+        condition: { type: 'rempli' }, siAbsent: 'prm-nouvelle',
+      },
+      {
+        id: 'prm-effectif', titre: 'L\'effectif maximum', importance: 'obligatoire', page: '/formation/promotions', champs: [{ cible: 'promotion:effectif', libelle: 'Effectif maximum' }],
+        texte: 'Une fois atteint, on ne peut plus y inscrire personne.',
+        condition: { type: 'rempli' }, siAbsent: 'prm-nouvelle',
+      },
+      {
+        id: 'prm-rythme', titre: 'Jour ou soir, et les dates', importance: 'facultatif', page: '/formation/promotions', champs: [{ cible: 'promotion:rythme' }, { cible: 'promotion:dates' }],
+        texte: 'Cours du jour ou du soir. Les dates de début et de fin de la promotion sont facultatives.',
+        condition: { type: 'lire' }, siAbsent: 'prm-nouvelle',
+      },
+      {
+        id: 'prm-creer', titre: 'Créez la promotion', importance: 'obligatoire', page: '/formation/promotions', champs: [{ cible: 'promotion:creer' }],
+        texte: 'Cliquez sur « Créer ».',
+        condition: { type: 'signal', nom: 'promotion-creee' }, siAbsent: 'prm-nouvelle',
+      },
+      {
+        id: 'prm-liste', titre: 'Vos promotions', page: '/formation/promotions', champs: [{ cible: 'promotion:liste' }],
+        texte: 'Elles sont rangées par formation et par niveau. « Formateurs » désigne qui enseigne chaque matière : ce formateur saisira lui-même ses notes depuis son portail.',
+        absence: 'Aucune promotion pour l\'instant.',
+        condition: { type: 'lire' },
       },
     ],
   },
@@ -604,6 +732,257 @@ export const CHAPITRES: Chapitre[] = [
       {
         id: 'not-fin', titre: 'Et ensuite ?',
         texte: 'De retour sur la page de la classe, le bouton « Classement » donne les rangs et les bulletins à imprimer.',
+        condition: { type: 'lire' },
+      },
+    ],
+  },
+
+  // ─── 9 bis. Évaluations (formation professionnelle) ──────────────────────
+  {
+    id: 'evaluations', titre: 'Noter les apprenants', icone: 'notes', permission: 'grades', mode: 'formation_pro',
+    description: 'Périodes, notes par matière, moyennes et bulletins d\'une promotion.',
+    etapes: [
+      {
+        id: 'eva-ouvrir', titre: 'Ouvrez « Évaluations »', champs: [{ cible: 'menu:/formation/evaluations' }],
+        texte: 'Cliquez sur Évaluations dans le menu de gauche.',
+        condition: { type: 'page', chemin: '/formation/evaluations' },
+      },
+      {
+        id: 'eva-promo', titre: 'Choisissez une promotion', page: '/formation/evaluations', champs: [{ cible: 'grille:promotion' }],
+        texte: 'Chaque promotion a son propre calendrier : on la choisit d\'abord.',
+        absence: 'Aucune promotion : faites d\'abord le chapitre « Ouvrir une promotion ».',
+        condition: { type: 'page', chemin: PAGE_EVALUATIONS }, passerVers: 'fin',
+      },
+      {
+        id: 'eva-periode', titre: 'Créez une période', page: PAGE_EVALUATIONS, champs: [{ cible: 'evaluations:nouvelle-periode' }],
+        texte: 'Semestre, trimestre… Les notes sont rangées dedans.',
+        condition: { type: 'visible', cible: 'periode-fp:nom' }, passerVers: 'eva-periodes', dejaFait: 'evaluations:periodes',
+      },
+      {
+        id: 'eva-periode-nom', titre: 'Son nom', importance: 'obligatoire', page: PAGE_EVALUATIONS, champs: [{ cible: 'periode-fp:nom', libelle: 'Nom de la période' }],
+        texte: 'Cliquez sur une suggestion (« Semestre 1 ») ou écrivez le vôtre. Les dates sont facultatives.',
+        condition: { type: 'rempli' }, siAbsent: 'eva-periode',
+      },
+      {
+        id: 'eva-periode-creer', titre: 'Créez la période', importance: 'obligatoire', page: PAGE_EVALUATIONS, champs: [{ cible: 'periode-fp:creer' }],
+        texte: 'Cliquez sur « Créer la période ».',
+        condition: { type: 'signal', nom: 'periode-fp-creee' }, siAbsent: 'eva-periode',
+      },
+      {
+        id: 'eva-periodes', titre: 'Les périodes de la promotion', page: PAGE_EVALUATIONS, champs: [{ cible: 'evaluations:periodes' }],
+        texte: 'Cliquez sur une période pour la voir ; le « + » en ajoute une, le crayon la modifie.',
+        absence: 'Pas encore de période, ou la formation n\'a pas de formule d\'évaluation : le directeur la définit sur la page de la formation.',
+        condition: { type: 'lire' },
+      },
+      {
+        id: 'eva-matieres', titre: 'Une matière à la fois', page: PAGE_EVALUATIONS, champs: [{ cible: 'evaluations:matieres' }],
+        texte: 'À gauche, les matières du programme : un point vert quand des notes sont saisies. Cliquez sur une matière.',
+        absence: 'Les matières s\'affichent quand la promotion a des élèves, une période, une formule et un programme.',
+        condition: { type: 'lire' },
+      },
+      {
+        id: 'eva-formateur', titre: 'Le formateur de la matière', importance: 'facultatif', page: PAGE_EVALUATIONS, champs: [{ cible: 'evaluations:formateur' }],
+        texte: 'Choisissez qui enseigne cette matière : il pourra saisir ses notes lui-même, depuis son portail.',
+        condition: { type: 'lire' },
+      },
+      {
+        id: 'eva-noter', titre: 'Ajoutez une note, puis saisissez-la', importance: 'facultatif', page: PAGE_EVALUATIONS, champs: [{ cible: 'evaluations:grille' }],
+        action: 'Le « + » ajoute une note, puis écrivez',
+        texte: 'Chaque colonne est une catégorie de la formule (contrôle continu, TP…). Le « + » ajoute une évaluation ; tapez les notes dans les cases : elles s\'enregistrent toutes seules. Une case vide ne compte jamais comme un zéro.',
+        condition: { type: 'signal', nom: 'note-fp-enregistree' },
+      },
+      {
+        id: 'eva-recap', titre: 'Le récapitulatif et les bulletins', page: PAGE_EVALUATIONS, champs: [{ cible: 'evaluations:recap' }],
+        texte: '« Récapitulatif » donne les moyennes de chaque matière, la moyenne générale et le rang. C\'est là que se trouve le bouton « Bulletins de la promotion ».',
+        condition: { type: 'lire' },
+      },
+    ],
+  },
+
+  // ─── 9 ter. Examens ───────────────────────────────────────────────────────
+  {
+    id: 'examens', titre: 'Organiser un examen', icone: 'notes', permission: 'grades', mode: 'formation_pro',
+    description: 'Examen blanc ou officiel : épreuves, notes, décisions et relevés.',
+    etapes: [
+      {
+        id: 'exa-ouvrir', titre: 'Ouvrez « Examens »', champs: [{ cible: 'menu:/formation/examens' }],
+        texte: 'Cliquez sur Examens dans le menu de gauche.',
+        condition: { type: 'page', chemin: '/formation/examens' },
+      },
+      {
+        id: 'exa-promo', titre: 'Choisissez une promotion', page: '/formation/examens', champs: [{ cible: 'grille:promotion' }],
+        texte: 'Ses élèves deviendront les candidats de l\'examen.',
+        absence: 'Aucune promotion : faites d\'abord le chapitre « Ouvrir une promotion ».',
+        condition: { type: 'page', chemin: PAGE_EXAMENS }, passerVers: 'fin',
+      },
+      {
+        id: 'exa-creer', titre: 'Créez un examen', page: PAGE_EXAMENS, champs: [{ cible: 'examens:creer' }],
+        texte: 'Une fenêtre va s\'ouvrir.',
+        condition: { type: 'visible', cible: 'examen:nom' }, passerVers: 'exa-epreuves', dejaFait: 'examens:actions',
+      },
+      {
+        id: 'exa-nom', titre: 'Le nom de l\'examen', importance: 'obligatoire', page: PAGE_EXAMENS, champs: [{ cible: 'examen:nom', libelle: 'Nom de l\'examen' }],
+        texte: 'Cliquez sur une suggestion ou écrivez-le : « Examen blanc n°1 », par exemple.',
+        condition: { type: 'rempli' }, siAbsent: 'exa-creer',
+      },
+      {
+        id: 'exa-type', titre: 'Le type', importance: 'obligatoire', page: PAGE_EXAMENS, champs: [{ cible: 'examen:type' }],
+        texte: 'Cliquez sur le bon type. Il décide dans quelle catégorie de la formule (examen blanc, examen final…) ses notes compteront.',
+        condition: { type: 'lire' }, siAbsent: 'exa-creer',
+      },
+      {
+        id: 'exa-moyenne', titre: 'Dans quelle moyenne ?', importance: 'conseille', page: PAGE_EXAMENS, champs: [{ cible: 'examen:moyenne' }],
+        texte: 'Choisissez la période dont la moyenne recevra ces notes. Le texte dessous dit exactement ce qui se passera.',
+        condition: { type: 'lire' }, siAbsent: 'exa-creer',
+      },
+      {
+        id: 'exa-seuil', titre: 'La note d\'admission et les dates', page: PAGE_EXAMENS, champs: [{ cible: 'examen:seuil' }],
+        texte: 'À partir de quelle moyenne un candidat est admis, et les dates de l\'examen. Cochez « Préparer les épreuves à partir du programme » s\'il apparaît : les épreuves seront créées pour vous.',
+        condition: { type: 'lire' }, siAbsent: 'exa-creer',
+      },
+      {
+        id: 'exa-valider', titre: 'Créez l\'examen', importance: 'obligatoire', page: PAGE_EXAMENS, champs: [{ cible: 'examen:creer' }],
+        texte: 'Les élèves de la promotion sont inscrits comme candidats.',
+        condition: { type: 'signal', nom: 'examen-cree' }, siAbsent: 'exa-creer',
+      },
+      {
+        id: 'exa-epreuves', titre: 'Les épreuves', page: PAGE_EXAMENS, champs: [{ cible: 'examens:epreuves' }],
+        texte: 'Sans épreuve, rien à noter : « Reprendre le programme » crée une épreuve par matière, avec ses coefficients. Seul le directeur définit les épreuves.',
+        absence: 'Les épreuves sont déjà là : vous pouvez continuer.',
+        condition: { type: 'lire' },
+      },
+      {
+        id: 'exa-saisie', titre: 'Saisir les notes', page: PAGE_EXAMENS, champs: [{ cible: 'examens:matieres' }],
+        texte: 'Cliquez sur une matière à gauche et tapez les notes : elles s\'enregistrent toutes seules. « Résultats » montre les moyennes, les décisions (admis, ajourné, refusé) et le taux de réussite.',
+        condition: { type: 'lire' },
+      },
+      {
+        id: 'exa-actions', titre: 'Candidats, convocations, verrouillage', page: PAGE_EXAMENS, champs: [{ cible: 'examens:actions' }],
+        texte: '« Candidats » ajoute ou retire des élèves. « Convocations » les imprime avec le planning. « Verrouiller les résultats » fige tout quand c\'est terminé : seul le directeur peut déverrouiller.',
+        condition: { type: 'lire' },
+      },
+    ],
+  },
+
+  // ─── 9 quater. Stages ─────────────────────────────────────────────────────
+  {
+    id: 'stages', titre: 'Suivre les stages', icone: 'profs', permission: 'grades', mode: 'formation_pro',
+    description: 'L\'entreprise, le tuteur, les dates et la note de chaque stagiaire.',
+    etapes: [
+      {
+        id: 'sta-ouvrir', titre: 'Ouvrez « Stages »', champs: [{ cible: 'menu:/formation/stages' }],
+        texte: 'Cliquez sur Stages dans le menu de gauche.',
+        condition: { type: 'page', chemin: '/formation/stages' },
+      },
+      {
+        id: 'sta-promo', titre: 'Choisissez une promotion', page: '/formation/stages', champs: [{ cible: 'grille:promotion' }],
+        texte: 'Les stages se suivent promotion par promotion.',
+        absence: 'Aucune promotion : faites d\'abord le chapitre « Ouvrir une promotion ».',
+        condition: { type: 'page', chemin: PAGE_STAGES }, passerVers: 'fin',
+      },
+      {
+        id: 'sta-entreprises', titre: 'Le carnet d\'entreprises', importance: 'facultatif', page: PAGE_STAGES, champs: [{ cible: 'stages:entreprises' }],
+        texte: 'Les entreprises qui accueillent vos stagiaires, avec leurs coordonnées. Inutile de le remplir d\'abord : une entreprise tapée dans un stage y est ajoutée toute seule.',
+        condition: { type: 'lire' },
+      },
+      {
+        id: 'sta-nouveau', titre: 'Cliquez sur « Nouveau stage »', page: PAGE_STAGES, champs: [{ cible: 'stages:nouveau' }],
+        texte: 'Une fiche de stage va s\'ouvrir.',
+        absence: 'Il faut des élèves dans la promotion pour créer un stage.',
+        condition: { type: 'visible', cible: 'stage:entreprise' }, passerVers: 'sta-fin',
+      },
+      {
+        id: 'sta-eleve', titre: 'Le stagiaire', importance: 'obligatoire', page: PAGE_STAGES, champs: [{ cible: 'stage:eleve', libelle: 'Élève' }],
+        texte: 'Choisissez l\'élève qui part en stage.',
+        condition: { type: 'rempli' }, siAbsent: 'sta-nouveau',
+      },
+      {
+        id: 'sta-entreprise', titre: 'L\'entreprise d\'accueil', importance: 'conseille', page: PAGE_STAGES, champs: [{ cible: 'stage:entreprise' }],
+        texte: 'L\'entreprise, le poste, le tuteur et son téléphone, puis les dates. Sans entreprise ni dates, l\'attestation de stage ne pourra pas être imprimée.',
+        condition: { type: 'lire' }, siAbsent: 'sta-nouveau',
+      },
+      {
+        id: 'sta-note', titre: 'La note du stage', importance: 'facultatif', page: PAGE_STAGES, champs: [{ cible: 'stage:note' }],
+        texte: 'Une seule note sur 20, donnée à la fin. Laissez vide tant que le stage n\'est pas fini. Choisissez dessous la période et la matière « Stage » qu\'elle remplira dans Évaluations.',
+        condition: { type: 'lire' }, siAbsent: 'sta-nouveau',
+      },
+      {
+        id: 'sta-creer', titre: 'Créez le stage', importance: 'obligatoire', page: PAGE_STAGES, champs: [{ cible: 'stage:creer' }],
+        texte: 'Cliquez sur « Créer le stage ». Vous rouvrirez la fiche plus tard pour ajouter la note, les visites ou l\'attestation.',
+        condition: { type: 'signal', nom: 'stage-cree' }, siAbsent: 'sta-nouveau',
+      },
+      {
+        id: 'sta-fin', titre: 'Le tableau des stages', page: PAGE_STAGES,
+        texte: 'Chaque ligne est un stagiaire : cliquez dessus pour rouvrir sa fiche. Les filtres en haut montrent les stages à venir, en cours ou terminés.',
+        condition: { type: 'lire' },
+      },
+    ],
+  },
+
+  // ─── 9 quinquies. Documents ───────────────────────────────────────────────
+  {
+    id: 'documents-pro', titre: 'Imprimer les documents', icone: 'autres', permission: 'grades', mode: 'formation_pro',
+    description: 'Bulletins, relevés, attestations et diplômes numérotés.',
+    etapes: [
+      {
+        id: 'doc-ouvrir', titre: 'Ouvrez « Documents »', champs: [{ cible: 'menu:/formation/documents' }],
+        texte: 'Cliquez sur Documents dans le menu de gauche.',
+        condition: { type: 'page', chemin: '/formation/documents' },
+      },
+      {
+        id: 'doc-eleve', titre: 'Choisissez un élève', page: '/formation/documents', champs: [{ cible: 'documents:eleve' }],
+        texte: 'Tapez son nom au-dessus de la liste si besoin, puis cliquez sur lui.',
+        absence: 'Aucun élève inscrit pour l\'instant.',
+        condition: { type: 'visible', cible: 'documents:imprimes' }, passerVers: 'fin',
+      },
+      {
+        id: 'doc-imprimes', titre: 'Les documents à la demande', page: '/formation/documents', champs: [{ cible: 'documents:imprimes' }],
+        texte: 'Bulletin d\'une période, relevé de notes d\'un examen, attestation de stage : imprimés autant de fois que vous voulez.',
+        condition: { type: 'lire' }, siAbsent: 'doc-eleve',
+      },
+      {
+        id: 'doc-officiels', titre: 'Les documents officiels', page: '/formation/documents', champs: [{ cible: 'documents:officiels' }],
+        texte: 'Attestation d\'inscription, attestation de réussite, diplôme : chacun reçoit un numéro définitif au moment où vous l\'émettez. N\'émettez qu\'un vrai document.',
+        astuce: 'Le numéro d\'autorisation et le registre de commerce saisis dans Paramètres sont imprimés au pied de ces documents.',
+        condition: { type: 'lire' }, siAbsent: 'doc-eleve',
+      },
+    ],
+  },
+
+  // ─── 9 sexies. Financements ───────────────────────────────────────────────
+  {
+    id: 'financements', titre: 'Les apprenants financés', icone: 'paiements', permission: 'financements', mode: 'formation_pro',
+    description: 'Quand un organisme (3FPT…) paie une part de la formation.',
+    etapes: [
+      {
+        id: 'fin-principe', titre: 'À quoi ça sert',
+        texte: 'Un organisme comme le 3FPT peut payer une part des frais d\'un apprenant. Les frais restent dus en entier à l\'école : l\'apprenant paie sa part à la caisse, et la part de l\'organisme lui est facturée.',
+        condition: { type: 'lire' },
+      },
+      {
+        id: 'fin-parametres', titre: 'Activez les financements', adminOnly: true, page: '/parametres', champs: [{ cible: 'parametres:onglet-financements' }],
+        texte: 'Ouvrez l\'onglet « Financements » des Paramètres. Si vous n\'avez aucun apprenant financé, passez ce chapitre.',
+        condition: { type: 'visible', cible: 'financements:activation' }, passerVers: 'fin-ouvrir',
+      },
+      {
+        id: 'fin-activer', titre: 'L\'interrupteur', adminOnly: true, page: '/parametres', champs: [{ cible: 'financements:activation' }],
+        texte: 'Allumé, la rubrique « Financements » apparaît dans le menu, et on peut rattacher un apprenant à un organisme lors de son inscription.',
+        condition: { type: 'lire' }, siAbsent: 'fin-parametres',
+      },
+      {
+        id: 'fin-ouvrir', titre: 'Ouvrez « Financements »', champs: [{ cible: 'menu:/formation/financements' }],
+        texte: 'Cliquez sur Financements dans le menu de gauche.',
+        absence: 'La rubrique n\'apparaît qu\'une fois les financements activés dans Paramètres.',
+        condition: { type: 'page', chemin: '/formation/financements' },
+      },
+      {
+        id: 'fin-organisme', titre: 'Créez un organisme', importance: 'facultatif', adminOnly: true, page: '/formation/financements', champs: [{ cible: 'financements:nouveau' }],
+        texte: 'Son nom, la part qu\'il prend en charge, les frais concernés et les pièces du dossier. Remplissez la fenêtre, puis enregistrez.',
+        condition: { type: 'signal', nom: 'organisme-cree' },
+      },
+      {
+        id: 'fin-suivi', titre: 'Le suivi d\'un organisme',
+        texte: 'Cliquez sur un organisme : ses apprenants et leurs dossiers, ses factures et versements, ses statistiques et les rapports de fin de formation.',
         condition: { type: 'lire' },
       },
     ],

@@ -15,6 +15,7 @@ import {
   Plus, Loader2, ClipboardList, Users, Check, AlertCircle, ArrowLeft, ChevronRight, Pencil, Trash2, CalendarRange, Trophy, BookOpen, FileText, UserCog,
 } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
+import { signalerGuide } from '@/lib/signauxGuide';
 import { triPeriodes, baremeComplet, sommeBareme, analyserSaisieNote, evaluationsDepuisExamens, LIBELLES_TYPE_EXAMEN } from '@/lib/formationPro';
 import { GrilleNotesMatiere } from '@/components/formation/GrilleNotesMatiere';
 import { RecapitulatifPeriode } from '@/components/formation/RecapitulatifPeriode';
@@ -174,7 +175,7 @@ const EvaluationsPromotion = () => {
 
       {/* ── Périodes ── */}
       {periodesPromo.length > 0 && periode && (
-        <div className="px-4 md:px-6 py-3 border-b flex items-center justify-between gap-3 flex-wrap flex-shrink-0">
+        <div data-guide="evaluations:periodes" className="px-4 md:px-6 py-3 border-b flex items-center justify-between gap-3 flex-wrap flex-shrink-0">
           <div className="flex items-center gap-2 flex-wrap">
             {periodesPromo.map(per => (
               <button
@@ -187,7 +188,7 @@ const EvaluationsPromotion = () => {
                 {per.name}
               </button>
             ))}
-            <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full" title="Nouvelle période" onClick={() => setDialogPeriode('create')}>
+            <Button data-guide="evaluations:nouvelle-periode" variant="ghost" size="icon" className="h-8 w-8 rounded-full" title="Nouvelle période" onClick={() => setDialogPeriode('create')}>
               <Plus className="h-4 w-4" />
             </Button>
           </div>
@@ -211,7 +212,7 @@ const EvaluationsPromotion = () => {
               <CalendarRange className="w-12 h-12 mx-auto mb-3 text-muted-foreground/50" />
               <h3 className="font-semibold text-foreground mb-1">Aucune période</h3>
               <p className="text-sm text-muted-foreground mb-5">Découpez l'année de cette promotion (semestres, trimestres…) pour commencer à noter.</p>
-              <Button className="gap-2" onClick={() => setDialogPeriode('create')}><Plus className="h-4 w-4" />Créer une période</Button>
+              <Button data-guide="evaluations:nouvelle-periode" className="gap-2" onClick={() => setDialogPeriode('create')}><Plus className="h-4 w-4" />Créer une période</Button>
             </CardContent>
           </Card>
         </div>
@@ -229,9 +230,10 @@ const EvaluationsPromotion = () => {
       ) : (
         <div className="flex-1 min-h-0 flex">
           {/* ── Colonne de gauche : récapitulatif + matières (écran large) ── */}
-          <div className="hidden md:flex w-56 border-r flex-shrink-0 flex-col bg-muted/10 overflow-hidden">
+          <div data-guide="evaluations:matieres" className="hidden md:flex w-56 border-r flex-shrink-0 flex-col bg-muted/10 overflow-hidden">
             <div className="p-2 border-b">
               <button
+                data-guide="evaluations:recap"
                 onClick={() => setVue({ kind: 'recap' })}
                 className={`w-full text-left flex items-center gap-2 px-2.5 py-2 rounded-lg text-sm transition-all ${
                   vueEffective?.kind === 'recap' ? 'bg-primary text-primary-foreground font-medium shadow-sm' : 'hover:bg-muted text-foreground'
@@ -292,10 +294,10 @@ const EvaluationsPromotion = () => {
                     <h2 className="text-xl font-bold flex items-center gap-2"><Trophy className="h-5 w-5 text-primary" />Récapitulatif — {periode.name}</h2>
                     <p className="text-sm text-muted-foreground">Moyennes par matière, moyenne générale et rang.</p>
                   </div>
-                  <BoutonBulletins
+                  <span data-guide="evaluations:bulletins"><BoutonBulletins
                     promotionId={promotion.id} periodeId={periode.id} periodeNom={periode.name}
                     libelle="Bulletins de la promotion" nomFichier={`Bulletins_${promotion.name}_${periode.name}`} className="gap-1.5"
-                  />
+                  /></span>
                 </div>
                 <RecapitulatifPeriode
                   promotionId={promotion.id} periode={periode} matieres={matieres} categories={categories} depuisExamens={depuisExamens}
@@ -319,7 +321,7 @@ const EvaluationsPromotion = () => {
                     <span className="text-sm font-normal text-muted-foreground">coefficient {matiere.coefficient} · {periode.name}</span>
                   </h2>
                   {/* Le formateur attitré saisit lui-même les notes de cette matière depuis son portail. */}
-                  <div className="flex items-center gap-2 flex-wrap text-sm">
+                  <div className="flex items-center gap-2 flex-wrap text-sm" data-guide="evaluations:formateur">
                     <span className="text-muted-foreground">Formateur :</span>
                     <Select
                       value={affectations.find(a => a.promotionId === promotion.id && a.niveauMatiereId === matiere.id)?.teacherId ?? '__aucun'}
@@ -389,6 +391,7 @@ const EvaluationsPromotion = () => {
             const per = await addPeriode(promotion.id, data);
             setPeriodeId(per.id);
             toast({ title: 'Période créée', description: data.name });
+            signalerGuide('periode-fp-creee');
           }
         }}
       />

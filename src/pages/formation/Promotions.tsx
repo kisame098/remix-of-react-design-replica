@@ -192,7 +192,7 @@ const Promotions = () => {
           </CardContent>
         </Card>
       ) : (
-        <div className="space-y-8">
+        <div className="space-y-8" data-guide="promotion:liste">
           {groupes.map(groupe => (
             <section key={groupe.formation.id}>
               <h2 className="text-base font-semibold text-foreground mb-3">{groupe.formation.name}</h2>
@@ -241,7 +241,7 @@ const Promotions = () => {
                                 const total = niveauMatieres.filter(m => m.niveauId === p.niveauId && m.nature !== 'stage').length;
                                 const affectees = affectations.filter(a => a.promotionId === p.id).length;
                                 return (
-                                  <Button variant="outline" size="sm" className="mt-3 gap-2 w-full" onClick={() => setFormateursDe(p)}>
+                                  <Button data-guide="promotion:formateurs" variant="outline" size="sm" className="mt-3 gap-2 w-full" onClick={() => setFormateursDe(p)}>
                                     <UserCog className="h-3.5 w-3.5" />Formateurs ({affectees}/{total})
                                   </Button>
                                 );
@@ -275,7 +275,7 @@ const Promotions = () => {
           </DialogHeader>
           <div className="space-y-4 pt-2">
             {dialog?.kind !== 'edit' && dialog?.kind !== 'duplicate' && (
-              <div className="space-y-2">
+              <div className="space-y-2" data-guide="promotion:niveau">
                 <Label htmlFor="promo-niveau">Niveau suivi *</Label>
                 <Select value={niveauId} onValueChange={setNiveauId}>
                   <SelectTrigger id="promo-niveau"><SelectValue placeholder="Choisir un niveau" /></SelectTrigger>
@@ -296,7 +296,7 @@ const Promotions = () => {
               </div>
             )}
 
-            <div className="space-y-2">
+            <div className="space-y-2" data-guide="promotion:nom">
               <Label htmlFor="promo-name">Nom de la promotion *</Label>
               <Input
                 id="promo-name" placeholder="Ex : CAP 1 — Promo Septembre 2026" value={nomAffiche}
@@ -306,11 +306,11 @@ const Promotions = () => {
             </div>
 
             <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-2">
+              <div className="space-y-2" data-guide="promotion:effectif">
                 <Label htmlFor="promo-limite">Effectif maximum *</Label>
                 <Input id="promo-limite" type="number" min="1" value={studentLimit} onChange={e => setStudentLimit(e.target.value)} />
               </div>
-              <div className="space-y-2">
+              <div className="space-y-2" data-guide="promotion:rythme">
                 <Label>Rythme</Label>
                 <RadioGroup value={rythme} onValueChange={(v: RythmePromotion) => setRythme(v)} className="flex gap-4 pt-2">
                   <div className="flex items-center gap-2"><RadioGroupItem value="jour" id="rythme-jour" /><Label htmlFor="rythme-jour">Jour</Label></div>
@@ -319,7 +319,7 @@ const Promotions = () => {
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-2 gap-3" data-guide="promotion:dates">
               <div className="space-y-2">
                 <Label htmlFor="promo-debut">Date de début (optionnel)</Label>
                 <Input id="promo-debut" type="date" value={startDate} onChange={e => setStartDate(e.target.value)} />
@@ -349,7 +349,7 @@ const Promotions = () => {
               <Textarea id="promo-description" value={description} onChange={e => setDescription(e.target.value)} rows={2} />
             </div>
 
-            <Button onClick={handleSave} className="w-full" disabled={isSaving}>
+            <Button data-guide="promotion:creer" onClick={handleSave} className="w-full" disabled={isSaving}>
               {isSaving && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
               {dialog?.kind === 'edit' ? 'Enregistrer' : dialog?.kind === 'duplicate' ? 'Dupliquer' : 'Créer'}
             </Button>

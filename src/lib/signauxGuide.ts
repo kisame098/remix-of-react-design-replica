@@ -11,10 +11,11 @@
 export const SIGNAUX_GUIDE = [
   'ecole-enregistree', 'compte-enregistre', 'annee-enregistree', 'echeance-enregistree',
   'horaires-enregistres', 'scolarite-enregistree',
-  'classe-creee', 'formation-creee', 'promotion-creee',
+  'classe-creee', 'formation-creee', 'niveau-cree', 'matiere-ajoutee', 'promotion-creee',
   'eleve-inscrit', 'eleve-modifie', 'prof-inscrit',
   'periode-creee', 'note-enregistree', 'cours-cree', 'presences-completes',
   'tarif-enregistre', 'paiement-enregistre',
+  'periode-fp-creee', 'note-fp-enregistree', 'examen-cree', 'stage-cree', 'organisme-cree',
 ] as const;
 
 export type SignalGuide = typeof SIGNAUX_GUIDE[number];

@@ -15,6 +15,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { ArrowLeft, Plus, Trash2, Loader2, Pencil, Layers, Copy, Clock, ShieldAlert, Percent } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
+import { signalerGuide } from '@/lib/signauxGuide';
 import {
   type Niveau, type BaremeCategorie, nomNiveauValide, triNiveaux, totauxNiveau,
   peutGererMatieres, nomCategorieValide, pourcentageValide, sommeBareme, baremeComplet,
@@ -157,6 +158,7 @@ const FormationDetail = () => {
       if (dialog.kind === 'create') {
         await addNiveau(formationId, data);
         toast({ title: 'Niveau créé', description: data.name });
+        signalerGuide('niveau-cree');
       } else if (dialog.kind === 'edit') {
         await updateNiveau(dialog.niveauId, data);
         toast({ title: 'Niveau modifié' });
@@ -211,7 +213,7 @@ const FormationDetail = () => {
           </p>
           {formation.description && <p className="text-sm text-muted-foreground/80 mt-1 max-w-2xl">{formation.description}</p>}
         </div>
-        <Button size="sm" className="gap-2" onClick={openCreate}>
+        <Button data-guide="niveau:ajouter" size="sm" className="gap-2" onClick={openCreate}>
           <Plus className="h-3.5 w-3.5" />Ajouter un niveau
         </Button>
       </div>
@@ -266,7 +268,7 @@ const FormationDetail = () => {
                       <span className="flex items-center gap-0.5"><Clock className="h-3 w-3" />{totaux.totalHeures} h{totaux.heuresIncompletes ? ' (partiel)' : ''}</span>
                     )}
                   </p>
-                  <Button asChild variant="outline" size="sm">
+                  <Button asChild variant="outline" size="sm" data-guide="niveau:programme">
                     <Link to={`/formation/formations/${formationId}/niveaux/${n.id}`}>Gérer le programme</Link>
                   </Button>
                 </CardContent>
@@ -278,7 +280,7 @@ const FormationDetail = () => {
 
       {/* ── Formule d'évaluation : réservée au directeur ── */}
       {estDirecteur && (
-        <Card>
+        <Card data-guide="formation:formule">
           <CardHeader className="pb-3">
             <div className="flex items-start justify-between gap-2 flex-wrap">
               <div>
@@ -408,7 +410,7 @@ const FormationDetail = () => {
             )}
           </DialogHeader>
           <div className="space-y-4 pt-2">
-            <div className="space-y-2">
+            <div className="space-y-2" data-guide="niveau:nom">
               <Label htmlFor="niveau-name">Nom *</Label>
               <Input id="niveau-name" placeholder="Ex : CAP 1, Cycle unique…" value={name} onChange={e => setName(e.target.value)} />
             </div>
@@ -416,7 +418,7 @@ const FormationDetail = () => {
               <Label htmlFor="niveau-description">Description (optionnel)</Label>
               <Textarea id="niveau-description" value={description} onChange={e => setDescription(e.target.value)} rows={2} />
             </div>
-            <Button onClick={handleSave} className="w-full" disabled={isSaving}>
+            <Button data-guide="niveau:creer" onClick={handleSave} className="w-full" disabled={isSaving}>
               {isSaving && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
               {dialog?.kind === 'edit' ? 'Enregistrer' : dialog?.kind === 'duplicate' ? 'Dupliquer' : 'Créer'}
             </Button>

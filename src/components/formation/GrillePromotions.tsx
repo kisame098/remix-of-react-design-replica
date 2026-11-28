@@ -70,7 +70,7 @@ export const GrillePromotions = ({ titre, lien, details, chargement, entete, sou
                       {gn.promotions.map(p => {
                         const nbEleves = getStudentCountByClass(p.classId);
                         return (
-                          <button key={p.id} onClick={() => navigate(lien(p))} className="text-left group">
+                          <button key={p.id} data-guide="grille:promotion" onClick={() => navigate(lien(p))} className="text-left group">
                             <Card className="hover:shadow-md hover:border-primary/40 transition-all h-full cursor-pointer">
                               <CardContent className="p-4">
                                 <div className="flex items-start justify-between mb-3">

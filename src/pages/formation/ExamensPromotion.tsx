@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from '@/hooks/use-toast';
+import { signalerGuide } from '@/lib/signauxGuide';
 import {
   triExamens, triTours, triEpreuves, epreuvesDepuisProgramme, bilanCandidat, decisionRetenue, mentionRetenue,
   bilanExamen, analyserSaisieNoteExamen, peutGererMatieres, LIBELLES_TYPE_EXAMEN, triPeriodes, type Decision, type StatutNoteExamen,
@@ -237,7 +238,7 @@ const ExamensPromotion = () => {
               <p className="text-sm text-muted-foreground mb-5">
                 Créez un examen blanc ou officiel : les élèves de la promotion deviennent ses candidats, et les épreuves peuvent reprendre le programme.
               </p>
-              <Button className="gap-2" onClick={() => setDialogExamen('create')}><Plus className="h-4 w-4" />Créer un examen</Button>
+              <Button data-guide="examens:creer" className="gap-2" onClick={() => setDialogExamen('create')}><Plus className="h-4 w-4" />Créer un examen</Button>
             </CardContent>
           </Card>
         </div>
@@ -257,11 +258,11 @@ const ExamensPromotion = () => {
                   {e.verrouille && <Lock className="h-3 w-3" />}{e.name}
                 </button>
               ))}
-              <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full" title="Nouvel examen" onClick={() => setDialogExamen('create')}>
+              <Button data-guide="examens:creer" variant="ghost" size="icon" className="h-8 w-8 rounded-full" title="Nouvel examen" onClick={() => setDialogExamen('create')}>
                 <Plus className="h-4 w-4" />
               </Button>
             </div>
-            <div className="flex items-center gap-1.5 flex-wrap">
+            <div className="flex items-center gap-1.5 flex-wrap" data-guide="examens:actions">
               <Button variant="outline" size="sm" className="h-8 gap-1.5" onClick={() => setDialogCandidats(true)}>
                 <Users className="h-3.5 w-3.5" />Candidats ({candidats.length})
               </Button>
@@ -305,7 +306,7 @@ const ExamensPromotion = () => {
 
           <div className="flex-1 min-h-0 flex">
             {/* ── Colonne de gauche : Résultats + matières (comme Évaluations) ── */}
-            <div className="hidden md:flex w-56 border-r flex-shrink-0 flex-col bg-muted/10 overflow-hidden">
+            <div data-guide="examens:matieres" className="hidden md:flex w-56 border-r flex-shrink-0 flex-col bg-muted/10 overflow-hidden">
               <div className="p-2 border-b">
                 <button
                   onClick={() => setVue({ kind: 'resultats' })}
@@ -391,7 +392,7 @@ const ExamensPromotion = () => {
 
               {epreuvesExamen.length === 0 && vueEffective.kind === 'resultats' ? (
                 <Card className="border-dashed">
-                  <CardContent className="py-12 text-center space-y-4">
+                  <CardContent className="py-12 text-center space-y-4" data-guide="examens:epreuves">
                     <p className="text-muted-foreground">Aucune épreuve dans cet examen.</p>
                     {estDirecteur ? (
                       <div className="flex items-center justify-center gap-2 flex-wrap">
@@ -474,6 +475,7 @@ const ExamensPromotion = () => {
               : undefined;
             const nouveau = await ex.addExamen(promotion.id, data, elevesPromotion.map(s => s.id), structure);
             setExamenId(nouveau.id);
+            signalerGuide('examen-cree');
             toast({ title: 'Examen créé', description: `${elevesPromotion.length} candidat${elevesPromotion.length !== 1 ? 's' : ''} inscrit${elevesPromotion.length !== 1 ? 's' : ''}.` });
           }
         }}

@@ -61,7 +61,7 @@ export const DialogPeriode = ({ open, onOpenChange, periode, nbExistantes, onVal
           <DialogDescription>Propre à cette promotion : chaque formation garde son propre rythme.</DialogDescription>
         </DialogHeader>
         <div className="space-y-4 pt-1">
-          <div className="space-y-2">
+          <div className="space-y-2" data-guide="periode-fp:nom">
             <Label htmlFor="periode-nom">Nom *</Label>
             <Input id="periode-nom" placeholder="Ex : Semestre 1" value={name} onChange={e => setName(e.target.value)} onKeyDown={e => e.key === 'Enter' && void valider()} />
             {!periode && (
@@ -82,7 +82,7 @@ export const DialogPeriode = ({ open, onOpenChange, periode, nbExistantes, onVal
               <Input id="periode-fin" type="date" value={endDate} onChange={e => setEndDate(e.target.value)} />
             </div>
           </div>
-          <Button onClick={() => void valider()} className="w-full" disabled={enregistrement}>
+          <Button data-guide="periode-fp:creer" onClick={() => void valider()} className="w-full" disabled={enregistrement}>
             {enregistrement && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
             {periode ? 'Enregistrer' : 'Créer la période'}
           </Button>

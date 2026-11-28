@@ -74,7 +74,7 @@ const Documents = () => {
       </div>
       <div className="flex-1 min-h-0 flex flex-col md:flex-row">
         {/* ── Élèves ── */}
-        <div className={`md:w-72 md:border-r flex-shrink-0 flex flex-col bg-muted/10 ${choix ? 'hidden md:flex' : 'flex'} min-h-0`}>
+        <div data-guide="documents:eleves" className={`md:w-72 md:border-r flex-shrink-0 flex flex-col bg-muted/10 ${choix ? 'hidden md:flex' : 'flex'} min-h-0`}>
           <div className="p-3 border-b">
             <div className="relative">
               <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
@@ -85,7 +85,7 @@ const Documents = () => {
             {trouves.length === 0 && <p className="text-sm text-muted-foreground text-center py-6">Aucun élève trouvé.</p>}
             {trouves.map(({ eleve: e, promotion: p }) => (
               <button
-                key={e.id} onClick={() => setEleveId(e.id)}
+                key={e.id} data-guide="documents:eleve" onClick={() => setEleveId(e.id)}
                 className={`w-full text-left px-2.5 py-2 rounded-lg transition-all text-sm ${
                   e.id === eleveId ? 'bg-primary text-primary-foreground shadow-sm' : 'hover:bg-muted text-foreground'
                 }`}
@@ -194,7 +194,7 @@ const DocumentsEleve = ({ eleveId, promotionId, estDirecteur, logo, donnees, onR
       </div>
 
       {/* ── À la demande ── */}
-      <section className="space-y-3">
+      <section className="space-y-3" data-guide="documents:imprimes">
         <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Imprimés à la demande</h3>
         <Card>
           <CardContent className="p-4 space-y-3">
@@ -266,7 +266,7 @@ const DocumentsEleve = ({ eleveId, promotionId, estDirecteur, logo, donnees, onR
       </section>
 
       {/* ── Documents officiels numérotés ── */}
-      <section className="space-y-3">
+      <section className="space-y-3" data-guide="documents:officiels">
         <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5"><Stamp className="h-3.5 w-3.5" />Documents officiels numérotés</h3>
         {!disponible ? (
           <div className="rounded-md border border-dashed p-4 text-sm text-muted-foreground">

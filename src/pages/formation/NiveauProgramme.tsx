@@ -11,6 +11,7 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { ArrowLeft, Plus, Trash2, Loader2, Pencil, Clock, ShieldAlert } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
+import { signalerGuide } from '@/lib/signauxGuide';
 import {
   type NiveauMatiere, type NiveauMatiereNature,
   NATURE_LABELS, totauxNiveau, coefficientValide, volumeHoraireValide, matiereDejaAuNiveau,
@@ -128,6 +129,7 @@ const NiveauProgramme = () => {
         }
         await addMatiereToNiveau(niveauId, rowName.trim(), { type: rowType, coefficient: coef, volumeHoraire: volume, nature: rowNature, categorie: rowCategorie.trim() || undefined });
       }
+      if (!editTarget) signalerGuide('matiere-ajoutee');
       closeRowDialog();
     } catch (err) {
       toast({ title: 'Erreur', description: String(err), variant: 'destructive' });
@@ -202,7 +204,7 @@ const NiveauProgramme = () => {
           <p className="text-sm text-muted-foreground mt-1">{formation.name} — Programme pédagogique</p>
         </div>
         {estDirecteur && (
-          <Button size="sm" className="gap-2" onClick={openAddRow}>
+          <Button data-guide="programme:ajouter" size="sm" className="gap-2" onClick={openAddRow}>
             <Plus className="h-3.5 w-3.5" />Ajouter une matière
           </Button>
         )}
@@ -214,7 +216,7 @@ const NiveauProgramme = () => {
             <p className="text-muted-foreground mb-6">
               {estDirecteur ? 'Aucune matière définie pour ce niveau.' : 'Aucune matière définie — le directeur général doit les ajouter.'}
             </p>
-            {estDirecteur && <Button onClick={openAddRow} className="gap-2"><Plus className="h-4 w-4" />Ajouter une matière</Button>}
+            {estDirecteur && <Button data-guide="programme:ajouter" onClick={openAddRow} className="gap-2"><Plus className="h-4 w-4" />Ajouter une matière</Button>}
           </CardContent>
         </Card>
       ) : (
@@ -299,13 +301,13 @@ const NiveauProgramme = () => {
             <DialogTitle>{editTarget ? 'Modifier' : 'Ajouter'} une matière</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 pt-2">
-            <RadioGroup value={rowType} onValueChange={(v: RowKind) => setRowType(v)} className="flex gap-4">
+            <RadioGroup data-guide="matiere:type" value={rowType} onValueChange={(v: RowKind) => setRowType(v)} className="flex gap-4">
               <div className="flex items-center gap-2"><RadioGroupItem value="obligatoire" id="type-obl" /><Label htmlFor="type-obl">Obligatoire</Label></div>
               <div className="flex items-center gap-2"><RadioGroupItem value="facultative" id="type-fac" /><Label htmlFor="type-fac">Facultative</Label></div>
               <div className="flex items-center gap-2"><RadioGroupItem value="choix" id="type-choix" /><Label htmlFor="type-choix">Au choix</Label></div>
             </RadioGroup>
 
-            <div className="space-y-2">
+            <div className="space-y-2" data-guide="matiere:nom">
               <Label htmlFor="row-name">{rowType === 'choix' ? 'Libellé du créneau (ex : LV2)' : 'Nom de la matière'} *</Label>
               <Input
                 id="row-name" value={rowName} onChange={e => setRowName(e.target.value)}
@@ -325,7 +327,7 @@ const NiveauProgramme = () => {
             </div>
 
             <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-2">
+              <div className="space-y-2" data-guide="matiere:coef">
                 <Label htmlFor="row-coef">Coefficient *</Label>
                 <Input id="row-coef" type="number" min="0.5" step="0.5" value={rowCoef} onChange={e => setRowCoef(e.target.value)} />
               </div>
@@ -339,7 +341,7 @@ const NiveauProgramme = () => {
 
             {rowType !== 'choix' && (
               <>
-                <div className="space-y-2">
+                <div className="space-y-2" data-guide="matiere:nature">
                   <Label htmlFor="row-nature">Nature</Label>
                   <Select value={rowNature} onValueChange={(v: NiveauMatiereNature) => setRowNature(v)}>
                     <SelectTrigger id="row-nature"><SelectValue /></SelectTrigger>
@@ -390,7 +392,7 @@ const NiveauProgramme = () => {
               </div>
             )}
 
-            <Button onClick={handleSaveRow} className="w-full" disabled={savingRow}>
+            <Button data-guide="matiere:ajouter" onClick={handleSaveRow} className="w-full" disabled={savingRow}>
               {savingRow && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
               {editTarget ? 'Enregistrer' : 'Ajouter'}
             </Button>

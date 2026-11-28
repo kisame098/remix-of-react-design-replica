@@ -223,7 +223,7 @@ const Formations = () => {
                 ref={fileInputRef} type="file" accept="application/json" className="hidden"
                 onChange={(e) => { const f = e.target.files?.[0]; if (f) void handleImportFile(f); e.target.value = ''; }}
               />
-              <Button variant="outline" size="sm" className="gap-2" onClick={() => setModelesOuvert(true)}>
+              <Button data-guide="formation:modeles" variant="outline" size="sm" className="gap-2" onClick={() => setModelesOuvert(true)}>
                 Modèles hôtellerie-restauration
               </Button>
               <Button variant="outline" size="sm" className="gap-2" onClick={() => fileInputRef.current?.click()} disabled={importing}>
@@ -303,7 +303,7 @@ const Formations = () => {
                     )}
                   </p>
                   <div className="flex items-center gap-2">
-                    <Button asChild variant="outline" size="sm" className="flex-1">
+                    <Button asChild variant="outline" size="sm" className="flex-1" data-guide="formation:gerer">
                       <Link to={`/formation/formations/${f.id}`}>Gérer</Link>
                     </Button>
                     {estDirecteur && (
@@ -334,10 +334,11 @@ const Formations = () => {
             )}
           </DialogHeader>
           <div className="space-y-4 pt-2">
-            <div className="space-y-2">
+            <div className="space-y-2" data-guide="formation:nom">
               <Label htmlFor="formation-name">{dialog?.kind === 'duplicate' ? 'Nom de la nouvelle formation *' : 'Nom *'}</Label>
               <Input id="formation-name" placeholder="Ex : CAP Restauration" value={name} onChange={e => setName(e.target.value)} />
             </div>
+            <div className="space-y-4" data-guide="formation:details">
             <div className="space-y-2">
               <Label htmlFor="formation-diplome">Type de diplôme (optionnel)</Label>
               <Input
@@ -368,11 +369,12 @@ const Formations = () => {
                 <Input id="formation-entree" placeholder="Ex : CM2 à 4e secondaire" value={entryLevel} onChange={e => setEntryLevel(e.target.value)} />
               </div>
             </div>
+            </div>
             <div className="space-y-2">
               <Label htmlFor="formation-description">Description (optionnel)</Label>
               <Textarea id="formation-description" placeholder="Facultatif" value={description} onChange={e => setDescription(e.target.value)} rows={2} />
             </div>
-            <Button onClick={handleSave} className="w-full" disabled={isSaving}>
+            <Button data-guide="formation:creer" onClick={handleSave} className="w-full" disabled={isSaving}>
               {isSaving && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
               {dialog?.kind === 'edit' ? 'Enregistrer' : dialog?.kind === 'duplicate' ? 'Dupliquer' : 'Créer'}
             </Button>

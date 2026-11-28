@@ -24,7 +24,7 @@ const etapes = CHAPITRES.flatMap(c => c.etapes.map(e => ({ c, e })));
 
 describe('le parcours colle aux écrans', () => {
   it('chaque élément désigné existe dans le code', () => {
-    const cibles = etapes.flatMap(({ e }) => [...(e.champs ?? []).map(x => x.cible), ...(e.condition.type === 'visible' ? [e.condition.cible] : [])]);
+    const cibles = etapes.flatMap(({ e }) => [...(e.champs ?? []).map(x => x.cible), ...(e.condition.type === 'visible' ? [e.condition.cible] : []), ...(e.dejaFait ? [e.dejaFait] : [])]);
     expect([...new Set(cibles)].filter(c => !existe(c))).toEqual([]);
   });
   it('chaque signal attendu est émis par un écran, et chaque signal connu sert', () => {
@@ -49,6 +49,9 @@ describe('on ne peut pas rester coincé', () => {
       if (e.siAbsent) expect(c.etapes.some(x => x.id === e.siAbsent), e.id).toBe(true);
       if (e.passerVers && e.passerVers !== 'fin') expect(c.etapes.findIndex(x => x.id === e.passerVers), e.id).toBeGreaterThan(rang);
     }
+  });
+  it('« déjà fait » ne sert qu\'aux étapes qui ont un « Passer » où aller', () => {
+    for (const { e } of etapes) if (e.dejaFait) expect(e.passerVers, e.id).toBeDefined();
   });
   it('une étape qui ouvre quelque chose peut être passée sans revenir en boucle', () => {
     for (const { c, e } of etapes) {
@@ -79,7 +82,8 @@ describe('on ne peut pas rester coincé', () => {
   it('les deux modes ont de quoi créer un groupe puis inscrire un élève', () => {
     const ids = (mode: 'classique' | 'formation_pro') => parcoursPour(CHAPITRES, { mode, accountRole: 'admin', staffPermissions: [] }).map(c => c.id);
     expect(ids('classique')).toEqual(expect.arrayContaining(['parametres', 'classes', 'inscrire-eleve', 'gerer-eleves', 'inscrire-prof', 'notes']));
-    expect(ids('formation_pro')).toEqual(expect.arrayContaining(['parametres', 'formations', 'inscrire-eleve', 'inscrire-prof']));
+    expect(ids('formation_pro')).toEqual(expect.arrayContaining(['parametres', 'formations', 'promotions', 'inscrire-eleve', 'inscrire-prof', 'evaluations', 'examens', 'stages', 'documents-pro', 'financements']));
+    expect(ids('classique')).not.toContain('promotions');
     expect(ids('formation_pro')).not.toContain('classes');
   });
   it('un élément caché n\'est pas « trouvé »', () => {
